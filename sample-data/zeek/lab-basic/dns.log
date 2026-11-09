@@ -1,0 +1,1 @@
+{"ts":1793959320.0,"uid":"C5","id.orig_h":"192.168.10.30","id.orig_p":53000,"id.resp_h":"192.168.10.1","id.resp_p":53,"proto":"udp","query":"scada01.fabrika.local","qtype_name":"A","answers":["192.168.10.40"]}

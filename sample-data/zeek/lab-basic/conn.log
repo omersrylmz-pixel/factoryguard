@@ -1,0 +1,8 @@
+{"ts":1793959200.0,"uid":"C1","id.orig_h":"192.168.10.50","id.orig_p":49152,"id.resp_h":"192.168.10.20","id.resp_p":502,"proto":"tcp","service":"modbus","orig_l2_addr":"00:11:22:33:44:50","resp_l2_addr":"00:11:22:33:44:20"}
+{"ts":1793959260.0,"uid":"C2","id.orig_h":"192.168.10.50","id.orig_p":49153,"id.resp_h":"192.168.10.20","id.resp_p":502,"proto":"tcp","service":"modbus","orig_l2_addr":"00:11:22:33:44:50","resp_l2_addr":"00:11:22:33:44:20"}
+{"ts":1793959260.0,"uid":"C2","id.orig_h":"192.168.10.50","id.orig_p":49153,"id.resp_h":"192.168.10.20","id.resp_p":502,"proto":"tcp","service":"modbus","orig_l2_addr":"00:11:22:33:44:50","resp_l2_addr":"00:11:22:33:44:20"}
+{"ts":1793959300.0,"uid":"C3","id.orig_h":"192.168.10.30","id.orig_p":51000,"id.resp_h":"192.168.10.40","id.resp_p":443,"proto":"tcp","service":"ssl","orig_l2_addr":"00:11:22:33:44:30","resp_l2_addr":"00:11:22:33:44:40"}
+{"ts":1793959310.0,"uid":"C4","id.orig_h":"192.168.10.60","id.orig_p":50000,"id.resp_h":"192.168.10.21","id.resp_p":102,"proto":"tcp","orig_l2_addr":"00:11:22:33:44:60","resp_l2_addr":"00:11:22:33:44:21"}
+{"ts":1793959320.0,"uid":"C5","id.orig_h":"192.168.10.30","id.orig_p":53000,"id.resp_h":"192.168.10.1","id.resp_p":53,"proto":"udp","service":"dns","orig_l2_addr":"00:11:22:33:44:30","resp_l2_addr":"00:11:22:33:44:01"}
+{"ts":1793959330.0,"uid":"C6","id.orig_h":"not-an-ip","id.orig_p":1,"id.resp_h":"192.168.10.1","id.resp_p":53,"proto":"udp"}
+{this is broken json

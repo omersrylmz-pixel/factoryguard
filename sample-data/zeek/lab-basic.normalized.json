@@ -1,0 +1,228 @@
+{
+  "sensor_id": "lab-001",
+  "schema_version": "0.1",
+  "logs_used": [
+    "conn",
+    "dhcp",
+    "dns",
+    "modbus"
+  ],
+  "observations": [
+    {
+      "sensor_id": "lab-001",
+      "observed_at": "2026-11-06T10:02:00Z",
+      "first_seen_at": "2026-11-06T10:02:00Z",
+      "source": "zeek",
+      "device": {
+        "ip": "192.168.10.1",
+        "mac": "00:11:22:33:44:01",
+        "hostname": null
+      },
+      "evidence": {
+        "source_logs": [
+          "conn.log"
+        ],
+        "observed_protocols": [
+          "dns"
+        ],
+        "is_private_ip": true
+      }
+    },
+    {
+      "sensor_id": "lab-001",
+      "observed_at": "2026-11-06T10:01:00Z",
+      "first_seen_at": "2026-11-06T10:00:00Z",
+      "source": "zeek",
+      "device": {
+        "ip": "192.168.10.20",
+        "mac": "00:11:22:33:44:20",
+        "hostname": null
+      },
+      "evidence": {
+        "source_logs": [
+          "conn.log",
+          "modbus.log"
+        ],
+        "observed_protocols": [
+          "modbus"
+        ],
+        "is_private_ip": true
+      }
+    },
+    {
+      "sensor_id": "lab-001",
+      "observed_at": "2026-11-06T10:01:50Z",
+      "first_seen_at": "2026-11-06T10:01:50Z",
+      "source": "zeek",
+      "device": {
+        "ip": "192.168.10.21",
+        "mac": "00:11:22:33:44:21",
+        "hostname": null
+      },
+      "evidence": {
+        "source_logs": [
+          "conn.log"
+        ],
+        "observed_protocols": [],
+        "is_private_ip": true
+      }
+    },
+    {
+      "sensor_id": "lab-001",
+      "observed_at": "2026-11-06T10:02:00Z",
+      "first_seen_at": "2026-11-06T09:58:20Z",
+      "source": "zeek",
+      "device": {
+        "ip": "192.168.10.30",
+        "mac": "00:11:22:33:44:30",
+        "hostname": "hmi-line1"
+      },
+      "evidence": {
+        "source_logs": [
+          "conn.log",
+          "dhcp.log"
+        ],
+        "observed_protocols": [
+          "dns",
+          "ssl"
+        ],
+        "is_private_ip": true
+      }
+    },
+    {
+      "sensor_id": "lab-001",
+      "observed_at": "2026-11-06T10:01:40Z",
+      "first_seen_at": "2026-11-06T10:01:40Z",
+      "source": "zeek",
+      "device": {
+        "ip": "192.168.10.40",
+        "mac": "00:11:22:33:44:40",
+        "hostname": "scada01.fabrika.local"
+      },
+      "evidence": {
+        "source_logs": [
+          "conn.log",
+          "dns.log"
+        ],
+        "observed_protocols": [
+          "ssl"
+        ],
+        "is_private_ip": true
+      }
+    },
+    {
+      "sensor_id": "lab-001",
+      "observed_at": "2026-11-06T10:01:00Z",
+      "first_seen_at": "2026-11-06T10:00:00Z",
+      "source": "zeek",
+      "device": {
+        "ip": "192.168.10.50",
+        "mac": "00:11:22:33:44:50",
+        "hostname": null
+      },
+      "evidence": {
+        "source_logs": [
+          "conn.log",
+          "modbus.log"
+        ],
+        "observed_protocols": [
+          "modbus"
+        ],
+        "is_private_ip": true
+      }
+    },
+    {
+      "sensor_id": "lab-001",
+      "observed_at": "2026-11-06T10:01:50Z",
+      "first_seen_at": "2026-11-06T10:01:50Z",
+      "source": "zeek",
+      "device": {
+        "ip": "192.168.10.60",
+        "mac": "00:11:22:33:44:60",
+        "hostname": null
+      },
+      "evidence": {
+        "source_logs": [
+          "conn.log"
+        ],
+        "observed_protocols": [],
+        "is_private_ip": true
+      }
+    }
+  ],
+  "communications": [
+    {
+      "sensor_id": "lab-001",
+      "source": "zeek",
+      "source_ip": "192.168.10.30",
+      "destination_ip": "192.168.10.1",
+      "transport": "udp",
+      "protocol": "dns",
+      "protocol_confidence": "observed",
+      "destination_port": 53,
+      "source_port_count": 1,
+      "connection_count": 1,
+      "first_seen_at": "2026-11-06T10:02:00Z",
+      "last_seen_at": "2026-11-06T10:02:00Z",
+      "evidence": {
+        "source_log": "conn.log"
+      }
+    },
+    {
+      "sensor_id": "lab-001",
+      "source": "zeek",
+      "source_ip": "192.168.10.30",
+      "destination_ip": "192.168.10.40",
+      "transport": "tcp",
+      "protocol": "ssl",
+      "protocol_confidence": "observed",
+      "destination_port": 443,
+      "source_port_count": 1,
+      "connection_count": 1,
+      "first_seen_at": "2026-11-06T10:01:40Z",
+      "last_seen_at": "2026-11-06T10:01:40Z",
+      "evidence": {
+        "source_log": "conn.log"
+      }
+    },
+    {
+      "sensor_id": "lab-001",
+      "source": "zeek",
+      "source_ip": "192.168.10.50",
+      "destination_ip": "192.168.10.20",
+      "transport": "tcp",
+      "protocol": "modbus",
+      "protocol_confidence": "observed",
+      "destination_port": 502,
+      "source_port_count": 2,
+      "connection_count": 2,
+      "first_seen_at": "2026-11-06T10:00:00Z",
+      "last_seen_at": "2026-11-06T10:01:00Z",
+      "evidence": {
+        "source_log": "conn.log"
+      }
+    },
+    {
+      "sensor_id": "lab-001",
+      "source": "zeek",
+      "source_ip": "192.168.10.60",
+      "destination_ip": "192.168.10.21",
+      "transport": "tcp",
+      "protocol": "s7comm?",
+      "protocol_confidence": "port_hint",
+      "destination_port": 102,
+      "source_port_count": 1,
+      "connection_count": 1,
+      "first_seen_at": "2026-11-06T10:01:50Z",
+      "last_seen_at": "2026-11-06T10:01:50Z",
+      "evidence": {
+        "source_log": "conn.log"
+      }
+    }
+  ],
+  "stats": {
+    "devices": 7,
+    "communications": 4,
+    "rejected_records": 1
+  }
+}
