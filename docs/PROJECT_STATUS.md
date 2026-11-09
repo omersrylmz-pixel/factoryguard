@@ -6,6 +6,19 @@
 - Windows geliştirme makinesi: Python 3.13, Node 22, git.
 - **Docker yok, WSL yok → Zeek bu makinede çalıştırılamıyor.** Zeek, Ubuntu VM'de `deployment/scripts/lab_zeek.sh` ile çalıştırılacak.
 
+## Ortam kontrolü (2026-11-09 18:31)
+| Kontrol | Sonuç |
+|---|---|
+| Windows | 11 Pro, build 26300 |
+| Hypervisor / sanallaştırma | Mevcut (VBS çalışıyor) ✅ |
+| RAM / C: boş alan | 31.6 GB / ~111 GB ✅ |
+| WSL | **Kurulu değil** ❌ |
+| Docker Desktop | **Kurulu değil** ❌ |
+| Agent kabuğu yönetici mi | Hayır → WSL/Docker kurulumu kullanıcı tarafından (UAC + yeniden başlatma) yapılmalı |
+
+Hazırlanan (henüz çalıştırılmadı, **test edilmedi**): `deployment/compose.yaml` (PostgreSQL 16, yalnızca 127.0.0.1),
+`deployment/scripts/lab_zeek_docker.ps1` (resmî `zeek/zeek` imajı, `--network none`, dosyadan okuma).
+
 ## Tamamlanan
 - Proje klasör iskeleti.
 - `sensor/parsers/zeek.py`: Zeek JSON + TSV log okuyucu (bozuk satırları atlar, loglar).
