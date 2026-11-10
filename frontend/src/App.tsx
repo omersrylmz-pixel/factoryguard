@@ -6,6 +6,8 @@ import AssetDetailPage from "./pages/AssetDetailPage";
 import AssetsPage from "./pages/AssetsPage";
 import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
+import NetworkPage from "./pages/NetworkPage";
+import RisksPage from "./pages/RisksPage";
 import SensorsPage from "./pages/SensorsPage";
 import SettingsPage from "./pages/SettingsPage";
 
@@ -37,6 +39,8 @@ export default function App() {
           <Route index element={<DashboardPage />} />
           <Route path="assets" element={<AssetsPage />} />
           <Route path="assets/:id" element={<AssetDetailPage />} />
+          <Route path="network" element={<NetworkPage />} />
+          <Route path="risks" element={<RisksPage />} />
           <Route path="sensors" element={<SensorsPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -114,6 +114,7 @@ class AssetDetailOut(AssetOut):
     identifiers: list[AssetIdentifierOut]
     observations: list[AssetObservationOut]
     communications: list[AssetCommunicationOut]
+    risk_findings: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class AssetUpdate(BaseModel):

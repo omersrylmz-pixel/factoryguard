@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { Card, CriticalityBadge, Empty, ErrorBox, PageHeader, formatDate } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { api } from "../services/api";
-import type { Asset, AuditLog, Page, Sensor, Site, Zone } from "../types/api";
+import type { Asset, AuditLog, Page, RiskFinding, Sensor, Site, Zone } from "../types/api";
 
 export default function DashboardPage() {
   const { activeOrg, canAdmin } = useAuth();
@@ -29,6 +29,12 @@ export default function DashboardPage() {
   const assetsQuery = useQuery({
     queryKey: ["assets", activeOrg?.id, "dashboard"],
     queryFn: () => api<Page<Asset>>("/assets?limit=200"),
+    enabled: !!activeOrg,
+  });
+
+  const risksQuery = useQuery({
+    queryKey: ["risks", activeOrg?.id, "open"],
+    queryFn: () => api<Page<RiskFinding>>("/risks?status=open&limit=200"),
     enabled: !!activeOrg,
   });
 
@@ -92,16 +98,17 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">Açık Risk Bulguları</span>
-            <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">
-              Aşama 4
-            </span>
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="text-xs font-medium text-slate-500">Açık Risk / Kritik Risk</div>
+          <div className="mt-2 text-2xl font-semibold text-slate-900">
+            {risksQuery.isLoading
+              ? "…"
+              : `${risksQuery.data?.total ?? 0} / ${(risksQuery.data?.items ?? []).filter((r) => r.severity === "critical").length}`}
           </div>
-          <div className="mt-2 text-sm text-slate-600">Risk motoru henüz aktif değil</div>
           <div className="mt-1 text-xs text-slate-500">
-            Kural tabanlı risk değerlendirmesi Aşama 4'te eklenecek.
+            <Link to="/risks" className="text-blue-700 hover:underline">
+              Risk merkezine git →
+            </Link>
           </div>
         </div>
       </div>

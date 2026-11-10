@@ -273,6 +273,47 @@ export default function AssetDetailPage() {
       </div>
 
       {/* İletişim İlişkileri */}
+      <Card title={`Risk Bulguları (${asset.risk_findings.length})`}>
+        {asset.risk_findings.length === 0 ? (
+          <Empty>Bu cihaz için kayıtlı risk bulgusu yok.</Empty>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="border-b border-slate-200 uppercase text-slate-500">
+                <tr>
+                  <th className="py-2 pr-4">Başlık</th>
+                  <th className="py-2 pr-4">Kural</th>
+                  <th className="py-2 pr-4">Seviye / Puan</th>
+                  <th className="py-2 pr-4">Güven</th>
+                  <th className="py-2 pr-4">Durum</th>
+                  <th className="py-2">Önerilen Aksiyon</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {asset.risk_findings.map((rf) => (
+                  <tr key={rf.id}>
+                    <td className="py-2 pr-4 font-medium text-slate-900">
+                      <Link to="/risks" className="text-blue-700 hover:underline">
+                        {rf.title}
+                      </Link>
+                    </td>
+                    <td className="py-2 pr-4 font-mono text-slate-700">{rf.rule_key}</td>
+                    <td className="py-2 pr-4">
+                      <CriticalityBadge value={rf.severity} />{" "}
+                      <span className="ml-1 font-mono font-semibold">{rf.score}/100</span>
+                    </td>
+                    <td className="py-2 pr-4 font-mono">%{Math.round(rf.confidence * 100)}</td>
+                    <td className="py-2 pr-4 font-medium">{rf.status}</td>
+                    <td className="py-2 text-slate-600">{rf.recommendation}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {/* İletişim İlişkileri */}
       <Card title={`Gözlemlenen İletişim İlişkileri (${asset.communications.length})`}>
         {asset.communications.length === 0 ? (
           <Empty>Bu cihaz için henüz iletişim akışı gözlemlenmedi.</Empty>

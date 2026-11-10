@@ -27,6 +27,7 @@ from app.modules.ingestion.schemas import (
     ObservationIn,
     ObservationIngestStats,
 )
+from app.modules.risk_engine.service import evaluate_organization_risks
 
 
 def _utc(dt: datetime) -> datetime:
@@ -285,6 +286,7 @@ def ingest_observations(
     sensor.last_seen_at = run.ended_at
     sensor.status = "active"
     db.commit()
+    evaluate_organization_risks(db, sensor.organization_id, site_id=sensor.site_id)
 
     return ObservationIngestStats(
         discovery_run_id=run.id,
@@ -389,6 +391,7 @@ def ingest_communications(
     sensor.last_seen_at = datetime.now(UTC)
     sensor.status = "active"
     db.commit()
+    evaluate_organization_risks(db, sensor.organization_id, site_id=sensor.site_id)
 
     return CommunicationIngestStats(
         received=len(items),

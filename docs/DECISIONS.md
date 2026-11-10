@@ -50,3 +50,9 @@ Sunucu durumu için `@tanstack/react-query`, kimlik/aktif organizasyon için kü
 - `is_verified=False` olan hiçbir cihaza tahmini üretici (`vendor`) atanmaz; üretici alanı boşsa arayüzde açıkça `"Üretici bilgisi doğrulanmadı"` gösterilir.
 - Yalnızca IP/MAC bilgisi varsa `"Bilinmeyen cihaz"`, gözlemlenen protokol `modbus` vb. ise `"Muhtemel endüstriyel cihaz (MODBUS gözlendi)"`, hostname deseni eşleşirse `"Muhtemel HMI/PLC/SCADA (Doğrulanmadı)"` etiketi üretilir.
 - Kullanıcı cihazı manuel olarak düzenleyip `is_verified=True` yaptığında veya doğrulanmış CSV içe aktardığında `confidence=1.0` olur.
+
+## D-015 Merkezi 100 puanlık risk modeli ve kanıt güveninden ayrımı (2026-11-11)
+- Risk puanı (`risk_score`, 0–100) ile bulgu güveni (`confidence`, 0.0–1.0) birbirine karıştırılmaz; iki ayrı alan olarak saklanır ve gösterilir.
+- Puanlama ağırlıkları `backend/app/modules/risk_engine/scoring.py` içinde merkezi olarak tanımlanmıştır: Cihaz Kritikliği (30) + Ağ Maruziyeti (25) + Doğrulanmış Zafiyet (25) + Beklenmeyen Davranış (10) + Envanter Eksikliği (10). Her bulgunun `evidence_json.score_breakdown` alanında puan kırılımı açıkça saklanır.
+- `KNOWN_VULNERABILITY` kuralı yalnızca `is_verified=True` ve tam `vendor + model + firmware_version` eşleşmesi olduğunda zafiyet bulgusu üretir; sürümsüz cihazlarda kesin CVE iddiası yapılmaz.
+- Analistin `false_positive` veya `accepted` olarak işaretlediği bulgular, risk motoru tekrar çalıştığında otomatik olarak yeniden `open` durumuna döndürülmez; `NEW_ASSET` ve `UNKNOWN_OT_ASSET` bulguları ise cihaz doğrulandığında (`is_verified=True`) otomatik olarak `resolved` durumuna geçirilir.

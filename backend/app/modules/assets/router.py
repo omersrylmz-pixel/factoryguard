@@ -12,7 +12,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.deps import DbSession, Tenant, TenantContext, client_ip, require_role
-from app.models import Asset, AssetCommunication, AssetIdentifier, AssetObservation, Zone
+from app.models import Asset, AssetCommunication, AssetIdentifier, AssetObservation, RiskFinding, Zone
 from app.models.asset import ASSET_TYPES
 from app.models.base import CRITICALITY_LEVELS
 from app.modules.assets.schemas import (
@@ -32,6 +32,8 @@ from app.modules.assets.schemas import (
 from app.modules.audit.service import changes, record
 from app.modules.discovery.classifier import infer_from_evidence
 from app.modules.ingestion.service import _upsert_identifier
+from app.modules.risk_engine.router import _to_risk_out
+from app.modules.risk_engine.service import evaluate_organization_risks
 from app.modules.sites.router import get_site_or_404
 
 router = APIRouter(prefix="/assets", tags=["assets"])
@@ -229,6 +231,14 @@ def get_asset(asset_id: uuid.UUID, db: DbSession, ctx: Tenant):
         observed_protocols=sorted(observed_protocols),
         base_confidence=asset.confidence,
     )
+    findings = db.scalars(
+        select(RiskFinding)
+        .where(
+            RiskFinding.organization_id == ctx.organization_id,
+            RiskFinding.asset_id == asset.id,
+        )
+        .order_by(RiskFinding.score.desc(), RiskFinding.last_seen_at.desc())
+    ).all()
     base = _to_asset_out(asset, sorted(observed_protocols))
     return AssetDetailOut(
         **base.model_dump(),
@@ -236,6 +246,7 @@ def get_asset(asset_id: uuid.UUID, db: DbSession, ctx: Tenant):
         identifiers=[AssetIdentifierOut.model_validate(i) for i in identifiers],
         observations=[AssetObservationOut.model_validate(o) for o in observations],
         communications=comm_out,
+        risk_findings=[_to_risk_out(f, asset).model_dump(mode="json") for f in findings],
     )
 
 
@@ -300,6 +311,7 @@ def update_asset(
             ip_address=client_ip(request),
         )
     db.commit()
+    evaluate_organization_risks(db, ctx.organization_id, site_id=asset.site_id)
     return _to_asset_out(asset)
 
 
@@ -466,4 +478,5 @@ def import_assets_csv(
         ip_address=client_ip(request),
     )
     db.commit()
+    evaluate_organization_risks(db, ctx.organization_id, site_id=site.id)
     return CsvImportResult(processed_rows=processed, created=created, updated=updated, errors=errors)

@@ -10,10 +10,13 @@ from app.core.db import get_engine
 from app.modules.assets.router import router as assets_router
 from app.modules.audit.router import router as audit_router
 from app.modules.auth.router import router as auth_router
+from app.modules.communications.router import router as communications_router
 from app.modules.ingestion.router import router as ingestion_router
 from app.modules.organizations.router import router as org_router
+from app.modules.risk_engine.router import router as risks_router
 from app.modules.sensors.router import router as sensors_router
 from app.modules.sites.router import router as site_router
+from app.modules.vulnerabilities.router import router as vulnerabilities_router
 from app.modules.zones.router import router as zone_router
 
 VERSION = "0.1.0"
@@ -38,7 +41,19 @@ def create_app() -> FastAPI:
         )
 
     api = APIRouter(prefix="/api/v1")
-    for r in (auth_router, org_router, site_router, zone_router, sensors_router, ingestion_router, assets_router, audit_router):
+    for r in (
+        auth_router,
+        org_router,
+        site_router,
+        zone_router,
+        sensors_router,
+        ingestion_router,
+        assets_router,
+        communications_router,
+        risks_router,
+        vulnerabilities_router,
+        audit_router,
+    ):
         api.include_router(r)
 
     @api.get("/health", tags=["system"])

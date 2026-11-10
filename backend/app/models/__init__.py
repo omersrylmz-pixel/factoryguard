@@ -2,6 +2,7 @@ from app.models.asset import Asset, AssetCommunication, AssetIdentifier, AssetOb
 from app.models.audit import AuditLog
 from app.models.base import Base
 from app.models.organization import Organization, Site, Zone
+from app.models.risk import AssetVulnerability, RiskFinding, VulnerabilityCatalog
 from app.models.sensor import DiscoveryRun, Sensor
 from app.models.user import Membership, RefreshToken, User
 
@@ -10,14 +11,17 @@ __all__ = [
     "AssetCommunication",
     "AssetIdentifier",
     "AssetObservation",
+    "AssetVulnerability",
     "AuditLog",
     "Base",
     "DiscoveryRun",
     "Membership",
     "Organization",
     "RefreshToken",
+    "RiskFinding",
     "Sensor",
     "Site",
     "User",
+    "VulnerabilityCatalog",
     "Zone",
 ]

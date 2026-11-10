@@ -6,8 +6,8 @@
 | 1 Altyapı | FastAPI, PostgreSQL, Alembic, auth, org/site/zone, React iskeleti, Compose | Giriş + fabrika kaydı + DB okuma/yazma | ✅ Tamamlandı |
 | 2 Sensör aktarımı | Sensör kimliği, ingestion, heartbeat, dedup | Sensör verisi PostgreSQL'e yazılır | ✅ Tamamlandı |
 | 3 Cihaz keşfi | Asset eşleştirme, identifiers, confidence, manuel düzenleme, CSV | Görülen cihazlar envanterde, düzenlenebilir | ✅ Tamamlandı |
-| 4 İlişkiler + risk | Communications, 5 kural, puanlama, durumlar | Olaydan açıklanabilir bulgu | ⬜ Sıradaki |
-| 5 Frontend + rapor | Tüm sayfalar, CSV/PDF | Panelde cihaz/risk/rapor | ⬜ |
+| 4 İlişkiler + risk | Communications, 5 kural, puanlama, durumlar | Olaydan açıklanabilir bulgu | ✅ Tamamlandı |
+| 5 Frontend + rapor | Tüm sayfalar, CSV/PDF | Panelde cihaz/risk/rapor | ⬜ Sıradaki |
 | 6 Sertleştirme | Güvenlik/tenant/performans testleri, kurulum/kaldırma, pilot | Kontrollü pilota hazır | ⬜ |
 
 Gelecek (MVP dışı): Growth, Partner, Intelligence, Enterprise; S7, EtherNet/IP, OPC UA ayrıştırma.

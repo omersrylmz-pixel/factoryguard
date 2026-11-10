@@ -181,6 +181,7 @@ export interface AssetDetail extends Asset {
   identifiers: AssetIdentifier[];
   observations: AssetObservation[];
   communications: AssetCommunication[];
+  risk_findings: RiskFinding[];
 }
 
 export interface CsvImportResult {
@@ -188,4 +189,75 @@ export interface CsvImportResult {
   created: number;
   updated: number;
   errors: { row: number; error: string }[];
+}
+
+export type RiskStatus = "open" | "investigating" | "accepted" | "resolved" | "false_positive";
+export type RiskRuleKey =
+  | "NEW_ASSET"
+  | "UNKNOWN_OT_ASSET"
+  | "UNEXPECTED_COMMUNICATION"
+  | "UNAPPROVED_REMOTE_PATH"
+  | "KNOWN_VULNERABILITY";
+
+export interface RiskFinding {
+  id: string;
+  organization_id: string;
+  asset_id: string;
+  asset_ip: string | null;
+  asset_name: string | null;
+  site_id: string | null;
+  rule_key: RiskRuleKey;
+  title: string;
+  description: string;
+  severity: Criticality;
+  score: number;
+  confidence: number;
+  evidence: {
+    what_observed?: string;
+    why_important?: string;
+    supporting_data?: Record<string, unknown>;
+    score_breakdown?: Record<string, number>;
+    [key: string]: unknown;
+  };
+  recommendation: string;
+  status: RiskStatus;
+  first_seen_at: string;
+  last_seen_at: string;
+  resolved_at: string | null;
+}
+
+export interface CommunicationEdge {
+  id: string;
+  site_id: string;
+  source_asset_id: string;
+  source_ip: string | null;
+  source_label: string;
+  source_type: AssetType;
+  target_asset_id: string;
+  target_ip: string | null;
+  target_label: string;
+  target_type: AssetType;
+  protocol: string;
+  source_port: number | null;
+  target_port: number | null;
+  connection_count: number;
+  first_seen_at: string;
+  last_seen_at: string;
+}
+
+export interface GraphNode {
+  id: string;
+  site_id: string;
+  zone_id: string | null;
+  label: string;
+  ip_address: string | null;
+  asset_type: AssetType;
+  classification_label: string;
+  criticality: Criticality;
+  is_verified: boolean;
+}
+
+export interface CommunicationGraph {
+  nodes: GraphNode[];
+  edges: CommunicationEdge[];
 }
