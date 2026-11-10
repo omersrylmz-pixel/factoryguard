@@ -18,3 +18,13 @@ Sınıflandırma backend'de, kanıt + confidence ile yapılacak (Aşama 3).
 
 ## D-006 Geliştirme ortamında Zeek yok
 Docker/WSL yok. Zeek Ubuntu VM'de çalışır; normalizer, Zeek formatında sentetik loglarla test edilir.
+
+## D-007 Lab ortamı: Docker Desktop + WSL2, resmî zeek/zeek imajı (2026-11-10)
+D-006'yı değiştirir. Zeek container'ı `--network none` ve PCAP salt-okunur bağlanarak çalışır → ağa paket gönderemez.
+
+## D-008 İletişim kaydı anahtarı (src, dst, transport, dst_port) (2026-11-10)
+Gerçek veride payload'sız TCP bağlantıları `service` alanı almıyor; protokol anahtarda olunca aynı akış ikiye bölünüyordu.
+Protokol güveni akış bazında en yüksek seviyeye yükseltilir.
+
+## D-009 MAC tek başına cihaz kimliği değildir (2026-11-10)
+Gerçek PCAP'te iki IP aynı MAC'i paylaştı. Aşama 3 eşleştirmesi MAC+IP+bağlam ile, confidence ile yapılacak.

@@ -1,42 +1,45 @@
 # PROJECT STATUS
 
-**Güncel aşama:** Aşama 0 — Laboratuvar (kısmen tamamlandı) · Son güncelleme: 2026-11-09
+**Güncel aşama:** Aşama 0 — Laboratuvar ✅ TAMAMLANDI · Sıradaki: Aşama 1 · Son güncelleme: 2026-11-10
 
-## Ortam
-- Windows geliştirme makinesi: Python 3.13, Node 22, git.
-- **Docker yok, WSL yok → Zeek bu makinede çalıştırılamıyor.** Zeek, Ubuntu VM'de `deployment/scripts/lab_zeek.sh` ile çalıştırılacak.
-
-## Ortam kontrolü (2026-11-09 18:31)
-| Kontrol | Sonuç |
+## Ortam (2026-11-10 doğrulandı)
+| Bileşen | Sürüm / durum |
 |---|---|
-| Windows | 11 Pro, build 26300 |
-| Hypervisor / sanallaştırma | Mevcut (VBS çalışıyor) ✅ |
-| RAM / C: boş alan | 31.6 GB / ~111 GB ✅ |
-| WSL | **Kurulu değil** ❌ |
-| Docker Desktop | **Kurulu değil** ❌ |
-| Agent kabuğu yönetici mi | Hayır → WSL/Docker kurulumu kullanıcı tarafından (UAC + yeniden başlatma) yapılmalı |
+| Windows 11 Pro | build 26300 |
+| WSL | Ubuntu-24.04 (WSL2), docker-desktop (WSL2) ✅ |
+| Docker Engine / Compose | 29.9.3 / v5.7.0 ✅ (`hello-world` geçti) |
+| Zeek | resmî `zeek/zeek:latest` → **zeek 9.0.1** ✅ |
+| PostgreSQL | `postgres:16` → 16.15, healthy, yalnızca 127.0.0.1:5432 ✅ |
+| Python | 3.13 (.venv) · Node 22 |
 
-Hazırlanan (henüz çalıştırılmadı, **test edilmedi**): `deployment/compose.yaml` (PostgreSQL 16, yalnızca 127.0.0.1),
-`deployment/scripts/lab_zeek_docker.ps1` (resmî `zeek/zeek` imajı, `--network none`, dosyadan okuma).
+## Aşama 0 başarı kriteri — karşılandı
+Gerçek PCAP (`MODBUS-TestDataPart1.pcap`, SHA-256 `94942B3D…213D`) → Zeek (Docker, `--network none`, salt-okunur) →
+conn.log (5 bağlantı) + modbus.log (35 kayıt) → normalizer → **4 cihaz, 4 iletişim, 0 reddedilen kayıt**.
+
+| Kaynak | Hedef | Port | Protokol | Güven | Bağlantı |
+|---|---|---|---|---|---|
+| 10.0.0.57 | 10.0.0.3 | 502 | modbus | observed | 2 |
+| 10.0.0.57 | 10.0.0.8 | 502 | modbus | observed | 2 |
+| 10.0.0.9 | 10.0.0.3 | 502 | modbus | observed | 1 |
+| 10.0.0.8 | 10.0.0.57 | 4446 | — | none | 1 |
 
 ## Tamamlanan
-- Proje klasör iskeleti.
-- `sensor/parsers/zeek.py`: Zeek JSON + TSV log okuyucu (bozuk satırları atlar, loglar).
-- `sensor/normalizer/normalize.py`: conn/dhcp/dns/modbus → normalize gözlem + iletişim JSON.
-  - uid ile tekrar kontrolü, IP/MAC doğrulama, protokol güveni (`observed` vs `port_hint`), tahmin yok.
-- `sensor/cli.py`: `python -m sensor.cli normalize --logs DIR --sensor-id ID --out FILE`.
-- Sentetik (DEMO işaretli) örnek loglar ve 10 birim testi.
+- Zeek JSON+TSV parser, normalizer, CLI (Aşama 0 ilk oturum).
+- Docker lab: `deployment/scripts/lab_zeek_docker.ps1`, `deployment/compose.yaml` (çalıştırıldı ve doğrulandı).
+- Gerçek veriyle bulunan hata düzeltildi: aynı akış, payload'sız bağlantı yüzünden iki iletişim kaydına bölünüyordu
+  (port_hint + observed). Artık anahtar protokolü içermiyor; güven yalnızca yükseltiliyor.
+- Lab script'i: Python INFO loglarını PowerShell'in hata saymasına neden olan sorun düzeltildi.
+- Gerçek Zeek çıktısı regresyon testi olarak saklandı (`sample-data/zeek/real-modbus-testdata-part1/`).
 
-## Devam eden / eksik (Aşama 0)
-- [ ] Ubuntu Server VM + Zeek kurulumu (kullanıcı tarafında; Docker/WSL olmadığı için).
-- [ ] Gerçek bir herkese açık Modbus PCAP'i ile uçtan uca doğrulama.
-- [ ] ARP: Zeek varsayılan olarak ARP logu üretmez; MAC'ler `mac-logging` policy (orig_l2_addr/resp_l2_addr) ve DHCP'den alınıyor.
-
-## Bilinen sınırlamalar
-- conn.log'daki L2 adresi, yönlendirilmiş trafikte router'ın MAC'i olabilir. Normalizer ilk görülen MAC'i alır, DHCP MAC'i bunu ezer. Aşama 3'te asset eşleştirmede ele alınacak.
+## Bilinen sınırlamalar / gözlemler
+- **Gerçek veride iki IP (10.0.0.8, 10.0.0.9) aynı MAC'i (00:50:04:93:70:67) paylaşıyor** → muhtemelen gateway/çok IP'li cihaz.
+  Normalizer birleştirmiyor (doğru). Aşama 3'te MAC'e tek başına dayanarak cihaz birleştirme YAPILMAMALI.
+- Zeek varsayılan olarak ARP logu üretmez; MAC'ler `mac-logging` policy ve DHCP'den geliyor.
+- Test PCAP'i 2004 tarihli, küçük; DHCP/DNS içermiyor → hostname yolu yalnızca sentetik veriyle test edildi.
+- PCAP lisansı kaynakta belirtilmemiş → yalnızca lab amaçlı, git'e eklenmedi.
 
 ## Son test sonuçları
-Bkz. `NEXT_SESSION.md`.
+`pytest sensor -q` → **13 passed** (10 eski + 2 yeni birim + 1 gerçek veri E2E).
 
 ## Sonraki hedef
-Aşama 0 doğrulaması (gerçek PCAP) → Aşama 1: FastAPI + PostgreSQL + Alembic + auth + org/site/zone.
+Aşama 1: FastAPI + SQLAlchemy + Alembic (PostgreSQL container'ı), auth, organizations/sites/zones, React iskeleti.

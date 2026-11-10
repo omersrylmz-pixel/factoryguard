@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 
 # Port ipuçları: yalnızca yardımcı bilgi, protokol kanıtı DEĞİL.
 PORT_HINTS = {502: "modbus", 102: "s7comm?", 44818: "enip?", 4840: "opcua?", 20000: "dnp3?"}
+_CONF_RANK = {"none": 0, "port_hint": 1, "observed": 2}
 
 
 def ts_to_iso(ts) -> str | None:
@@ -118,10 +119,14 @@ class Normalizer:
                 d.mac = mac
             if proto and conf == "observed":
                 d.protocols.add(proto)
-        key = (src, dst, r.get("proto"), proto, dport)
+        # Anahtar protokolü içermez: aynı akışın payload'sız bağlantıları (ör. yalnızca
+        # TCP el sıkışma) ayrı kayda bölünmesin. Güven yalnızca yukarı yükseltilir.
+        key = (src, dst, r.get("proto"), dport)
         c = self.comms.get(key)
         if not c:
             c = self.comms[key] = Comm(src, dst, r.get("proto"), proto, conf, dport)
+        elif _CONF_RANK[conf] > _CONF_RANK[c.protocol_confidence]:
+            c.protocol, c.protocol_confidence = proto, conf
         c.count += 1
         if isinstance(sport, int):
             c.source_ports.add(sport)

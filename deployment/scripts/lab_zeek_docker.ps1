@@ -18,5 +18,10 @@ docker run --rm --network none `
   zeek -C -r "/pcap/$(Split-Path $pcapFull -Leaf)" LogAscii::use_json=T policy/protocols/conn/mac-logging
 if ($LASTEXITCODE -ne 0) { throw "Zeek başarısız (exit $LASTEXITCODE)" }
 
-& "$root\.venv\Scripts\python.exe" -m sensor.cli normalize --logs $out --sensor-id $SensorId --out "$out\normalized.json"
+# Python INFO logları stderr'e yazar; PowerShell bunu hata saymasın, exit code'a bak.
+$ErrorActionPreference = "Continue"
+Push-Location $root
+try { & "$root\.venv\Scripts\python.exe" -m sensor.cli normalize --logs $out --sensor-id $SensorId --out "$out\normalized.json" 2>&1 | ForEach-Object { "$_" } }
+finally { Pop-Location }
+if ($LASTEXITCODE -ne 0) { throw "Normalizer başarısız (exit $LASTEXITCODE)" }
 Write-Host "Çıktı: $out\normalized.json"

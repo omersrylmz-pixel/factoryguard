@@ -70,6 +70,26 @@ def test_mac_normalization():
     assert norm_mac("zz") is None
 
 
+def test_same_flow_not_split_and_confidence_upgraded():
+    # Gerçek PCAP'te görülen durum: payload'sız el sıkışma + gerçek Modbus aynı akış.
+    n = Normalizer("s")
+    base = {"id.orig_h": "10.0.0.57", "id.resp_h": "10.0.0.3", "id.resp_p": 502, "proto": "tcp"}
+    n.add_conn({**base, "uid": "a", "ts": 1.0})
+    n.add_conn({**base, "uid": "b", "ts": 2.0, "service": "modbus"})
+    comms = n.communications()
+    assert len(comms) == 1
+    assert comms[0]["protocol_confidence"] == "observed" and comms[0]["connection_count"] == 2
+
+
+def test_shared_mac_kept_per_ip_not_merged():
+    # Gerçek PCAP: iki IP aynı MAC (gateway). Normalizer birleştirmez; karar Aşama 3'te.
+    n = Normalizer("s")
+    for ip, uid in (("10.0.0.8", "a"), ("10.0.0.9", "b")):
+        n.add_conn({"uid": uid, "ts": 1.0, "id.orig_h": "10.0.0.57", "id.resp_h": ip, "id.resp_p": 502,
+                    "proto": "tcp", "resp_l2_addr": "00:50:04:93:70:67"})
+    assert {o["device"]["ip"] for o in n.observations()} >= {"10.0.0.8", "10.0.0.9"}
+
+
 def test_conn_without_ts_rejected():
     n = Normalizer("s")
     n.add_conn({"id.orig_h": "10.0.0.1", "id.resp_h": "10.0.0.2"})
