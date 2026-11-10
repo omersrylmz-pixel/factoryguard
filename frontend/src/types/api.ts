@@ -107,3 +107,85 @@ export interface DiscoveryRun {
 export interface SensorDetail extends Sensor {
   recent_runs: DiscoveryRun[];
 }
+
+export type AssetType =
+  | "plc"
+  | "hmi"
+  | "scada_server"
+  | "industrial_pc"
+  | "network_device"
+  | "engineering_workstation"
+  | "server"
+  | "computer"
+  | "unknown_device";
+
+export interface Asset {
+  id: string;
+  organization_id: string;
+  site_id: string;
+  zone_id: string | null;
+  name: string | null;
+  ip_address: string | null;
+  mac_address: string | null;
+  hostname: string | null;
+  asset_type: AssetType;
+  vendor: string | null;
+  model: string | null;
+  serial_number: string | null;
+  firmware_version: string | null;
+  criticality: Criticality;
+  confidence: number;
+  is_verified: boolean;
+  is_active: boolean;
+  first_seen_at: string;
+  last_seen_at: string;
+  created_at: string;
+  classification_label: string;
+  vendor_status_label: string;
+}
+
+export interface AssetIdentifier {
+  id: string;
+  identifier_type: "ip" | "mac" | "hostname";
+  identifier_value: string;
+  first_seen_at: string;
+  last_seen_at: string;
+  confidence: number;
+}
+
+export interface AssetObservation {
+  id: string;
+  sensor_id: string;
+  source: string;
+  evidence: Record<string, unknown>;
+  confidence: number;
+  observed_at: string;
+}
+
+export interface AssetCommunication {
+  id: string;
+  direction: "outbound" | "inbound";
+  peer_asset_id: string;
+  peer_ip: string | null;
+  peer_name: string | null;
+  protocol: string;
+  source_port: number | null;
+  target_port: number | null;
+  connection_count: number;
+  first_seen_at: string;
+  last_seen_at: string;
+}
+
+export interface AssetDetail extends Asset {
+  classification_reasons: string[];
+  identifiers: AssetIdentifier[];
+  observations: AssetObservation[];
+  communications: AssetCommunication[];
+}
+
+export interface CsvImportResult {
+  processed_rows: number;
+  created: number;
+  updated: number;
+  errors: { row: number; error: string }[];
+}

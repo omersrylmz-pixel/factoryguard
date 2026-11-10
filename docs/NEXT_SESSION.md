@@ -1,33 +1,29 @@
 # NEXT SESSION
 
 ## En son ne yapıldı (2026-11-10)
-Aşama 2 (Sensör ve Veri Aktarımı) tamamlandı ve doğrulandı:
-- `sensors`, `discovery_runs`, `assets`, `asset_identifiers`, `asset_observations`, `asset_communications` modelleri ve ikinci Alembic migration'ı (`8f4c19a0b312`).
-- Sensör kayıt (`enroll`), SHA-256 fingerprint kimlik doğrulaması, heartbeat/sağlık kontrolü (`/api/v1/sensors/*`).
-- Gözlem ve iletişim ingestion uç noktaları (`/api/v1/ingest/observations`, `/api/v1/ingest/communications`), tekrarlanan kayıt kontrolü (`dedup_hash`), IP değişiminde `asset_identifiers` geçmişini koruma ve gerçek Zeek çıktısıyla uçtan uca test.
-- `sensor/exporter/http_exporter.py` ve `sensor/cli.py export` komutu.
-- Frontend `SensorsPage.tsx` ve `DashboardPage.tsx` sensör sayacı entegrasyonu.
+Aşama 3 (Cihaz Keşfi ve Merkezi Envanter) tamamlandı ve doğrulandı:
+- Kanıta dayalı cihaz sınıflandırma yardımcısı (`backend/app/modules/discovery/classifier.py`).
+- Merkezi cihaz envanteri API'si (`GET /api/v1/assets`, `GET /api/v1/assets/{id}`, `PATCH /api/v1/assets/{id}`, `POST /api/v1/assets/import`).
+- Frontend `AssetsPage.tsx` (filtreler + CSV içe aktarma) ve `AssetDetailPage.tsx` (detay, manuel düzenleme/doğrulama, iletişim, kimlik ve gözlem geçmişi).
 
 ## Değişen / eklenen ana dosyalar
-- `backend/app/models/{sensor,asset,__init__}.py`
-- `backend/app/core/{security,deps}.py`
-- `backend/app/modules/sensors/router.py`
-- `backend/app/modules/ingestion/{schemas,service,router}.py`
-- `backend/migrations/versions/20261110_8f4c19a0b312_sensors_assets_observations_communications.py`
-- `backend/tests/test_sensors_ingestion.py`, `backend/pytest.ini`
-- `sensor/exporter/http_exporter.py`, `sensor/cli.py`, `sensor/tests/test_exporter.py`
-- `frontend/src/pages/SensorsPage.tsx`, `frontend/src/pages/DashboardPage.tsx`, `frontend/src/layouts/AppLayout.tsx`, `frontend/src/App.tsx`, `frontend/src/types/api.ts`
+- `backend/app/modules/discovery/classifier.py`
+- `backend/app/modules/assets/{schemas,router}.py`
+- `backend/app/modules/ingestion/service.py`, `backend/app/main.py`
+- `backend/tests/test_assets.py`
+- `frontend/src/pages/{AssetsPage,AssetDetailPage,DashboardPage}.tsx`
+- `frontend/src/{App,layouts/AppLayout,hooks/useAuth,components/ui,types/api}.tsx`
 - `docs/*`
 
 ## Çalıştırılan testler
 - `pytest sensor -q` → **16 passed**
-- `pytest` (backend, gerçek PostgreSQL `factoryguard_test` üzerinde) → **41 passed**
+- `pytest` (backend, gerçek PostgreSQL `factoryguard_test` üzerinde) → **45 passed**
 - `npm run build` (frontend `tsc -b && vite build`) → **0 hata**
 
 ## Kalan / bilinen konular
 - Bilinen hata yok.
 
-## Bir sonraki oturumda ilk iş (Aşama 3 — Cihaz Keşfi ve Merkezi Envanter)
-1. Kanıta dayalı cihaz sınıflandırma kurallarını (`discovery` modülü — tahmin yapmadan, gözlemlenen protokollere ve kanıtlara göre `confidence` hesaplama) uygula.
-2. `GET /api/v1/assets`, `GET /api/v1/assets/{id}`, `PATCH /api/v1/assets/{id}` ve `POST /api/v1/assets/import` (CSV içe aktarma) endpoint'lerini ve testlerini yaz.
-3. Frontend'de `AssetsPage` (filtreli envanter tablosu + CSV içe aktarma) ve `AssetDetailPage` (genel bilgiler, düzenleme, kimlik ve gözlem geçmişi) sayfalarını ekle.
+## Bir sonraki oturumda ilk iş (Aşama 4 — Ağ İlişkileri ve Risk Motoru)
+1. `risk_findings`, `vulnerability_catalog`, `asset_vulnerabilities` modellerini ve Alembic migration'ını oluştur.
+2. `GET /api/v1/communications` ve `GET /api/v1/communications/graph` endpoint'lerini uygula.
+3. 5 temel kuralı (`NEW_ASSET`, `UNKNOWN_OT_ASSET`, `UNEXPECTED_COMMUNICATION`, `UNAPPROVED_REMOTE_PATH`, `KNOWN_VULNERABILITY`) ve merkezi 100 puanlık puanlama modelini içeren `risk_engine` modülünü ve `/api/v1/risks` endpoint'lerini yazıp test et.

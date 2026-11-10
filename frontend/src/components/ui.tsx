@@ -103,6 +103,18 @@ export const ROLE_LABEL: Record<string, string> = {
   viewer: "İzleyici",
 };
 
+export const ASSET_TYPE_LABEL: Record<string, string> = {
+  plc: "PLC",
+  hmi: "HMI",
+  scada_server: "SCADA Sunucusu",
+  industrial_pc: "Endüstriyel PC",
+  network_device: "Ağ Cihazı",
+  engineering_workstation: "Mühendislik İstasyonu",
+  server: "Sunucu",
+  computer: "Bilgisayar",
+  unknown_device: "Bilinmeyen Cihaz",
+};
+
 export function formatDate(iso: string): string {
   return new Date(iso).toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" });
 }

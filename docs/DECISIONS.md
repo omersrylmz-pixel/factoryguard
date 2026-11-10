@@ -45,3 +45,8 @@ Sunucu durumu için `@tanstack/react-query`, kimlik/aktif organizasyon için kü
 - Sensörün son görülme zamanı (`last_seen_at`) 180 saniyeyi aşarsa `connectivity_status` otomatik olarak `offline` raporlanır.
 - Gözlem tekrarı (`dedup_hash` = SHA-256(kanonik gözlem)) veritabanı seviyesinde `UNIQUE(sensor_id, dedup_hash)` ile engellenir.
 - Cihaz IP değiştirdiğinde (DHCP kanıtı veya sitedeki tekil MAC eşleşmesi) mevcut `Asset` güncellenir ve eski/yeni IP `asset_identifiers` tablosunda korunur; ancak birden fazla IP aynı MAC'i paylaşıyorsa (gateway durumu — D-009) yanlış birleştirme yapılmaz.
+
+## D-014 Kanıta dayalı cihaz sınıflandırması ve doğrulama durumu (2026-11-10)
+- `is_verified=False` olan hiçbir cihaza tahmini üretici (`vendor`) atanmaz; üretici alanı boşsa arayüzde açıkça `"Üretici bilgisi doğrulanmadı"` gösterilir.
+- Yalnızca IP/MAC bilgisi varsa `"Bilinmeyen cihaz"`, gözlemlenen protokol `modbus` vb. ise `"Muhtemel endüstriyel cihaz (MODBUS gözlendi)"`, hostname deseni eşleşirse `"Muhtemel HMI/PLC/SCADA (Doğrulanmadı)"` etiketi üretilir.
+- Kullanıcı cihazı manuel olarak düzenleyip `is_verified=True` yaptığında veya doğrulanmış CSV içe aktardığında `confidence=1.0` olur.

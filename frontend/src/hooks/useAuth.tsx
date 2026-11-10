@@ -11,6 +11,7 @@ interface AuthState {
   organizations: OrgMembership[];
   activeOrg: OrgMembership | null;
   canAdmin: boolean;
+  canEditAssets: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   setActiveOrg: (id: string) => void;
@@ -92,6 +93,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       organizations,
       activeOrg,
       canAdmin: activeOrg?.role === "owner" || activeOrg?.role === "admin",
+      canEditAssets:
+        activeOrg?.role === "owner" || activeOrg?.role === "admin" || activeOrg?.role === "analyst",
       login,
       logout,
       setActiveOrg,

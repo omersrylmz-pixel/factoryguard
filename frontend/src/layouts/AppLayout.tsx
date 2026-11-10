@@ -10,7 +10,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { to: "/", label: "Genel Bakış" },
-  { to: "/assets", label: "Cihaz Envanteri", stage: "Aşama 3" },
+  { to: "/assets", label: "Cihaz Envanteri" },
   { to: "/network", label: "Ağ Görünümü", stage: "Aşama 4" },
   { to: "/risks", label: "Risk Merkezi", stage: "Aşama 4" },
   { to: "/sensors", label: "Sensörler" },

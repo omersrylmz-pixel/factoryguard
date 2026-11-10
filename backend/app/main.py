@@ -7,6 +7,7 @@ from sqlalchemy import text
 
 from app.core.config import get_settings
 from app.core.db import get_engine
+from app.modules.assets.router import router as assets_router
 from app.modules.audit.router import router as audit_router
 from app.modules.auth.router import router as auth_router
 from app.modules.ingestion.router import router as ingestion_router
@@ -37,7 +38,7 @@ def create_app() -> FastAPI:
         )
 
     api = APIRouter(prefix="/api/v1")
-    for r in (auth_router, org_router, site_router, zone_router, sensors_router, ingestion_router, audit_router):
+    for r in (auth_router, org_router, site_router, zone_router, sensors_router, ingestion_router, assets_router, audit_router):
         api.include_router(r)
 
     @api.get("/health", tags=["system"])

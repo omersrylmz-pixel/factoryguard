@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 import { useAuth } from "./hooks/useAuth";
 import AppLayout from "./layouts/AppLayout";
+import AssetDetailPage from "./pages/AssetDetailPage";
+import AssetsPage from "./pages/AssetsPage";
 import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
 import SensorsPage from "./pages/SensorsPage";
@@ -33,6 +35,8 @@ export default function App() {
           }
         >
           <Route index element={<DashboardPage />} />
+          <Route path="assets" element={<AssetsPage />} />
+          <Route path="assets/:id" element={<AssetDetailPage />} />
           <Route path="sensors" element={<SensorsPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

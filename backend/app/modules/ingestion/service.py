@@ -20,6 +20,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Asset, AssetCommunication, AssetIdentifier, AssetObservation, DiscoveryRun, Sensor
+from app.modules.discovery.classifier import infer_from_evidence
 from app.modules.ingestion.schemas import (
     CommunicationIn,
     CommunicationIngestStats,
@@ -225,6 +226,11 @@ def ingest_observations(
             continue
 
         source_logs = obs.evidence.get("source_logs") if isinstance(obs.evidence.get("source_logs"), list) else []
+        obs_protos = (
+            obs.evidence.get("observed_protocols")
+            if isinstance(obs.evidence.get("observed_protocols"), list)
+            else []
+        )
         asset, created = _resolve_or_create_asset(
             db,
             sensor,
@@ -237,6 +243,17 @@ def ingest_observations(
             source_logs=source_logs,
             batch_seen_ips_by_mac=batch_ips_by_mac,
         )
+        if not asset.is_verified:
+            hint = infer_from_evidence(
+                current_type=asset.asset_type,
+                is_verified=asset.is_verified,
+                vendor=asset.vendor,
+                hostname=asset.hostname,
+                observed_protocols=obs_protos,
+                base_confidence=asset.confidence,
+            )
+            asset.asset_type = hint.inferred_type
+            asset.confidence = max(asset.confidence, hint.confidence)
         if created:
             created_count += 1
         else:
