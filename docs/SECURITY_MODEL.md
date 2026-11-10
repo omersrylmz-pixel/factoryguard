@@ -28,3 +28,10 @@
 
 ## Denetim Kaydı — Audit Log (Aşama 1 — uygulandı)
 - Giriş başarılı/başarısız/kilitli, çıkış, refresh token tekrar kullanım tespiti, organizasyon/fabrika/bölge oluşturma, güncelleme (eski/yeni değer farklarıyla) ve silme işlemleri ana veritabanı işlemiyle aynı transaction içinde `audit_logs` tablosuna yazılır.
+
+## Sensör Kimlik Doğrulaması ve Veri Aktarımı (Aşama 2 — uygulandı)
+- Sensörler yönetici tarafından fabrikaya (`site_id`) özel kaydedilir (`POST /api/v1/sensors/enroll`).
+- Üretilen `fg_snr_...` anahtarı yalnızca kayıt anında bir kez döndürülür; veritabanında yalnızca SHA-256 özeti (`credential_fingerprint`) tutulur.
+- `status='revoked'` olan sensörlerin tüm ingestion ve heartbeat istekleri `401 Unauthorized` ile reddedilir.
+- Ingestion uç noktaları (`/api/v1/ingest/observations`, `/api/v1/ingest/communications`) yalnızca doğrulanmış sensörün kendi `organization_id` ve `site_id` kapsamına yazabilir; istemci yükünden (payload) tenant bilgisi alınmaz.
+- `asset_observations` ve `asset_communications` tabloları `(asset_id, organization_id)` ve `(sensor_id, organization_id)` bileşik foreign key'leri ile veritabanı seviyesinde de tenant sızıntısına karşı korunur.

@@ -66,5 +66,11 @@ def new_refresh_token() -> tuple[str, str]:
     return raw, hash_token(raw)
 
 
+def new_sensor_credential() -> tuple[str, str]:
+    """Sensör için tek seferlik API anahtarı (`fg_snr_...`) ve SHA-256 fingerprint üretir."""
+    raw = f"fg_snr_{secrets.token_urlsafe(36)}"
+    return raw, hash_token(raw)
+
+
 def hash_token(raw: str) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()

@@ -39,3 +39,9 @@ Gerçek PCAP'te iki IP aynı MAC'i paylaştı. Aşama 3 eşleştirmesi MAC+IP+ba
 
 ## D-012 Frontend veri yönetimi: TanStack Query + React Context (2026-11-10)
 Sunucu durumu için `@tanstack/react-query`, kimlik/aktif organizasyon için küçük bir `AuthContext` kullanıldı. Redux/Zustand eklenmedi; organizasyon değiştiğinde `queryClient.clear()` ile tüm önbellek temizlenerek tenant sızıntısı önlenir.
+
+## D-013 Sensör kimlik doğrulaması ve tekrar kontrolü (2026-11-10)
+- Sensör kaydı (`POST /api/v1/sensors/enroll`) tek seferlik `fg_snr_...` anahtarı üretir; veritabanında yalnızca SHA-256 parmak izi (`credential_fingerprint`) saklanır.
+- Sensörün son görülme zamanı (`last_seen_at`) 180 saniyeyi aşarsa `connectivity_status` otomatik olarak `offline` raporlanır.
+- Gözlem tekrarı (`dedup_hash` = SHA-256(kanonik gözlem)) veritabanı seviyesinde `UNIQUE(sensor_id, dedup_hash)` ile engellenir.
+- Cihaz IP değiştirdiğinde (DHCP kanıtı veya sitedeki tekil MAC eşleşmesi) mevcut `Asset` güncellenir ve eski/yeni IP `asset_identifiers` tablosunda korunur; ancak birden fazla IP aynı MAC'i paylaşıyorsa (gateway durumu — D-009) yanlış birleştirme yapılmaz.

@@ -4,6 +4,7 @@ import { useAuth } from "./hooks/useAuth";
 import AppLayout from "./layouts/AppLayout";
 import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
+import SensorsPage from "./pages/SensorsPage";
 import SettingsPage from "./pages/SettingsPage";
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -32,6 +33,7 @@ export default function App() {
           }
         >
           <Route index element={<DashboardPage />} />
+          <Route path="sensors" element={<SensorsPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

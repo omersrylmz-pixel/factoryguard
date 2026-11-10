@@ -1,6 +1,6 @@
 # PROJECT STATUS
 
-**Güncel aşama:** Aşama 1 — Uygulama Altyapısı ✅ TAMAMLANDI · Sıradaki: Aşama 2 · Son güncelleme: 2026-11-10
+**Güncel aşama:** Aşama 2 — Sensör ve Veri Aktarımı ✅ TAMAMLANDI · Sıradaki: Aşama 3 · Son güncelleme: 2026-11-10
 
 ## Ortam
 | Bileşen | Sürüm / durum |
@@ -11,33 +11,35 @@
 | Backend | Python 3.13, FastAPI 0.162, SQLAlchemy 2.1, Alembic 1.20, Argon2-cffi (`127.0.0.1:8000`) ✅ |
 | Frontend | React 19, TypeScript, Vite 8, Tailwind CSS v4, Nginx (`127.0.0.1:3000`) ✅ |
 
-## Aşama 1 başarı kriteri — karşılandı
-Kullanıcı giriş yapabiliyor, fabrika (`sites`) ve üretim hattı/bölge (`zones`) kaydı oluşturabiliyor, veritabanı üzerinden tenant-izole şekilde veri okuyup yazabiliyor ve tüm yazma işlemleri `audit_logs` tablosuna kaydediliyor.
+## Aşama 2 başarı kriteri — karşılandı
+Sensörden gelen normalize Zeek gözlem ve iletişim verileri (`sample-data/zeek/real-modbus-testdata-part1` dahil), `SensorExporter` üzerinden kimlik doğrulamalı (`X-Sensor-Token`) olarak FastAPI backend'e aktarılıp tekrarlanan kayıt kontrolünden (dedup) geçerek PostgreSQL'e (`assets`, `asset_identifiers`, `asset_observations`, `asset_communications`, `discovery_runs`) kaydedilebiliyor.
 
-## Tamamlananlar (Aşama 0 + Aşama 1)
-- **Aşama 0:** Zeek JSON/TSV parser, normalizer, CLI, Docker tabanlı gerçek PCAP doğrulaması (13 test).
-- **Aşama 1 Veritabanı & Migration:** `organizations`, `sites`, `zones`, `users`, `memberships`, `refresh_tokens`, `audit_logs` tabloları ve `20261110_238a86522076_initial_tenancy_auth_audit` Alembic migration'ı (upgrade + downgrade test edildi).
-- **Aşama 1 Backend Modülleri (`/api/v1/`):**
-  - `auth`: `POST /login`, `POST /refresh`, `POST /logout`, `GET /me` + `python -m app.cli create-owner`.
-  - `organizations`: listeleme, oluşturma, detay, güncelleme, üye listesi.
-  - `sites`: CRUD + bağlı bölge varken silmeyi engelleme (409).
-  - `zones`: CRUD + kritiklik doğrulaması + bileşik `(site_id, organization_id)` FK ile tenant koruması.
-  - `audit`: tüm yazma ve kritik auth olaylarını kaydetme + `GET /audit-logs`.
-- **Aşama 1 Frontend:** Türkçe B2B endüstriyel arayüz; Giriş, Genel Bakış (yalnızca gerçek backend verisi; Aşama 2–4 metrikleri dürüstçe aşama etiketiyle işaretli) ve Ayarlar (Organizasyon, Fabrika ekle/sil, Bölge ekle/sil, Kullanıcılar, Denetim Kayıtları).
-- **Dağıtım:** `deployment/compose.yaml` içinde `postgres`, `backend` ve `frontend` (Nginx `/api` reverse proxy ile aynı origin).
+## Tamamlananlar (Aşama 0 + Aşama 1 + Aşama 2)
+- **Aşama 0:** Zeek JSON/TSV parser, normalizer, CLI, Docker tabanlı gerçek PCAP doğrulaması.
+- **Aşama 1:** FastAPI modüler monolith (`auth`, `organizations`, `sites`, `zones`, `audit`), Argon2id + refresh rotasyonu, bileşik tenant FK, React arayüzü (Giriş, Genel Bakış, Ayarlar) ve Docker Compose.
+- **Aşama 2:**
+  - **Veritabanı & Migration (`8f4c19a0b312`):** `sensors`, `discovery_runs`, `assets`, `asset_identifiers`, `asset_observations`, `asset_communications` tabloları ve bileşik tenant FK kısıtları.
+  - **Sensör Yönetimi (`/api/v1/sensors`):**
+    - `POST /enroll`: tek seferlik `fg_snr_...` anahtarı üretir, veritabanında yalnızca SHA-256 `credential_fingerprint` saklar ve audit log'a yazar.
+    - `GET /sensors`, `GET /sensors/{id}` (son keşif çalışmalarıyla birlikte), `GET /sensors/{id}/health` ve `POST /sensors/heartbeat`.
+    - Son görülme süresi eşik değeri (180 sn) aşan sensörlerin otomatik olarak `offline` raporlanması.
+  - **Backend Ingestion (`/api/v1/ingest`):**
+    - `POST /observations` ve `POST /communications`: `dedup_hash` ile mükerrer gözlem engelleme, aynı cihaz tekrar görüldüğünde mükerrer `Asset` üretmeme, IP değişiminde geçmişi `asset_identifiers` tablosunda koruma, paylaşılan MAC (gateway) durumunda yanlış birleştirme yapmama ve bilinmeyen cihaza tahmini üretici/tür atamama.
+  - **Sensör Exporter (`sensor/exporter/http_exporter.py` & `sensor/cli.py export`):** Saf Python (stdlib `urllib`) HTTP aktarıcısı.
+  - **Frontend (`SensorsPage.tsx`):** Sensör listesi, çevrimiçi/çevrimdışı durumu, yeni sensör kaydı (tek seferlik anahtar kutusu) ve keşif çalışmaları tablosu.
 
 ## Bilinen sınırlamalar
-- Giriş hız sınırlayıcısı (`LoginThrottle`) süreç içi bellekte çalışır; tek süreçli local-first kurulum için yeterlidir, çok işçili (multi-worker) dağıtımda paylaşımlı depoya taşınmalıdır.
-- Henüz kullanıcı davet/parola sıfırlama ekranı yok; ilk sahip kullanıcı CLI (`app.cli create-owner`) ile oluşturulur.
-- HTTPS sonlandırma Aşama 6'da eklenecek; geliştirme ortamında servisler yalnızca `127.0.0.1` üzerinde dinler.
+- Giriş hız sınırlayıcısı (`LoginThrottle`) süreç içi bellekte çalışır.
+- Cihaz envanter listeleme, detay, manuel düzenleme ve CSV içe aktarma uç noktaları Aşama 3'te eklenecek.
 
 ## Son test sonuçları
-- Sensör testleri: `pytest sensor -q` → **13 passed**.
-- Backend testleri (gerçek PostgreSQL `factoryguard_test` üzerinde): `pytest` → **33 passed**.
-- Frontend tip kontrolü ve üretim derlemesi: `npm run build` (`tsc -b && vite build`) → **başarılı**.
+- Sensör testleri: `pytest sensor -q` → **16 passed**.
+- Backend testleri (gerçek PostgreSQL `factoryguard_test` üzerinde): `pytest` → **41 passed**.
+- Frontend tip kontrolü ve üretim derlemesi: `npm run build` (`tsc -b && vite build`) → **0 hata**.
 
-## Sonraki hedef (Aşama 2 — Sensör ve veri aktarımı)
-- `sensors` ve `discovery_runs` tabloları + Alembic migration.
-- Sensör kayıt (`POST /api/v1/sensors/enroll`), listeleme, detay, sağlık/heartbeat (`GET /api/v1/sensors/{id}/health`) ve sensör kimlik doğrulaması (credential + fingerprint).
-- `POST /api/v1/ingest/observations` ve `POST /api/v1/ingest/communications` + tekrarlanan kayıt kontrolü.
-- Sensör exporter modülü (`sensor/exporter/`).
+## Sonraki hedef (Aşama 3 — Cihaz Keşfi ve Envanter)
+- `GET /api/v1/assets` (IP, MAC, tür, üretici, bölge, kritiklik, doğrulama durumu filtreleriyle), `GET /api/v1/assets/{id}` (kimlik geçmişi + gözlem geçmişi ile).
+- `PATCH /api/v1/assets/{id}` (kullanıcı tarafından manuel düzenleme, doğrulama durumu `is_verified` ve audit log).
+- `POST /api/v1/assets/import` (CSV üzerinden envanter içe aktarma).
+- Kanıta dayalı, confidence puanlı cihaz sınıflandırma yardımcısı (`discovery` modülü).
+- Frontend `AssetsPage` ve `AssetDetailPage`.

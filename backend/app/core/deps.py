@@ -17,8 +17,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.security import decode_access_token
-from app.models import Membership, User
+from app.core.security import decode_access_token, hash_token
+from app.models import Membership, Sensor, User
 
 ROLE_RANK = {"viewer": 0, "analyst": 1, "admin": 2, "owner": 3}
 
@@ -97,3 +97,27 @@ AdminTenant = Annotated[TenantContext, Depends(require_role("admin"))]
 
 def client_ip(request: Request) -> str | None:
     return request.client.host if request.client else None
+
+
+def get_current_sensor(
+    db: DbSession,
+    cred: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+    x_sensor_token: Annotated[str | None, Header()] = None,
+) -> Sensor:
+    """Sensör veri gönderimi ve heartbeat için kimlik doğrulama.
+
+    Sensör `X-Sensor-Token: fg_snr_...` veya `Authorization: Bearer fg_snr_...` gönderebilir.
+    """
+    raw = x_sensor_token
+    if not raw and cred is not None and cred.scheme.lower() == "bearer":
+        raw = cred.credentials
+    if not raw or not raw.startswith("fg_snr_"):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Sensör kimlik doğrulaması gerekli")
+    fp = hash_token(raw)
+    sensor = db.scalar(select(Sensor).where(Sensor.credential_fingerprint == fp))
+    if sensor is None or sensor.status == "revoked":
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Geçersiz veya iptal edilmiş sensör kimliği")
+    return sensor
+
+
+AuthenticatedSensor = Annotated[Sensor, Depends(get_current_sensor)]

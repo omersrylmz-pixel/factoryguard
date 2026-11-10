@@ -13,7 +13,7 @@ const NAV: NavItem[] = [
   { to: "/assets", label: "Cihaz Envanteri", stage: "Aşama 3" },
   { to: "/network", label: "Ağ Görünümü", stage: "Aşama 4" },
   { to: "/risks", label: "Risk Merkezi", stage: "Aşama 4" },
-  { to: "/sensors", label: "Sensörler", stage: "Aşama 2" },
+  { to: "/sensors", label: "Sensörler" },
   { to: "/reports", label: "Raporlar", stage: "Aşama 5" },
   { to: "/settings", label: "Ayarlar" },
 ];

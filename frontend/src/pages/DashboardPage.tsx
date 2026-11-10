@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { Card, CriticalityBadge, Empty, ErrorBox, PageHeader, formatDate } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { api } from "../services/api";
-import type { AuditLog, Page, Site, Zone } from "../types/api";
+import type { AuditLog, Page, Sensor, Site, Zone } from "../types/api";
 
 export default function DashboardPage() {
   const { activeOrg, canAdmin } = useAuth();
@@ -17,6 +17,12 @@ export default function DashboardPage() {
   const zonesQuery = useQuery({
     queryKey: ["zones", activeOrg?.id],
     queryFn: () => api<Zone[]>("/zones"),
+    enabled: !!activeOrg,
+  });
+
+  const sensorsQuery = useQuery({
+    queryKey: ["sensors", activeOrg?.id],
+    queryFn: () => api<Sensor[]>("/sensors"),
     enabled: !!activeOrg,
   });
 
@@ -63,16 +69,17 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">Aktif Sensör & Keşfedilen Cihaz</span>
-            <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">
-              Aşama 2–3
-            </span>
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="text-xs font-medium text-slate-500">Aktif Sensör</div>
+          <div className="mt-2 text-2xl font-semibold text-slate-900">
+            {sensorsQuery.isLoading
+              ? "…"
+              : `${(sensorsQuery.data ?? []).filter((s) => s.is_connected).length} / ${(sensorsQuery.data ?? []).length}`}
           </div>
-          <div className="mt-2 text-sm text-slate-600">Henüz sensör bağlı değil</div>
           <div className="mt-1 text-xs text-slate-500">
-            Sensör kayıt ve cihaz envanteri Aşama 2–3'te devreye alınacak.
+            <Link to="/sensors" className="text-blue-700 hover:underline">
+              Sensör yönetimi →
+            </Link>
           </div>
         </div>
 

@@ -1,31 +1,33 @@
 # NEXT SESSION
 
 ## En son ne yapıldı (2026-11-10)
-Aşama 1 (Uygulama Altyapısı) uçtan uca tamamlandı:
-- FastAPI modüler monolith (`auth`, `organizations`, `sites`, `zones`, `audit`), SQLAlchemy 2 modelleri ve ilk Alembic migration'ı.
-- Gerçek PostgreSQL (`factoryguard_test`) üzerinde 33 entegrasyon testi (auth, refresh rotasyonu + tekrar kullanım tespiti, RBAC, tenant izolasyonu, bileşik FK, audit log).
-- React + TypeScript + Tailwind v4 arayüzü (`LoginPage`, `DashboardPage`, `SettingsPage`, `AppLayout`).
-- `backend/Dockerfile`, `frontend/Dockerfile` (Nginx reverse proxy) ve `deployment/compose.yaml` güncellendi.
+Aşama 2 (Sensör ve Veri Aktarımı) tamamlandı ve doğrulandı:
+- `sensors`, `discovery_runs`, `assets`, `asset_identifiers`, `asset_observations`, `asset_communications` modelleri ve ikinci Alembic migration'ı (`8f4c19a0b312`).
+- Sensör kayıt (`enroll`), SHA-256 fingerprint kimlik doğrulaması, heartbeat/sağlık kontrolü (`/api/v1/sensors/*`).
+- Gözlem ve iletişim ingestion uç noktaları (`/api/v1/ingest/observations`, `/api/v1/ingest/communications`), tekrarlanan kayıt kontrolü (`dedup_hash`), IP değişiminde `asset_identifiers` geçmişini koruma ve gerçek Zeek çıktısıyla uçtan uca test.
+- `sensor/exporter/http_exporter.py` ve `sensor/cli.py export` komutu.
+- Frontend `SensorsPage.tsx` ve `DashboardPage.tsx` sensör sayacı entegrasyonu.
 
 ## Değişen / eklenen ana dosyalar
-- `backend/app/core/{config,db,security,deps}.py`
-- `backend/app/models/{base,organization,user,audit}.py`
-- `backend/app/modules/{auth,organizations,sites,zones,audit}/*`
-- `backend/app/{main,cli}.py`, `backend/migrations/*`, `backend/Dockerfile`
-- `backend/tests/{conftest,test_auth,test_tenancy,test_sites_zones}.py`
-- `frontend/src/{types,services,hooks,components,layouts,pages}/*`, `frontend/Dockerfile`, `frontend/nginx.conf`
-- `deployment/compose.yaml`, `deployment/.env.example`, `docs/*`, `README.md`
+- `backend/app/models/{sensor,asset,__init__}.py`
+- `backend/app/core/{security,deps}.py`
+- `backend/app/modules/sensors/router.py`
+- `backend/app/modules/ingestion/{schemas,service,router}.py`
+- `backend/migrations/versions/20261110_8f4c19a0b312_sensors_assets_observations_communications.py`
+- `backend/tests/test_sensors_ingestion.py`, `backend/pytest.ini`
+- `sensor/exporter/http_exporter.py`, `sensor/cli.py`, `sensor/tests/test_exporter.py`
+- `frontend/src/pages/SensorsPage.tsx`, `frontend/src/pages/DashboardPage.tsx`, `frontend/src/layouts/AppLayout.tsx`, `frontend/src/App.tsx`, `frontend/src/types/api.ts`
+- `docs/*`
 
 ## Çalıştırılan testler
-- `pytest sensor -q` → **13 passed**
-- `pytest` (backend) → **33 passed**
+- `pytest sensor -q` → **16 passed**
+- `pytest` (backend, gerçek PostgreSQL `factoryguard_test` üzerinde) → **41 passed**
 - `npm run build` (frontend `tsc -b && vite build`) → **0 hata**
-- Docker Compose tam yığın sağlık ve uçtan uca API testi.
 
 ## Kalan / bilinen konular
 - Bilinen hata yok.
 
-## Bir sonraki oturumda ilk iş (Aşama 2)
-1. `sensors`, `discovery_runs`, `asset_observations` için veritabanı modellerini ve Alembic migration'ını oluştur.
-2. Sensör kimlik doğrulama mekanizmasını (enroll + API anahtarı/fingerprint) ve heartbeat endpoint'ini uygula.
-3. Sensör normalizer çıktısını backend'e aktaran `sensor/exporter/` bileşenini ve `/api/v1/ingest/*` endpoint'lerini yazıp test et.
+## Bir sonraki oturumda ilk iş (Aşama 3 — Cihaz Keşfi ve Merkezi Envanter)
+1. Kanıta dayalı cihaz sınıflandırma kurallarını (`discovery` modülü — tahmin yapmadan, gözlemlenen protokollere ve kanıtlara göre `confidence` hesaplama) uygula.
+2. `GET /api/v1/assets`, `GET /api/v1/assets/{id}`, `PATCH /api/v1/assets/{id}` ve `POST /api/v1/assets/import` (CSV içe aktarma) endpoint'lerini ve testlerini yaz.
+3. Frontend'de `AssetsPage` (filtreli envanter tablosu + CSV içe aktarma) ve `AssetDetailPage` (genel bilgiler, düzenleme, kimlik ve gözlem geçmişi) sayfalarını ekle.
