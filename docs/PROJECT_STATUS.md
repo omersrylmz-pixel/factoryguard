@@ -1,45 +1,43 @@
 # PROJECT STATUS
 
-**Güncel aşama:** Aşama 0 — Laboratuvar ✅ TAMAMLANDI · Sıradaki: Aşama 1 · Son güncelleme: 2026-11-10
+**Güncel aşama:** Aşama 1 — Uygulama Altyapısı ✅ TAMAMLANDI · Sıradaki: Aşama 2 · Son güncelleme: 2026-11-10
 
-## Ortam (2026-11-10 doğrulandı)
+## Ortam
 | Bileşen | Sürüm / durum |
 |---|---|
-| Windows 11 Pro | build 26300 |
-| WSL | Ubuntu-24.04 (WSL2), docker-desktop (WSL2) ✅ |
-| Docker Engine / Compose | 29.9.3 / v5.7.0 ✅ (`hello-world` geçti) |
-| Zeek | resmî `zeek/zeek:latest` → **zeek 9.0.1** ✅ |
-| PostgreSQL | `postgres:16` → 16.15, healthy, yalnızca 127.0.0.1:5432 ✅ |
-| Python | 3.13 (.venv) · Node 22 |
+| Windows 11 Pro + WSL2 | Ubuntu-24.04, Docker Engine 29.9.3, Compose v5.7.0 ✅ |
+| Zeek | `zeek/zeek:latest` → 9.0.1 ✅ |
+| PostgreSQL | `postgres:16` → 16.15, healthy (`127.0.0.1:5432`) ✅ |
+| Backend | Python 3.13, FastAPI 0.162, SQLAlchemy 2.1, Alembic 1.20, Argon2-cffi (`127.0.0.1:8000`) ✅ |
+| Frontend | React 19, TypeScript, Vite 8, Tailwind CSS v4, Nginx (`127.0.0.1:3000`) ✅ |
 
-## Aşama 0 başarı kriteri — karşılandı
-Gerçek PCAP (`MODBUS-TestDataPart1.pcap`, SHA-256 `94942B3D…213D`) → Zeek (Docker, `--network none`, salt-okunur) →
-conn.log (5 bağlantı) + modbus.log (35 kayıt) → normalizer → **4 cihaz, 4 iletişim, 0 reddedilen kayıt**.
+## Aşama 1 başarı kriteri — karşılandı
+Kullanıcı giriş yapabiliyor, fabrika (`sites`) ve üretim hattı/bölge (`zones`) kaydı oluşturabiliyor, veritabanı üzerinden tenant-izole şekilde veri okuyup yazabiliyor ve tüm yazma işlemleri `audit_logs` tablosuna kaydediliyor.
 
-| Kaynak | Hedef | Port | Protokol | Güven | Bağlantı |
-|---|---|---|---|---|---|
-| 10.0.0.57 | 10.0.0.3 | 502 | modbus | observed | 2 |
-| 10.0.0.57 | 10.0.0.8 | 502 | modbus | observed | 2 |
-| 10.0.0.9 | 10.0.0.3 | 502 | modbus | observed | 1 |
-| 10.0.0.8 | 10.0.0.57 | 4446 | — | none | 1 |
+## Tamamlananlar (Aşama 0 + Aşama 1)
+- **Aşama 0:** Zeek JSON/TSV parser, normalizer, CLI, Docker tabanlı gerçek PCAP doğrulaması (13 test).
+- **Aşama 1 Veritabanı & Migration:** `organizations`, `sites`, `zones`, `users`, `memberships`, `refresh_tokens`, `audit_logs` tabloları ve `20261110_238a86522076_initial_tenancy_auth_audit` Alembic migration'ı (upgrade + downgrade test edildi).
+- **Aşama 1 Backend Modülleri (`/api/v1/`):**
+  - `auth`: `POST /login`, `POST /refresh`, `POST /logout`, `GET /me` + `python -m app.cli create-owner`.
+  - `organizations`: listeleme, oluşturma, detay, güncelleme, üye listesi.
+  - `sites`: CRUD + bağlı bölge varken silmeyi engelleme (409).
+  - `zones`: CRUD + kritiklik doğrulaması + bileşik `(site_id, organization_id)` FK ile tenant koruması.
+  - `audit`: tüm yazma ve kritik auth olaylarını kaydetme + `GET /audit-logs`.
+- **Aşama 1 Frontend:** Türkçe B2B endüstriyel arayüz; Giriş, Genel Bakış (yalnızca gerçek backend verisi; Aşama 2–4 metrikleri dürüstçe aşama etiketiyle işaretli) ve Ayarlar (Organizasyon, Fabrika ekle/sil, Bölge ekle/sil, Kullanıcılar, Denetim Kayıtları).
+- **Dağıtım:** `deployment/compose.yaml` içinde `postgres`, `backend` ve `frontend` (Nginx `/api` reverse proxy ile aynı origin).
 
-## Tamamlanan
-- Zeek JSON+TSV parser, normalizer, CLI (Aşama 0 ilk oturum).
-- Docker lab: `deployment/scripts/lab_zeek_docker.ps1`, `deployment/compose.yaml` (çalıştırıldı ve doğrulandı).
-- Gerçek veriyle bulunan hata düzeltildi: aynı akış, payload'sız bağlantı yüzünden iki iletişim kaydına bölünüyordu
-  (port_hint + observed). Artık anahtar protokolü içermiyor; güven yalnızca yükseltiliyor.
-- Lab script'i: Python INFO loglarını PowerShell'in hata saymasına neden olan sorun düzeltildi.
-- Gerçek Zeek çıktısı regresyon testi olarak saklandı (`sample-data/zeek/real-modbus-testdata-part1/`).
-
-## Bilinen sınırlamalar / gözlemler
-- **Gerçek veride iki IP (10.0.0.8, 10.0.0.9) aynı MAC'i (00:50:04:93:70:67) paylaşıyor** → muhtemelen gateway/çok IP'li cihaz.
-  Normalizer birleştirmiyor (doğru). Aşama 3'te MAC'e tek başına dayanarak cihaz birleştirme YAPILMAMALI.
-- Zeek varsayılan olarak ARP logu üretmez; MAC'ler `mac-logging` policy ve DHCP'den geliyor.
-- Test PCAP'i 2004 tarihli, küçük; DHCP/DNS içermiyor → hostname yolu yalnızca sentetik veriyle test edildi.
-- PCAP lisansı kaynakta belirtilmemiş → yalnızca lab amaçlı, git'e eklenmedi.
+## Bilinen sınırlamalar
+- Giriş hız sınırlayıcısı (`LoginThrottle`) süreç içi bellekte çalışır; tek süreçli local-first kurulum için yeterlidir, çok işçili (multi-worker) dağıtımda paylaşımlı depoya taşınmalıdır.
+- Henüz kullanıcı davet/parola sıfırlama ekranı yok; ilk sahip kullanıcı CLI (`app.cli create-owner`) ile oluşturulur.
+- HTTPS sonlandırma Aşama 6'da eklenecek; geliştirme ortamında servisler yalnızca `127.0.0.1` üzerinde dinler.
 
 ## Son test sonuçları
-`pytest sensor -q` → **13 passed** (10 eski + 2 yeni birim + 1 gerçek veri E2E).
+- Sensör testleri: `pytest sensor -q` → **13 passed**.
+- Backend testleri (gerçek PostgreSQL `factoryguard_test` üzerinde): `pytest` → **33 passed**.
+- Frontend tip kontrolü ve üretim derlemesi: `npm run build` (`tsc -b && vite build`) → **başarılı**.
 
-## Sonraki hedef
-Aşama 1: FastAPI + SQLAlchemy + Alembic (PostgreSQL container'ı), auth, organizations/sites/zones, React iskeleti.
+## Sonraki hedef (Aşama 2 — Sensör ve veri aktarımı)
+- `sensors` ve `discovery_runs` tabloları + Alembic migration.
+- Sensör kayıt (`POST /api/v1/sensors/enroll`), listeleme, detay, sağlık/heartbeat (`GET /api/v1/sensors/{id}/health`) ve sensör kimlik doğrulaması (credential + fingerprint).
+- `POST /api/v1/ingest/observations` ve `POST /api/v1/ingest/communications` + tekrarlanan kayıt kontrolü.
+- Sensör exporter modülü (`sensor/exporter/`).

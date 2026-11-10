@@ -1,13 +1,13 @@
-﻿# ROADMAP
+# ROADMAP
 
-| AÅŸama | Ä°Ã§erik | Tamamlanma kriteri | Durum |
+| Aşama | İçerik | Tamamlanma kriteri | Durum |
 |---|---|---|---|
-| 0 Laboratuvar | Zeek, PCAP analizi, normalizer | Ã–rnek trafikten IP/port/protokol/baÄŸlantÄ± Ã§Ä±karÄ±lÄ±r | ğŸŸ¡ Normalizer hazÄ±r, gerÃ§ek PCAP doÄŸrulamasÄ± bekliyor |
-| 1 AltyapÄ± | FastAPI, PostgreSQL, Alembic, auth, org/site/zone, React iskeleti, Compose | GiriÅŸ + fabrika kaydÄ± + DB okuma/yazma | â¬œ |
-| 2 SensÃ¶r aktarÄ±mÄ± | SensÃ¶r kimliÄŸi, ingestion, heartbeat, dedup | SensÃ¶r verisi PostgreSQL'e yazÄ±lÄ±r | â¬œ |
-| 3 Cihaz keÅŸfi | Asset eÅŸleÅŸtirme, identifiers, confidence, manuel dÃ¼zenleme, CSV | GÃ¶rÃ¼len cihazlar envanterde, dÃ¼zenlenebilir | â¬œ |
-| 4 Ä°liÅŸkiler + risk | Communications, 5 kural, puanlama, durumlar | Olaydan aÃ§Ä±klanabilir bulgu | â¬œ |
-| 5 Frontend + rapor | TÃ¼m sayfalar, CSV/PDF | Panelde cihaz/risk/rapor | â¬œ |
-| 6 SertleÅŸtirme | GÃ¼venlik/tenant/performans testleri, kurulum/kaldÄ±rma, pilot | KontrollÃ¼ pilota hazÄ±r | â¬œ |
+| 0 Laboratuvar | Zeek, PCAP analizi, normalizer | Örnek trafikten IP/port/protokol/bağlantı çıkarılır | ✅ Gerçek PCAP + Zeek 9.0.1 ile doğrulandı |
+| 1 Altyapı | FastAPI, PostgreSQL, Alembic, auth, org/site/zone, React iskeleti, Compose | Giriş + fabrika kaydı + DB okuma/yazma | ✅ Tamamlandı (33 backend testi + Docker E2E) |
+| 2 Sensör aktarımı | Sensör kimliği, ingestion, heartbeat, dedup | Sensör verisi PostgreSQL'e yazılır | ⬜ Sıradaki |
+| 3 Cihaz keşfi | Asset eşleştirme, identifiers, confidence, manuel düzenleme, CSV | Görülen cihazlar envanterde, düzenlenebilir | ⬜ |
+| 4 İlişkiler + risk | Communications, 5 kural, puanlama, durumlar | Olaydan açıklanabilir bulgu | ⬜ |
+| 5 Frontend + rapor | Tüm sayfalar, CSV/PDF | Panelde cihaz/risk/rapor | ⬜ |
+| 6 Sertleştirme | Güvenlik/tenant/performans testleri, kurulum/kaldırma, pilot | Kontrollü pilota hazır | ⬜ |
 
-Gelecek (MVP dÄ±ÅŸÄ±): Growth, Partner, Intelligence, Enterprise; S7, EtherNet/IP, OPC UA ayrÄ±ÅŸtÄ±rma.
+Gelecek (MVP dışı): Growth, Partner, Intelligence, Enterprise; S7, EtherNet/IP, OPC UA ayrıştırma.

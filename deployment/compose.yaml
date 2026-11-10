@@ -1,5 +1,8 @@
-# FactoryGuard Lite — geliştirme ortamı (Aşama 0/1)
-# Kullanım: docker compose -f deployment/compose.yaml up -d postgres
+# FactoryGuard Lite — geliştirme ve yerel kurulum ortamı
+# Kullanım:
+#   docker compose -f deployment/compose.yaml up -d            (postgres + backend + frontend)
+#   docker compose -f deployment/compose.yaml up -d postgres   (yalnızca veritabanı)
+# HTTPS sonlandırma Aşama 6'da eklenecek; şimdilik tüm portlar yalnızca 127.0.0.1'e açık.
 services:
   postgres:
     image: postgres:16
@@ -15,5 +18,35 @@ services:
       test: ["CMD-SHELL", "pg_isready -U factoryguard -d factoryguard"]
       interval: 5s
       retries: 10
+
+  backend:
+    build: ../backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      FG_ENV: ${FG_ENV:-development}
+      FG_DATABASE_URL: postgresql+psycopg://factoryguard:${FG_DB_PASSWORD:-dev-only-change-me}@postgres:5432/factoryguard
+      FG_JWT_SECRET: ${FG_JWT_SECRET:-dev-only-insecure-secret-change-me-0123456789}
+      FG_COOKIE_SECURE: ${FG_COOKIE_SECURE:-false}
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health')\""]
+      interval: 10s
+      retries: 5
+
+  frontend:
+    build: ../frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3000:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ >/dev/null"]
+      interval: 10s
+      retries: 5
+
 volumes:
   fg_pgdata:

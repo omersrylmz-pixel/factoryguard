@@ -16,7 +16,7 @@ Zeek varsayılanı TSV; biz `LogAscii::use_json=T` öneriyoruz ama müşteri kur
 ## D-005 Normalizer cihaz türü/üretici tahmini YAPMAZ
 Sınıflandırma backend'de, kanıt + confidence ile yapılacak (Aşama 3).
 
-## D-006 Geliştirme ortamında Zeek yok
+## D-006 Geliştirme ortamında Zeek yok (iptal → D-007)
 Docker/WSL yok. Zeek Ubuntu VM'de çalışır; normalizer, Zeek formatında sentetik loglarla test edilir.
 
 ## D-007 Lab ortamı: Docker Desktop + WSL2, resmî zeek/zeek imajı (2026-11-10)
@@ -28,3 +28,14 @@ Protokol güveni akış bazında en yüksek seviyeye yükseltilir.
 
 ## D-009 MAC tek başına cihaz kimliği değildir (2026-11-10)
 Gerçek PCAP'te iki IP aynı MAC'i paylaştı. Aşama 3 eşleştirmesi MAC+IP+bağlam ile, confidence ile yapılacak.
+
+## D-010 Parola hash'leme ve token stratejisi (2026-11-10)
+- Parola: **Argon2id** (`argon2-cffi`). Bcrypt'in 72-bayt sınırına takılmaz ve GPU saldırılarına daha dayanıklıdır.
+- Access token: kısa ömürlü (15 dk) HS256 JWT; frontend'de **yalnızca bellekte** tutulur (`localStorage` kullanılmaz).
+- Refresh token: 48 bayt kriptografik rastgele değer; veritabanında yalnızca **SHA-256 hash'i** saklanır, istemciye `HttpOnly`, `SameSite=Strict`, `Path=/api/v1/auth` cookie olarak verilir. Her yenilemede döndürülür (rotation); iptal edilmiş bir token tekrar kullanılırsa kullanıcının tüm oturumları iptal edilir (reuse detection).
+
+## D-011 Veritabanı seviyesinde bileşik tenant FK (2026-11-10)
+`zones` tablosu `sites(id, organization_id)` üzerine bileşik foreign key (`fk_zones_site_org`) içerir. Uygulama katmanında bir hata olsa bile bir bölgenin başka bir tenant'ın fabrikasına bağlanması PostgreSQL tarafından reddedilir.
+
+## D-012 Frontend veri yönetimi: TanStack Query + React Context (2026-11-10)
+Sunucu durumu için `@tanstack/react-query`, kimlik/aktif organizasyon için küçük bir `AuthContext` kullanıldı. Redux/Zustand eklenmedi; organizasyon değiştiğinde `queryClient.clear()` ile tüm önbellek temizlenerek tenant sızıntısı önlenir.
