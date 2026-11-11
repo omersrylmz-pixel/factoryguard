@@ -1,28 +1,22 @@
 # NEXT SESSION
 
 ## En son ne yapıldı (2026-11-11)
-Aşama 5 (Frontend Tamamlama ve CSV/PDF Raporlama) tamamlandı ve doğrulandı:
-- Saf Python, sıfır bağımlılıklı çok sayfalı PDF 1.4 üreticisi (`backend/app/modules/reports/pdf_writer.py`).
-- Raporlama API uç noktaları (`backend/app/modules/reports/router.py`): `GET /api/v1/reports/summary`, `GET /api/v1/reports/inventory?format=csv|pdf`, `GET /api/v1/reports/risks?format=csv|pdf` + `audit_logs` kaydı.
-- Frontend `ReportsPage.tsx`, `apiDownload` yardımcısı (`frontend/src/services/api.ts`) ve yan menü / rota entegrasyonu (`AppLayout.tsx`, `App.tsx`).
+Aşama 6 (Sertleştirme, Güvenlik Doğrulaması ve Pilot Hazırlığı) tamamlandı ve tüm 6 aşamalık FactoryGuard Lite MVP yol haritası bitirildi:
+- Gerçek PCAP → Normalizer → Exporter → Ingestion → Envanter → Topoloji → Risk Motoru → CSV/PDF Rapor E2E testi, RBAC matrisi, bozuk girdi/SQLi dayanıklılığı ve toplu yük performans testleri (`backend/tests/test_hardening.py`).
+- Canlı demo verisi yükleme komutu (`python -m app.cli seed-demo`), sağlık kontrolü (`deployment/scripts/healthcheck.ps1`), temiz kaldırma (`deployment/scripts/uninstall.ps1`) ve saha pilot kontrol listesi (`docs/PILOT_CHECKLIST.md`).
 
 ## Değişen / eklenen ana dosyalar
-- `backend/app/modules/reports/{__init__,pdf_writer,router}.py`
-- `backend/app/main.py`
-- `backend/tests/test_reports.py`
-- `frontend/src/pages/ReportsPage.tsx`
-- `frontend/src/{App,layouts/AppLayout,components/ui,services/api,types/api}.tsx`
-- `docs/*`
+- `backend/tests/test_hardening.py`
+- `backend/app/cli.py`
+- `deployment/scripts/{healthcheck,uninstall}.ps1`
+- `docs/{PILOT_CHECKLIST,PROJECT_STATUS,ROADMAP,CHANGELOG,NEXT_SESSION}.md`
 
 ## Çalıştırılan testler
 - `pytest sensor/tests -v` → **16 passed**
-- `pytest -v` (backend, gerçek PostgreSQL `factoryguard_test` üzerinde) → **49 passed**
+- `pytest -v` (backend, gerçek PostgreSQL `factoryguard_test` üzerinde) → **53 passed**
 - `npm run build` (frontend `tsc -b && vite build`) → **0 hata**
 
-## Kalan / bilinen konular
-- Bilinen hata yok.
-
-## Bir sonraki oturumda ilk iş (Aşama 6 — Sertleştirme, Güvenlik ve Pilot Hazırlığı)
-1. Güvenlik, RBAC, tenant sızıntı, bozuk girdi ve toplu yük/performans testlerini (`backend/tests/test_hardening.py`) ekle ve doğrula.
-2. Saha kurulum (`install`), sağlık kontrolü (`healthcheck`), yedekleme ve temiz kaldırma (`uninstall`) betiklerini (`deployment/scripts/`) ve pilot hazırlık dokümanını oluştur.
-3. Gerçek PCAP → Sensör Normalizer → Exporter → Backend Ingestion → Envanter → Risk Motoru → CSV/PDF Rapor uçtan uca (E2E) doğrulamasını çalıştır.
+## Canlı Erişim Bilgileri
+- **Web Arayüzü (Frontend):** `http://localhost:3000`
+- **Backend API & Sağlık:** `http://127.0.0.1:8000/api/v1/health` (Swagger: `http://127.0.0.1:8000/api/docs`)
+- **Demo Yönetici Girişi:** `admin@factoryguard.com` / `FactoryGuard2026!`
