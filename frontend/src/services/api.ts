@@ -99,3 +99,51 @@ export async function api<T>(path: string, opts: Options = {}, retry = true): Pr
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
+
+/** Kimlik doğrulamalı CSV/PDF rapor indirme yardımcısı. */
+export async function apiDownload(path: string, fallbackFilename: string, retry = true): Promise<void> {
+  const headers: Record<string, string> = {};
+  if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+  const org = localStorage.getItem(ACTIVE_ORG_KEY);
+  if (org) headers["X-Organization-ID"] = org;
+
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      method: "GET",
+      headers,
+      credentials: "same-origin",
+    });
+  } catch {
+    throw new ApiError(0, "Sunucuya ulaşılamıyor. Backend çalışıyor mu?");
+  }
+
+  if (res.status === 401 && retry && !path.startsWith("/auth/")) {
+    if (await refreshSession()) return apiDownload(path, fallbackFilename, false);
+    onUnauthorized();
+  }
+  if (!res.ok) {
+    let detail: unknown;
+    try {
+      detail = (await res.json()).detail;
+    } catch {
+      /* gövde JSON değil */
+    }
+    throw new ApiError(res.status, formatDetail(detail, res.status));
+  }
+
+  const blob = await res.blob();
+  const disposition = res.headers.get("Content-Disposition") ?? "";
+  const match = disposition.match(/filename="?([^";]+)"?/i);
+  const filename = match?.[1] ?? fallbackFilename;
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+

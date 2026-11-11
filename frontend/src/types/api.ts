@@ -261,3 +261,39 @@ export interface CommunicationGraph {
   nodes: GraphNode[];
   edges: CommunicationEdge[];
 }
+
+export interface ReportSummary {
+  generated_at: string;
+  organization_id: string;
+  organization_name: string;
+  site_id: string | null;
+  site_name: string | null;
+  assets: {
+    total: number;
+    verified: number;
+    unverified: number;
+    by_criticality: Record<string, number>;
+    by_type: Record<string, number>;
+  };
+  risks: {
+    total: number;
+    open_total: number;
+    max_score: number;
+    avg_open_score: number;
+    by_severity: Record<string, number>;
+    by_status: Record<string, number>;
+    by_rule: Record<string, number>;
+  };
+  communications: {
+    total_flows: number;
+    cross_zone_flows: number;
+    protocols: Record<string, number>;
+  };
+  sensors: {
+    total: number;
+    active: number;
+    offline: number;
+    revoked: number;
+  };
+}
+

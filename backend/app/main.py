@@ -13,6 +13,7 @@ from app.modules.auth.router import router as auth_router
 from app.modules.communications.router import router as communications_router
 from app.modules.ingestion.router import router as ingestion_router
 from app.modules.organizations.router import router as org_router
+from app.modules.reports.router import router as reports_router
 from app.modules.risk_engine.router import router as risks_router
 from app.modules.sensors.router import router as sensors_router
 from app.modules.sites.router import router as site_router
@@ -52,6 +53,7 @@ def create_app() -> FastAPI:
         communications_router,
         risks_router,
         vulnerabilities_router,
+        reports_router,
         audit_router,
     ):
         api.include_router(r)

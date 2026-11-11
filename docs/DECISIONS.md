@@ -56,3 +56,8 @@ Sunucu durumu için `@tanstack/react-query`, kimlik/aktif organizasyon için kü
 - Puanlama ağırlıkları `backend/app/modules/risk_engine/scoring.py` içinde merkezi olarak tanımlanmıştır: Cihaz Kritikliği (30) + Ağ Maruziyeti (25) + Doğrulanmış Zafiyet (25) + Beklenmeyen Davranış (10) + Envanter Eksikliği (10). Her bulgunun `evidence_json.score_breakdown` alanında puan kırılımı açıkça saklanır.
 - `KNOWN_VULNERABILITY` kuralı yalnızca `is_verified=True` ve tam `vendor + model + firmware_version` eşleşmesi olduğunda zafiyet bulgusu üretir; sürümsüz cihazlarda kesin CVE iddiası yapılmaz.
 - Analistin `false_positive` veya `accepted` olarak işaretlediği bulgular, risk motoru tekrar çalıştığında otomatik olarak yeniden `open` durumuna döndürülmez; `NEW_ASSET` ve `UNKNOWN_OT_ASSET` bulguları ise cihaz doğrulandığında (`is_verified=True`) otomatik olarak `resolved` durumuna geçirilir.
+
+## D-016 Sıfır bağımlılıklı PDF 1.4 üretimi ve UTF-8 BOM CSV dışa aktarma (2026-11-11)
+- Fabrika sahasındaki sunucularda ve Windows geliştirme ortamında `wkhtmltopdf`, `Cairo` veya `GTK` gibi yerel C kütüphanelerine bağımlılık oluşturmamak için `backend/app/modules/reports/pdf_writer.py` içinde saf Python ile çok sayfalı A4 PDF 1.4 üreticisi yazıldı.
+- CSV raporları (`GET /api/v1/reports/inventory?format=csv` ve `GET /api/v1/reports/risks?format=csv`) Türkçe Windows Excel'de karakter bozulması yaşanmaması için UTF-8 BOM (`\ufeff`) ile sunulur.
+- Tüm rapor dışa aktarma işlemleri `audit_logs` tablosuna (`report.export_inventory`, `report.export_risks`) kaydedilir.
