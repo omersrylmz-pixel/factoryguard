@@ -108,6 +108,16 @@ export interface SensorDetail extends Sensor {
   recent_runs: DiscoveryRun[];
 }
 
+export interface SensorUploadAnalyzeResult {
+  filename: string;
+  devices_discovered: number;
+  assets_created: number;
+  assets_updated: number;
+  communications_created: number;
+  communications_updated: number;
+  open_risks_total: number;
+}
+
 export type AssetType =
   | "plc"
   | "hmi"

@@ -298,3 +298,51 @@ def test_bulk_ingestion_and_risk_evaluation_performance(client, make_org, make_u
     elapsed = time.perf_counter() - t0
 
     assert elapsed < 5.0, f"Toplu işleme çok yavaş: {elapsed:.2f}s"
+
+
+def test_web_pcap_and_sample_upload_analyze_endpoint(client, make_org, make_user, login):
+    """Web arayüzünden tek tıkla PCAP / örnek paket analizi (`POST /api/v1/sensors/{id}/analyze-upload`)."""
+    import base64
+
+    org = make_org("Web PCAP Yükleme A.Ş.")
+    make_user("admin@webpcap.com", org, role="admin")
+    h_admin = login("admin@webpcap.com")
+    site = client.post("/api/v1/sites", json={"name": "İzmir Fabrika"}, headers=h_admin).json()
+    sensor = client.post(
+        "/api/v1/sensors/enroll",
+        json={"site_id": site["id"], "name": "sensor-web-upload"},
+        headers=h_admin,
+    ).json()
+
+    # 1. Hazır gerçek Modbus PCAP senaryosu
+    r_sample = client.post(
+        f"/api/v1/sensors/{sensor['id']}/analyze-upload",
+        json={"sample": "real-modbus-pcap"},
+        headers=h_admin,
+    )
+    assert r_sample.status_code == 200, r_sample.text
+    s_data = r_sample.json()
+    assert s_data["devices_discovered"] == 4
+    assert s_data["assets_created"] == 4
+    assert s_data["open_risks_total"] >= 3
+
+    # 2. Gerçek ikili (binary) .pcap dosyası yükleme (MODBUS-TestDataPart1.pcap ilk 64 KB)
+    pcap_path = (
+        Path(__file__).resolve().parents[2]
+        / "sample-data"
+        / "pcap"
+        / "MODBUS-TestDataPart1.pcap"
+    )
+    if pcap_path.is_file():
+        raw_chunk = pcap_path.read_bytes()[:65536]
+        r_bin = client.post(
+            f"/api/v1/sensors/{sensor['id']}/analyze-upload",
+            json={
+                "filename": "MODBUS-TestDataPart1.pcap",
+                "content_base64": base64.b64encode(raw_chunk).decode("ascii"),
+            },
+            headers=h_admin,
+        )
+        assert r_bin.status_code == 200, r_bin.text
+        assert r_bin.json()["devices_discovered"] >= 2
+

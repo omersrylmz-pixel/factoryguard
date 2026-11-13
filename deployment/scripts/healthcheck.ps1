@@ -8,7 +8,10 @@ $ErrorActionPreference = "Continue"
 Write-Host "=== FactoryGuard Lite Saglik Kontrolu ===" -ForegroundColor Cyan
 
 # 1. PostgreSQL kontrolü
-docker exec factoryguard-postgres pg_isready -U factoryguard -d factoryguard > $null 2>&1
+docker exec deployment-postgres-1 pg_isready -U factoryguard -d factoryguard > $null 2>&1
+if ($LASTEXITCODE -ne 0) {
+    docker exec factoryguard-postgres pg_isready -U factoryguard -d factoryguard > $null 2>&1
+}
 if ($LASTEXITCODE -eq 0) {
     Write-Host "[OK] PostgreSQL veritabani hazir (127.0.0.1:5432)" -ForegroundColor Green
 } else {

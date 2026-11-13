@@ -1,24 +1,44 @@
 """Sensör yönetimi, kayıt (enroll) ve sağlık/heartbeat kontrolü."""
 from __future__ import annotations
 
+import base64
+import tempfile
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, StringConstraints
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
-from app.core.deps import AdminTenant, AuthenticatedSensor, DbSession, Tenant, TenantContext, client_ip, get_tenant
+from app.core.deps import (
+    AdminTenant,
+    AuthenticatedSensor,
+    DbSession,
+    Tenant,
+    TenantContext,
+    client_ip,
+    get_tenant,
+    require_role,
+)
 from app.core.security import decode_access_token, hash_token, new_sensor_credential
-from app.models import DiscoveryRun, Membership, Sensor, User
+from app.models import DiscoveryRun, Membership, RiskFinding, Sensor, User
 from app.modules.audit.service import record
+from app.modules.ingestion.schemas import CommunicationIn, ObservationIn
+from app.modules.ingestion.service import ingest_communications, ingest_observations
 from app.modules.sites.router import get_site_or_404
 from app.schemas.common import Name
+from sensor.cli import run as run_zeek_dir
+from sensor.normalizer.normalize import Normalizer
+from sensor.parsers.pcap_binary import parse_pcap_bytes
+from sensor.parsers.zeek import read_zeek_log
 
 router = APIRouter(prefix="/sensors", tags=["sensors"])
+
+AnalystTenant = Annotated[TenantContext, Depends(require_role("analyst"))]
 
 VersionStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=64)]
 SENSOR_OFFLINE_THRESHOLD_SECONDS = 180
@@ -250,3 +270,167 @@ def sensor_heartbeat(
         version=sensor.version,
         last_seen_at=sensor.last_seen_at,
     )
+
+
+class SensorUploadAnalyzeRequest(BaseModel):
+    filename: str | None = None
+    content_base64: str | None = None
+    sample: str | None = None
+
+
+class SensorUploadAnalyzeOut(BaseModel):
+    filename: str
+    devices_discovered: int
+    assets_created: int
+    assets_updated: int
+    communications_created: int
+    communications_updated: int
+    open_risks_total: int
+
+
+_PCAP_MAGICS = (
+    b"\xd4\xc3\xb2\xa1",
+    b"\xa1\xb2\xc3\xd4",
+    b"\x4d\x3c\xb2\xa1",
+    b"\xa1\xb2\x3c\x4d",
+    b"\x0a\x0d\x0d\x0a",
+)
+
+
+@router.post("/{sensor_id}/analyze-upload", response_model=SensorUploadAnalyzeOut)
+def analyze_sensor_upload(
+    sensor_id: uuid.UUID,
+    body: SensorUploadAnalyzeRequest,
+    request: Request,
+    db: DbSession,
+    ctx: AnalystTenant,
+):
+    """Web arayüzünden tek tıkla PCAP (`.pcap`/`.pcapng`), Zeek `.log` veya hazır örnek analizi."""
+    sensor = _get_sensor_or_404(db, ctx, sensor_id)
+    if sensor.status == "revoked":
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "İptal edilmiş (revoked) sensör üzerinden analiz yapılamaz",
+        )
+
+    repo_root = Path(__file__).resolve().parents[4]
+    if body.sample:
+        if body.sample == "real-modbus-pcap":
+            sample_dir = repo_root / "sample-data" / "zeek" / "real-modbus-testdata-part1"
+            label = "MODBUS-TestDataPart1.pcap (Zeek 9.0.1)"
+        elif body.sample == "synthetic-zeek":
+            sample_dir = repo_root / "sample-data" / "zeek" / "sample"
+            label = "Ornek-Fabrika-Zeek-Paketi"
+        else:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Geçersiz örnek veri adı")
+        if not sample_dir.is_dir():
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Örnek veri dizini bulunamadı")
+        bundle = run_zeek_dir(sample_dir, str(sensor.id))
+    elif body.content_base64:
+        label = (body.filename or "yuklenen-dosya").strip()
+        try:
+            raw_bytes = base64.b64decode(body.content_base64, validate=False)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Geçersiz Base64 dosya içeriği") from exc
+
+        if not raw_bytes:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Yüklenen dosya boş")
+        if len(raw_bytes) > 20 * 1024 * 1024:
+            raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Dosya boyutu en fazla 20 MB olabilir")
+
+        lower_name = label.lower()
+        is_pcap = raw_bytes[:4] in _PCAP_MAGICS or lower_name.endswith((".pcap", ".pcapng", ".cap"))
+        if is_pcap:
+            try:
+                bundle = parse_pcap_bytes(raw_bytes, str(sensor.id))
+            except ValueError as exc:
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+        else:
+            # Zeek JSON veya TSV log dosyası
+            with tempfile.TemporaryDirectory() as tmpdir:
+                tmp_path = Path(tmpdir) / "conn.log"
+                tmp_path.write_bytes(raw_bytes)
+                norm = Normalizer(str(sensor.id))
+                for rec in read_zeek_log(tmp_path):
+                    if "func" in rec:
+                        norm.add_modbus(rec)
+                    elif "assigned_addr" in rec or "client_addr" in rec:
+                        norm.add_dhcp(rec)
+                    elif "query" in rec and "answers" in rec:
+                        norm.add_dns(rec)
+                    else:
+                        norm.add_conn(rec)
+                bundle = {
+                    "observations": norm.observations(),
+                    "communications": norm.communications(),
+                }
+    else:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Analiz için dosya ('content_base64') veya hazır senaryo ('sample') seçilmelidir",
+        )
+
+    raw_obs = bundle.get("observations") or []
+    raw_comms = bundle.get("communications") or []
+    if not raw_obs and not raw_comms:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Dosyada geçerli IPv4/TCP/UDP veya Zeek bağlantı kaydı bulunamadı",
+        )
+
+    obs_models = [ObservationIn.model_validate(o) for o in raw_obs]
+    comm_models = [CommunicationIn.model_validate(c) for c in raw_comms]
+
+    obs_stats = (
+        ingest_observations(db, sensor, obs_models)
+        if obs_models
+        else None
+    )
+    comm_stats = (
+        ingest_communications(db, sensor, comm_models)
+        if comm_models
+        else None
+    )
+
+    sensor.last_seen_at = datetime.now(UTC)
+    if sensor.status == "offline":
+        sensor.status = "active"
+
+    record(
+        db,
+        "sensor.analyze_upload",
+        user_id=ctx.user.id,
+        organization_id=ctx.organization_id,
+        target_type="sensor",
+        target_id=sensor.id,
+        metadata={
+            "filename": label,
+            "devices_discovered": len(obs_models),
+            "flows_discovered": len(comm_models),
+        },
+        ip_address=client_ip(request),
+    )
+    db.commit()
+
+    open_risks = (
+        db.scalar(
+            select(func.count())
+            .select_from(RiskFinding)
+            .where(
+                RiskFinding.organization_id == ctx.organization_id,
+                RiskFinding.status.in_(("open", "investigating")),
+            )
+        )
+        or 0
+    )
+
+    return SensorUploadAnalyzeOut(
+        filename=label,
+        devices_discovered=len(obs_models),
+        assets_created=obs_stats.assets_created if obs_stats else 0,
+        assets_updated=obs_stats.assets_updated if obs_stats else 0,
+        communications_created=comm_stats.communications_created if comm_stats else 0,
+        communications_updated=comm_stats.communications_updated if comm_stats else 0,
+        open_risks_total=open_risks,
+    )
+
