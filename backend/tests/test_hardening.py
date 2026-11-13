@@ -346,3 +346,44 @@ def test_web_pcap_and_sample_upload_analyze_endpoint(client, make_org, make_user
         assert r_bin.status_code == 200, r_bin.text
         assert r_bin.json()["devices_discovered"] >= 2
 
+
+def test_phase2_mac_oui_hint_and_modbus_write_risk(client, make_org, make_user, login):
+    """Faz 2: Pasif MAC OUI donanım üreticisi ipucu ve tehlikeli Modbus WRITE komutu risk bulgusu."""
+    org = make_org("Faz 2 Endüstriyel A.Ş.")
+    make_user("admin@faz2.com", org, role="admin")
+    h_admin = login("admin@faz2.com")
+    site = client.post("/api/v1/sites", json={"name": "Manisa Fabrika"}, headers=h_admin).json()
+    sensor = client.post(
+        "/api/v1/sensors/enroll",
+        json={"site_id": site["id"], "name": "sensor-faz2"},
+        headers=h_admin,
+    ).json()
+    h_sensor = {"X-Sensor-Token": sensor["sensor_token"]}
+
+    # Siemens OUI (00:1b:1b) ve WRITE_MULTIPLE_REGISTERS gözlemi
+    res = client.post(
+        "/api/v1/ingest/observations",
+        json={
+            "observations": [
+                {
+                    "observed_at": "2026-11-13T20:00:00Z",
+                    "device": {"ip": "10.90.1.15", "mac": "00:1b:1b:99:88:77"},
+                    "evidence": {
+                        "source_logs": ["conn.log", "modbus.log"],
+                        "observed_protocols": ["s7comm", "modbus"],
+                        "modbus_functions": ["READ_COILS", "WRITE_MULTIPLE_REGISTERS"],
+                    },
+                }
+            ]
+        },
+        headers=h_sensor,
+    )
+    assert res.status_code == 200
+
+    assets = client.get("/api/v1/assets", headers=h_admin).json()["items"]
+    assert len(assets) == 1
+    detail = client.get(f"/api/v1/assets/{assets[0]['id']}", headers=h_admin).json()
+    assert any("Siemens AG" in r for r in detail["classification_reasons"])
+    assert any("WRITE_MULTIPLE_REGISTERS" in f["title"] for f in detail["risk_findings"])
+
+

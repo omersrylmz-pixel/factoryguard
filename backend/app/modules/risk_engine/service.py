@@ -30,6 +30,12 @@ from app.modules.risk_engine.scoring import calculate_risk_score
 
 OT_CRITICAL_PORTS = {502: "Modbus TCP", 102: "Siemens S7", 44818: "EtherNet/IP", 4840: "OPC UA", 20000: "DNP3"}
 REMOTE_ADMIN_PORTS = {22: "SSH", 23: "Telnet", 3389: "RDP", 5900: "VNC"}
+MODBUS_WRITE_FUNCTIONS = {
+    "WRITE_SINGLE_COIL",
+    "WRITE_SINGLE_REGISTER",
+    "WRITE_MULTIPLE_COILS",
+    "WRITE_MULTIPLE_REGISTERS",
+}
 
 
 def _is_private_ip(ip_str: str | None) -> bool:
@@ -145,6 +151,7 @@ def evaluate_organization_risks(
     ).all()
     protocols_by_asset: dict[uuid.UUID, set[str]] = {}
     logs_by_asset: dict[uuid.UUID, set[str]] = {}
+    write_funcs_by_asset: dict[uuid.UUID, set[str]] = {}
     for o in obs_rows:
         for p in o.evidence.get("observed_protocols") or []:
             if isinstance(p, str):
@@ -152,6 +159,9 @@ def evaluate_organization_risks(
         for lg in o.evidence.get("source_logs") or []:
             if isinstance(lg, str):
                 logs_by_asset.setdefault(o.asset_id, set()).add(lg)
+        for fn in o.evidence.get("modbus_functions") or []:
+            if isinstance(fn, str) and fn.upper() in MODBUS_WRITE_FUNCTIONS:
+                write_funcs_by_asset.setdefault(o.asset_id, set()).add(fn.upper())
 
     # İletişim kayıtlarını topla
     comm_stmt = select(AssetCommunication).where(AssetCommunication.organization_id == organization_id)
@@ -263,6 +273,49 @@ def evaluate_organization_risks(
             updated_count += int(not created)
         elif asset.is_verified and asset.asset_type != "unknown_device" and asset.vendor:
             _auto_resolve_if_open(db, organization_id, asset.id, "UNKNOWN_OT_ASSET")
+
+        # --- EK KURAL (Faz 2): Endüstriyel Yazma / Kontrol Komutu Tespiti (MODBUS WRITE) ---
+        write_funcs = sorted(write_funcs_by_asset.get(asset.id, set()))
+        if write_funcs and not asset.is_verified:
+            score_res = calculate_risk_score(
+                asset_criticality="critical",
+                network_exposure_ratio=0.6,
+                has_unexpected_behavior=True,
+                has_inventory_gap=inv_gap,
+            )
+            _, created = _upsert_finding(
+                db,
+                organization_id=organization_id,
+                asset_id=asset.id,
+                rule_key="UNEXPECTED_COMMUNICATION",
+                dedup_key="ot_write_command_detected",
+                title=f"Endüstriyel yazma/kontrol komutu tespit edildi ({', '.join(write_funcs)})",
+                description=(
+                    f"Doğrulanmamış cihaz ({asset.ip_address}) üzerinde fiziksel prosesi değiştirebilecek "
+                    f"Modbus yazma fonksiyonları ({', '.join(write_funcs)}) gözlemlendi."
+                ),
+                severity=score_res.severity,
+                score=score_res.score,
+                confidence=0.95,
+                evidence={
+                    "what_observed": f"{asset.ip_address} adresli cihaz trafiğinde {', '.join(write_funcs)} komutları gözlendi.",
+                    "why_important": "Modbus yazma fonksiyonları PLC bobin (coil) ve register değerlerini doğrudan değiştirerek üretimi durdurabilir veya fiziksel hasara yol açabilir.",
+                    "supporting_data": {
+                        "ip_address": asset.ip_address,
+                        "mac_address": asset.mac_address,
+                        "modbus_write_functions": write_funcs,
+                    },
+                    "score_breakdown": score_res.breakdown,
+                },
+                recommendation=(
+                    "Bu yazma komutlarını gönderen mühendislik istasyonu veya HMI'ın yetkili olup olmadığını "
+                    "derhal doğrulayın; yetkisizse anahtarlayıcı (switch) ACL veya endüstriyel güvenlik duvarı ile "
+                    "salt-okunur (read-only) kısıtlama uygulayın."
+                ),
+                observed_at=asset.last_seen_at or now,
+            )
+            created_count += int(created)
+            updated_count += int(not created)
 
         # --- KURAL 5: KNOWN_VULNERABILITY (yalnızca yeterli ürün + sürüm kanıtıyla) ---
         if asset.vendor and asset.model and asset.firmware_version:

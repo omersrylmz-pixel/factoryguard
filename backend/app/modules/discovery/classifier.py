@@ -16,6 +16,32 @@ from dataclasses import dataclass
 
 INDUSTRIAL_PROTOCOLS = {"modbus", "s7comm", "enip", "cip", "opcua", "dnp3", "bacnet", "profinet"}
 
+# IEEE MAC OUI (ilk 3 bayt) -> Endüstriyel donanım üreticisi ipucu sözlüğü (pasif, kanıta dayalı)
+INDUSTRIAL_OUI_VENDORS: dict[str, str] = {
+    "00:1b:1b": "Siemens AG",
+    "00:0e:8c": "Siemens AG",
+    "28:63:36": "Siemens AG",
+    "00:00:bc": "Rockwell Automation (Allen-Bradley)",
+    "f4:54:33": "Rockwell Automation (Allen-Bradley)",
+    "00:80:f4": "Schneider Electric (Modicon)",
+    "00:00:54": "Schneider Electric",
+    "00:a0:45": "Phoenix Contact",
+    "00:01:05": "Beckhoff Automation",
+    "00:30:de": "WAGO Kontakttechnik",
+    "00:90:e8": "Moxa Technologies",
+    "00:e0:4b": "Advantech Industrial",
+    "00:d0:c9": "Hirschmann Automation",
+}
+
+
+def lookup_mac_oui_vendor(mac: str | None) -> str | None:
+    """MAC adresinin ilk 3 oktetinden (OUI) pasif endüstriyel üretici ipucunu döndürür."""
+    if not mac or len(mac) < 8:
+        return None
+    prefix = mac.strip().lower().replace("-", ":")[:8]
+    return INDUSTRIAL_OUI_VENDORS.get(prefix)
+
+
 ASSET_TYPE_TR: dict[str, str] = {
     "plc": "PLC",
     "hmi": "HMI",
@@ -56,6 +82,7 @@ def infer_from_evidence(
     hostname: str | None,
     observed_protocols: list[str],
     base_confidence: float,
+    mac_address: str | None = None,
 ) -> ClassificationHint:
     """Mevcut kanıtlara göre cihazın sınıflandırma etiketini ve güven seviyesini hesaplar."""
     reasons: list[str] = []
@@ -64,6 +91,10 @@ def infer_from_evidence(
 
     if ot_protos:
         reasons.append(f"Gözlemlenen endüstriyel protokol: {', '.join(ot_protos)}")
+
+    oui_hint = lookup_mac_oui_vendor(mac_address)
+    if oui_hint and not is_verified:
+        reasons.append(f"Pasif MAC OUI donanım ipucu: {oui_hint} (Doğrulanmadı)")
 
     inferred_type = current_type
     confidence = base_confidence

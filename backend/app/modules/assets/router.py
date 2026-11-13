@@ -74,6 +74,7 @@ def _to_asset_out(asset: Asset, observed_protocols: list[str] | None = None) -> 
         hostname=asset.hostname,
         observed_protocols=observed_protocols or [],
         base_confidence=asset.confidence,
+        mac_address=asset.mac_address,
     )
     return AssetOut(
         id=asset.id,
@@ -230,6 +231,7 @@ def get_asset(asset_id: uuid.UUID, db: DbSession, ctx: Tenant):
         hostname=asset.hostname,
         observed_protocols=sorted(observed_protocols),
         base_confidence=asset.confidence,
+        mac_address=asset.mac_address,
     )
     findings = db.scalars(
         select(RiskFinding)
