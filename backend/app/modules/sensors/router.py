@@ -2,11 +2,16 @@
 from __future__ import annotations
 
 import base64
+import sys
 import tempfile
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
+
+_REPO_ROOT = str(Path(__file__).resolve().parents[4])
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
