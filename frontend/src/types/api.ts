@@ -184,6 +184,8 @@ export interface AssetCommunication {
   connection_count: number;
   first_seen_at: string;
   last_seen_at: string;
+  cross_zone?: boolean;
+  is_baseline_approved?: boolean;
 }
 
 export interface AssetDetail extends Asset {
@@ -253,6 +255,13 @@ export interface CommunicationEdge {
   connection_count: number;
   first_seen_at: string;
   last_seen_at: string;
+  cross_zone?: boolean;
+  is_baseline_approved?: boolean;
+}
+
+export interface BaselineApproveResult {
+  approved_flows: number;
+  risks_accepted: number;
 }
 
 export interface GraphNode {

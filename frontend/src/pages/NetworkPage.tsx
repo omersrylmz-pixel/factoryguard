@@ -1,15 +1,28 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router";
-import { ASSET_TYPE_LABEL, Card, CriticalityBadge, Empty, ErrorBox, Field, PageHeader, Select, formatDate } from "../components/ui";
+import {
+  ASSET_TYPE_LABEL,
+  Button,
+  Card,
+  CriticalityBadge,
+  Empty,
+  ErrorBox,
+  Field,
+  PageHeader,
+  Select,
+  formatDate,
+} from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { api } from "../services/api";
-import type { CommunicationGraph, Site } from "../types/api";
+import type { BaselineApproveResult, CommunicationGraph, Site } from "../types/api";
 
 export default function NetworkPage() {
-  const { activeOrg } = useAuth();
+  const { activeOrg, canEditAssets } = useAuth();
+  const qc = useQueryClient();
   const [siteId, setSiteId] = useState("");
   const [protocolFilter, setProtocolFilter] = useState("");
+  const [baselineNotice, setBaselineNotice] = useState<string | null>(null);
 
   const sitesQuery = useQuery({
     queryKey: ["sites", activeOrg?.id],
@@ -22,6 +35,35 @@ export default function NetworkPage() {
     queryFn: () =>
       api<CommunicationGraph>(`/communications/graph${siteId ? `?site_id=${siteId}` : ""}`),
     enabled: !!activeOrg,
+  });
+
+  const approveSingleMut = useMutation({
+    mutationFn: (commId: string) =>
+      api<BaselineApproveResult>(`/communications/${commId}/approve-baseline`, { method: "POST" }),
+    onSuccess: async () => {
+      setBaselineNotice("İletişim akışı onaylı fabrika baseline listesine eklendi.");
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["communications-graph", activeOrg?.id] }),
+        qc.invalidateQueries({ queryKey: ["risks", activeOrg?.id] }),
+      ]);
+    },
+  });
+
+  const approveAllMut = useMutation({
+    mutationFn: () =>
+      api<BaselineApproveResult>(
+        `/communications/approve-all-baseline${siteId ? `?site_id=${siteId}` : ""}`,
+        { method: "POST" },
+      ),
+    onSuccess: async (res) => {
+      setBaselineNotice(
+        `${res.approved_flows} iletişim akışı onaylı fabrika baseline'ı (whitelist) olarak kaydedildi.`,
+      );
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["communications-graph", activeOrg?.id] }),
+        qc.invalidateQueries({ queryKey: ["risks", activeOrg?.id] }),
+      ]);
+    },
   });
 
   const sites = sitesQuery.data ?? [];
@@ -52,9 +94,28 @@ export default function NetworkPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Ağ İletişim Görünümü"
-        subtitle="Yalnızca pasif olarak gözlemlenen gerçek cihazlar arası iletişim ilişkileri (tahmini bağlantı gösterilmez)"
+        title="Ağ İletişim Görünümü ve Baseline (Whitelist)"
+        subtitle="Yalnızca pasif olarak gözlemlenen gerçek cihazlar arası iletişim ilişkileri ve onaylı baseline yönetimi"
+        actions={
+          canEditAssets && edges.length > 0 ? (
+            <Button
+              variant="secondary"
+              disabled={approveAllMut.isPending}
+              onClick={() => approveAllMut.mutate()}
+            >
+              {approveAllMut.isPending
+                ? "Onaylanıyor…"
+                : "Mevcut Akışları Baseline Olarak Onayla"}
+            </Button>
+          ) : undefined
+        }
       />
+
+      {baselineNotice && (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+          {baselineNotice}
+        </div>
+      )}
 
       <Card title="Filtreler">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -81,7 +142,7 @@ export default function NetworkPage() {
         </div>
       </Card>
 
-      <ErrorBox error={graphQuery.error} />
+      <ErrorBox error={graphQuery.error || approveAllMut.error || approveSingleMut.error} />
 
       <Card title={`Topoloji Görünümü (${nodes.length} Cihaz, ${edges.length} İletişim Akışı)`}>
         {graphQuery.isLoading ? (
@@ -102,6 +163,11 @@ export default function NetworkPage() {
                 if (!s || !t) return null;
                 const mx = (s.x + t.x) / 2;
                 const my = (s.y + t.y) / 2;
+                const strokeColor = e.is_baseline_approved
+                  ? "#059669"
+                  : e.cross_zone
+                    ? "#dc2626"
+                    : "#64748b";
                 return (
                   <g key={e.id}>
                     <line
@@ -109,7 +175,8 @@ export default function NetworkPage() {
                       y1={s.y}
                       x2={t.x}
                       y2={t.y}
-                      stroke="#64748b"
+                      stroke={strokeColor}
+                      strokeDasharray={e.cross_zone && !e.is_baseline_approved ? "5,3" : undefined}
                       strokeWidth={Math.min(1.5 + Math.log2(e.connection_count + 1), 4)}
                       markerEnd="url(#arrow)"
                     />
@@ -142,12 +209,18 @@ export default function NetworkPage() {
                 );
               })}
             </svg>
-            <div className="mt-2 flex items-center justify-center gap-6 text-xs text-slate-600">
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-6 text-xs text-slate-600">
               <span className="inline-flex items-center gap-1.5">
                 <span className="h-3 w-3 rounded-full bg-blue-700" /> Doğrulanmış Cihaz
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <span className="h-3 w-3 rounded-full bg-amber-500" /> Doğrulanmamış Cihaz
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-1 w-4 bg-emerald-600" /> Onaylı Baseline Akışı
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-1 w-4 bg-red-600" /> Bölgeler Arası (Cross-Zone) Akış
               </span>
             </div>
           </div>
@@ -164,10 +237,11 @@ export default function NetworkPage() {
                 <tr>
                   <th className="py-2 pr-4">Kaynak Cihaz</th>
                   <th className="py-2 pr-4">Hedef Cihaz</th>
-                  <th className="py-2 pr-4">Protokol / Hedef Port</th>
-                  <th className="py-2 pr-4">Bağlantı Sayısı</th>
-                  <th className="py-2 pr-4">İlk Görülme</th>
-                  <th className="py-2 text-right">Son Görülme</th>
+                  <th className="py-2 pr-4">Protokol / Port</th>
+                  <th className="py-2 pr-4">Baseline Durumu</th>
+                  <th className="py-2 pr-4">Bağlantı</th>
+                  <th className="py-2 pr-4">Son Görülme</th>
+                  {canEditAssets && <th className="py-2 text-right">İşlem</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -198,10 +272,38 @@ export default function NetworkPage() {
                           {e.protocol.toUpperCase()}
                         </span>
                         {e.target_port !== null && <span className="ml-1.5 text-slate-600">:{e.target_port}</span>}
+                        {e.cross_zone && (
+                          <span className="ml-2 rounded bg-red-50 px-1.5 py-0.5 font-sans text-[10px] font-medium text-red-700">
+                            Cross-Zone
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2.5 pr-4">
+                        {e.is_baseline_approved ? (
+                          <span className="rounded bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                            Onaylı Baseline
+                          </span>
+                        ) : (
+                          <span className="rounded bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">
+                            İnceleme Bekliyor
+                          </span>
+                        )}
                       </td>
                       <td className="py-2.5 pr-4 font-mono text-xs">{e.connection_count}</td>
-                      <td className="py-2.5 pr-4 text-xs text-slate-500">{formatDate(e.first_seen_at)}</td>
-                      <td className="py-2.5 text-right text-xs text-slate-500">{formatDate(e.last_seen_at)}</td>
+                      <td className="py-2.5 pr-4 text-xs text-slate-500">{formatDate(e.last_seen_at)}</td>
+                      {canEditAssets && (
+                        <td className="py-2.5 text-right">
+                          {!e.is_baseline_approved && (
+                            <Button
+                              variant="secondary"
+                              disabled={approveSingleMut.isPending}
+                              onClick={() => approveSingleMut.mutate(e.id)}
+                            >
+                              Onayla
+                            </Button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
