@@ -91,17 +91,19 @@ export default function ReportsPage() {
     }
   }
 
-  async function handleRisksExport(format: "csv" | "pdf") {
+  async function handleRisksExport(format: "csv" | "pdf" | "cef") {
     setDownloadErr(null);
     const key = `risk-${format}`;
     setBusyKey(key);
     try {
-      const p = new URLSearchParams({ format });
+      const p = new URLSearchParams();
+      if (format !== "cef") p.set("format", format);
       if (siteId) p.set("site_id", siteId);
       if (riskStatus) p.set("status", riskStatus);
       if (riskSeverity) p.set("severity", riskSeverity);
       if (riskRuleKey) p.set("rule_key", riskRuleKey);
-      await apiDownload(`/reports/risks?${p.toString()}`, `factoryguard-risk-raporu.${format}`);
+      const endpoint = format === "cef" ? "/reports/siem-cef" : "/reports/risks";
+      await apiDownload(`${endpoint}?${p.toString()}`, `factoryguard-risk-raporu.${format}`);
     } catch (err) {
       setDownloadErr(err);
     } finally {
@@ -249,6 +251,13 @@ export default function ReportsPage() {
               onClick={() => void handleRisksExport("pdf")}
             >
               {busyKey === "risk-pdf" ? "PDF Hazırlanıyor…" : "Yönetici + Teknik PDF İndir"}
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={busyKey !== null}
+              onClick={() => void handleRisksExport("cef")}
+            >
+              {busyKey === "risk-cef" ? "CEF Hazırlanıyor…" : "SIEM (CEF) Log İndir"}
             </Button>
           </div>
         </Card>

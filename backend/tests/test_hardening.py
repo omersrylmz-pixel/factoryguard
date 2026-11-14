@@ -387,3 +387,45 @@ def test_phase2_mac_oui_hint_and_modbus_write_risk(client, make_org, make_user, 
     assert any("WRITE_MULTIPLE_REGISTERS" in f["title"] for f in detail["risk_findings"])
 
 
+def test_phase3_baseline_approval_and_siem_cef_export(client, make_org, make_user, login):
+    """Faz 3: İletişim baseline (whitelist) onaylama ve kurumsal SIEM CEF dışa aktarma."""
+    org = make_org("Faz 3 SIEM ve Baseline A.Ş.")
+    make_user("admin@faz3.com", org, role="admin")
+    h_admin = login("admin@faz3.com")
+    site = client.post("/api/v1/sites", json={"name": "Sakarya Fabrika"}, headers=h_admin).json()
+    sensor = client.post(
+        "/api/v1/sensors/enroll",
+        json={"site_id": site["id"], "name": "sensor-faz3"},
+        headers=h_admin,
+    ).json()
+
+    # Gerçek Modbus PCAP analiz et
+    r_up = client.post(
+        f"/api/v1/sensors/{sensor['id']}/analyze-upload",
+        json={"sample": "real-modbus-pcap"},
+        headers=h_admin,
+    )
+    assert r_up.status_code == 200
+
+    # Baseline onaylamadan önce akışları kontrol et
+    graph_before = client.get("/api/v1/communications/graph", headers=h_admin).json()
+    assert len(graph_before["edges"]) >= 2
+    assert any(not e["is_baseline_approved"] for e in graph_before["edges"])
+
+    # Tüm mevcut akışları baseline olarak onayla
+    r_base = client.post("/api/v1/communications/approve-all-baseline", headers=h_admin)
+    assert r_base.status_code == 200
+    assert r_base.json()["approved_flows"] == len(graph_before["edges"])
+
+    graph_after = client.get("/api/v1/communications/graph", headers=h_admin).json()
+    assert all(e["is_baseline_approved"] for e in graph_after["edges"])
+
+    # SIEM CEF dışa aktarma kontrolü
+    r_cef = client.get("/api/v1/reports/siem-cef", headers=h_admin)
+    assert r_cef.status_code == 200
+    cef_text = r_cef.content.decode("utf-8")
+    assert "CEF:0|FactoryGuard|Lite|0.1.0|" in cef_text
+    assert "UNKNOWN_OT_ASSET" in cef_text
+
+
+

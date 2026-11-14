@@ -585,3 +585,93 @@ def export_risks_report(
             "Content-Disposition": f'attachment; filename="factoryguard-risk-raporu-{date_tag}.pdf"'
         },
     )
+
+
+_CEF_SEV_MAP = {"critical": 10, "high": 8, "medium": 5, "low": 2}
+
+
+def _cef_escape(val: str) -> str:
+    return (val or "").replace("\\", "\\\\").replace("|", "\\|").replace("=", "\\=").replace("\n", " ")
+
+
+@router.get("/siem-cef")
+def export_siem_cef_report(
+    request: Request,
+    db: DbSession,
+    ctx: Tenant,
+    site_id: uuid.UUID | None = None,
+    status: str | None = None,
+    severity: str | None = None,
+    rule_key: str | None = None,
+) -> Response:
+    """Kurumsal SIEM / SOC (QRadar, Splunk, Sentinel, FortiSIEM) için CEF (Common Event Format) çıktısı."""
+    org_id = ctx.organization_id
+    stmt = (
+        select(RiskFinding)
+        .join(Asset, Asset.id == RiskFinding.asset_id)
+        .where(RiskFinding.organization_id == org_id)
+    )
+    if site_id is not None:
+        stmt = stmt.where(Asset.site_id == site_id)
+    if status:
+        stmt = stmt.where(RiskFinding.status == status)
+    if severity:
+        stmt = stmt.where(RiskFinding.severity == severity)
+    if rule_key:
+        stmt = stmt.where(RiskFinding.rule_key == rule_key)
+    stmt = stmt.order_by(RiskFinding.score.desc(), RiskFinding.last_seen_at.desc())
+    findings = list(db.scalars(stmt).all())
+
+    asset_ids = list({f.asset_id for f in findings})
+    assets_map: dict[uuid.UUID, Asset] = {}
+    if asset_ids:
+        for a in db.scalars(
+            select(Asset).where(Asset.organization_id == org_id, Asset.id.in_(asset_ids))
+        ).all():
+            assets_map[a.id] = a
+
+    record(
+        db,
+        action="report.export_siem_cef",
+        organization_id=org_id,
+        user_id=ctx.user.id,
+        target_type="report",
+        target_id="siem-cef",
+        metadata={
+            "format": "cef",
+            "count": len(findings),
+            "site_id": str(site_id) if site_id else None,
+        },
+        ip_address=client_ip(request),
+    )
+    db.commit()
+
+    lines: list[str] = []
+    for f in findings:
+        asset = assets_map.get(f.asset_id)
+        sev_int = _CEF_SEV_MAP.get(f.severity, 5)
+        dst_ip = asset.ip_address if asset and asset.ip_address else "0.0.0.0"
+        dhost = (asset.name or asset.hostname or "") if asset else ""
+        ext = (
+            f"dst={dst_ip} "
+            f"dhost={_cef_escape(dhost)} "
+            f"cn1Label=RiskScore cn1={f.score} "
+            f"cfp1Label=Confidence cfp1={f.confidence:.2f} "
+            f"cs1Label=Status cs1={f.status} "
+            f"cs2Label=Recommendation cs2={_cef_escape(f.recommendation)} "
+            f"rt={int(f.last_seen_at.timestamp() * 1000)}"
+        )
+        lines.append(
+            f"CEF:0|FactoryGuard|Lite|0.1.0|{f.rule_key}|{_cef_escape(f.title)}|{sev_int}|{ext}"
+        )
+
+    date_tag = datetime.now(UTC).strftime("%Y%m%d")
+    body = ("\n".join(lines) + ("\n" if lines else "")).encode("utf-8")
+    return Response(
+        content=body,
+        media_type="text/plain; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="factoryguard-siem-{date_tag}.cef"'
+        },
+    )
+
