@@ -1,6 +1,6 @@
 # PROJECT STATUS
 
-**Güncel aşama:** Aşama 6 — Sertleştirme, Güvenlik Doğrulaması ve Pilot Hazırlığı ✅ TAMAMLANDI (MVP Aşama 0–6 Tamamlandı) · Son güncelleme: 2026-11-11
+**Güncel aşama:** Aşama 6 + Faz 1–4 İleri OT Güvenlik Geliştirmeleri ✅ TAMAMLANDI · Son güncelleme: 2026-11-15
 
 ## Ortam
 | Bileşen | Sürüm / durum |
@@ -24,8 +24,13 @@ Gerçek Zeek 9.0.1 PCAP çıktısından (`MODBUS-TestDataPart1.pcap`) başlayıp
 - **Aşama 6:**
   - **Sertleştirme ve Uçtan Uca Pilot Testleri (`backend/tests/test_hardening.py`):** Gerçek PCAP → Normalizer → Exporter → Ingestion → Envanter → Topoloji → Risk → PDF/CSV E2E testi; tüm uç noktalarda RBAC (401/403) matrisi; SQLi/bozuk girdi dayanıklılık testi; 80 cihaz + 120 akış toplu yük performans testi.
   - **Canlı Demo & Saha Hazırlık Araçları:** `python -m app.cli seed-demo`, `deployment/scripts/healthcheck.ps1`, `deployment/scripts/uninstall.ps1`, `docs/PILOT_CHECKLIST.md`.
+- **Faz 1–4 İleri OT Güvenlik Geliştirmeleri:**
+  - Web üzerinden tek tıkla `.pcap`/`.pcapng`/`.log` yükleme ve anında analiz (`POST /api/v1/sensors/{id}/analyze-upload`).
+  - Endüstriyel MAC OUI sözlüğü ve tehlikeli Modbus yazma komutu tespiti.
+  - İletişim baseline onaylama iş akışı ve SIEM CEF dışa aktarma (`GET /api/v1/reports/siem-cef`).
+  - S7comm, EtherNet/IP ve OPC UA derin paket imzası (DPI) ayrıştırıcısı, Fabrika Siber Güvenlik Duruş Endeksi (`GET /api/v1/risks/posture`) ve toplu risk durumu yönetimi (`POST /api/v1/risks/bulk-status`).
 
 ## Son test sonuçları
-- Sensör testleri: `pytest sensor/tests -v` → **16 passed**.
-- Backend testleri (gerçek PostgreSQL `factoryguard_test` üzerinde): `pytest -v` → **53 passed**.
+- Sensör testleri: `pytest sensor/tests -v` → **17 passed**.
+- Backend testleri (gerçek PostgreSQL `factoryguard_test` üzerinde): `pytest -v` → **56 passed**.
 - Frontend tip kontrolü ve üretim derlemesi: `npm run build` (`tsc -b && vite build`) → **0 hata**.

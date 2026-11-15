@@ -427,5 +427,21 @@ def test_phase3_baseline_approval_and_siem_cef_export(client, make_org, make_use
     assert "CEF:0|FactoryGuard|Lite|0.1.0|" in cef_text
     assert "UNKNOWN_OT_ASSET" in cef_text
 
+    # Fabrika güvenlik duruş endeksi ve toplu durum güncelleme kontrolü
+    r_posture = client.get("/api/v1/risks/posture", headers=h_admin)
+    assert r_posture.status_code == 200
+    posture = r_posture.json()
+    assert posture["grade"] in ("A", "B", "C", "D", "F")
+    assert 0 <= posture["health_score"] <= 100
+
+    r_bulk = client.post(
+        "/api/v1/risks/bulk-status",
+        headers=h_admin,
+        json={"filter_status": "open", "new_status": "investigating"},
+    )
+    assert r_bulk.status_code == 200
+    assert r_bulk.json()["updated_count"] >= 1
+
+
 
 
