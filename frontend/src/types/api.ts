@@ -264,6 +264,23 @@ export interface BaselineApproveResult {
   risks_accepted: number;
 }
 
+export interface RiskPosture {
+  health_score: number;
+  grade: "A" | "B" | "C" | "D" | "F";
+  status_label: string;
+  open_critical: number;
+  open_high: number;
+  open_medium: number;
+  open_low: number;
+  total_open: number;
+  verified_asset_ratio: number;
+}
+
+export interface RiskBulkStatusResult {
+  updated_count: number;
+  new_status: RiskStatus;
+}
+
 export interface GraphNode {
   id: string;
   site_id: string;

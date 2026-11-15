@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { Card, CriticalityBadge, Empty, ErrorBox, PageHeader, formatDate } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { api } from "../services/api";
-import type { Asset, AuditLog, Page, RiskFinding, Sensor, Site, Zone } from "../types/api";
+import type { Asset, AuditLog, Page, RiskFinding, RiskPosture, Sensor, Site, Zone } from "../types/api";
 
 export default function DashboardPage() {
   const { activeOrg, canAdmin } = useAuth();
@@ -38,6 +38,12 @@ export default function DashboardPage() {
     enabled: !!activeOrg,
   });
 
+  const postureQuery = useQuery({
+    queryKey: ["risks", activeOrg?.id, "posture"],
+    queryFn: () => api<RiskPosture>("/risks/posture"),
+    enabled: !!activeOrg,
+  });
+
   const auditQuery = useQuery({
     queryKey: ["audit-logs", activeOrg?.id, 10],
     queryFn: () => api<Page<AuditLog>>("/audit-logs?limit=10"),
@@ -61,7 +67,19 @@ export default function DashboardPage() {
       )}
 
       {/* Aşama 1 gerçek metrikleri + sonraki aşamaların dürüst durum göstergeleri */}
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="text-xs font-medium text-slate-500">OT Güvenlik Duruşu</div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-slate-900">
+              {postureQuery.isLoading ? "…" : `${postureQuery.data?.grade ?? "A"} (${postureQuery.data?.health_score ?? 100}/100)`}
+            </span>
+          </div>
+          <div className="mt-1 text-xs text-slate-500">
+            {postureQuery.data?.status_label ?? "Tesis güvenlik sağlık endeksi"}
+          </div>
+        </div>
+
         <div className="rounded-lg border border-slate-200 bg-white p-4">
           <div className="text-xs font-medium text-slate-500">Kayıtlı Fabrika (Site)</div>
           <div className="mt-2 text-2xl font-semibold text-slate-900">

@@ -16,7 +16,7 @@ import {
 } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { api } from "../services/api";
-import type { Criticality, Page, RiskFinding, RiskRuleKey, RiskStatus } from "../types/api";
+import type { Criticality, Page, RiskBulkStatusResult, RiskFinding, RiskPosture, RiskRuleKey, RiskStatus } from "../types/api";
 
 export const RISK_STATUS_LABEL: Record<RiskStatus, string> = {
   open: "Open (Açık)",
@@ -81,6 +81,23 @@ export default function RisksPage() {
     },
   });
 
+  const postureQuery = useQuery({
+    queryKey: ["risks", activeOrg?.id, "posture"],
+    queryFn: () => api<RiskPosture>("/risks/posture"),
+    enabled: !!activeOrg,
+  });
+
+  const bulkStatusMut = useMutation({
+    mutationFn: (new_status: RiskStatus) =>
+      api<RiskBulkStatusResult>("/risks/bulk-status", {
+        method: "POST",
+        body: { filter_status: "open", new_status },
+      }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["risks", activeOrg?.id] });
+    },
+  });
+
   const risks = risksQuery.data?.items ?? [];
   const total = risksQuery.data?.total ?? 0;
   const selected = risks.find((r) => r.id === selectedRiskId) ?? risks[0] ?? null;
@@ -93,11 +110,45 @@ export default function RisksPage() {
           subtitle="Açıklanabilir, kanıta dayalı kurallarla tespit edilen güvenlik riskleri ve aksiyon önerileri"
         />
         {canEditAssets && (
-          <Button variant="secondary" onClick={() => evaluateMut.mutate()} disabled={evaluateMut.isPending}>
-            {evaluateMut.isPending ? "Değerlendiriliyor…" : "Kuralları Şimdi Yeniden Çalıştır"}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => bulkStatusMut.mutate("investigating")}
+              disabled={bulkStatusMut.isPending}
+            >
+              Açık Bulguları İncelemeye Al
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => bulkStatusMut.mutate("resolved")}
+              disabled={bulkStatusMut.isPending}
+            >
+              Açık Bulguları Çözüldü İşaretle
+            </Button>
+            <Button variant="secondary" onClick={() => evaluateMut.mutate()} disabled={evaluateMut.isPending}>
+              {evaluateMut.isPending ? "Değerlendiriliyor…" : "Kuralları Şimdi Yeniden Çalıştır"}
+            </Button>
+          </div>
         )}
       </div>
+
+      {postureQuery.data && (
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white p-4">
+          <div>
+            <div className="text-xs font-semibold uppercase text-slate-500">Fabrika Siber Güvenlik Duruşu</div>
+            <div className="mt-1 text-lg font-bold text-slate-900">
+              Not: {postureQuery.data.grade} · Sağlık Endeksi: {postureQuery.data.health_score}/100 —{" "}
+              <span className="font-normal text-slate-600">{postureQuery.data.status_label}</span>
+            </div>
+          </div>
+          <div className="flex gap-4 text-xs text-slate-600">
+            <span>Kritik: <strong>{postureQuery.data.open_critical}</strong></span>
+            <span>Yüksek: <strong>{postureQuery.data.open_high}</strong></span>
+            <span>Orta: <strong>{postureQuery.data.open_medium}</strong></span>
+            <span>Envanter Doğrulama: <strong>%{Math.round(postureQuery.data.verified_asset_ratio * 100)}</strong></span>
+          </div>
+        </div>
+      )}
 
       <Card title="Filtreler">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
