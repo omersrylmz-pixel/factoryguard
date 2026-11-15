@@ -87,6 +87,15 @@ class Normalizer:
     def _dev(self, ip: str) -> Device:
         return self.devices.setdefault(ip, Device(ip=ip))
 
+    def add_protocol_evidence(self, ip: str, protocol: str, source_log: str):
+        """Kanıtlanmış uygulama katmanı protokolünü (S7comm, ENIP, OPC UA vb.) cihaza işler."""
+        valid = valid_ip(ip)
+        if not valid:
+            return
+        d = self._dev(valid)
+        d.protocols.add(protocol.lower())
+        d.evidence.add(source_log)
+
     # ---- conn.log ----
     def add_conn(self, r: dict):
         uid = r.get("uid")

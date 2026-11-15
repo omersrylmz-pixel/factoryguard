@@ -94,3 +94,42 @@ def test_conn_without_ts_rejected():
     n = Normalizer("s")
     n.add_conn({"id.orig_h": "10.0.0.1", "id.resp_h": "10.0.0.2"})
     assert n.rejected == 1 and not n.devices
+
+
+def test_pcap_dpi_s7comm_enip_opcua_signatures():
+    import socket
+    import struct
+    from sensor.parsers.pcap_binary import parse_pcap_bytes
+
+    def build_tcp_pkt(src_ip: str, dst_ip: str, sport: int, dport: int, payload: bytes) -> bytes:
+        eth = bytes.fromhex("001b1b112233" "000e8c445566" "0800")
+        tot_len = 20 + 20 + len(payload)
+        ip = struct.pack("!BBHHHBBH4s4s", 0x45, 0, tot_len, 1, 0, 64, 6, 0, socket.inet_aton(src_ip), socket.inet_aton(dst_ip))
+        tcp = struct.pack("!HHIIBBHHH", sport, dport, 1, 1, (5 << 4), 0x18, 8192, 0, 0)
+        return eth + ip + tcp + payload
+
+    # 1. Siemens S7comm Job Request (TPKT 03 00 00 11 + COTP 02 f0 80 + S7 32 01 ...)
+    s7_payload = bytes([0x03, 0x00, 0x00, 0x11, 0x02, 0xF0, 0x80, 0x32, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00])
+    # 2. EtherNet/IP ListIdentity (cmd=0x0063, 24 bytes header)
+    enip_payload = struct.pack("<HHII8sI", 0x0063, 0, 0, 0, b"\x00" * 8, 0)
+    # 3. OPC UA Hello (HEL + F + size)
+    opcua_payload = b"HELF" + struct.pack("<I", 32) + b"\x00" * 24
+
+    pkts = [
+        build_tcp_pkt("10.10.1.50", "10.10.1.10", 49152, 102, s7_payload),
+        build_tcp_pkt("10.10.1.50", "10.10.1.11", 49153, 44818, enip_payload),
+        build_tcp_pkt("10.10.1.50", "10.10.1.12", 49154, 4840, opcua_payload),
+    ]
+    pcap = struct.pack("<IHHiIII", 0xA1B2C3D4, 2, 4, 0, 0, 65535, 1)
+    for idx, p in enumerate(pkts, start=1):
+        pcap += struct.pack("<IIII", 1700000000 + idx, 0, len(p), len(p)) + p
+
+    parsed = parse_pcap_bytes(pcap, "snr-dpi")
+    obs = {o["device"]["ip"]: o for o in parsed["observations"]}
+    assert "s7comm" in obs["10.10.1.10"]["evidence"]["observed_protocols"]
+    assert "s7comm.job_request" in obs["10.10.1.10"]["evidence"]["source_logs"]
+    assert "enip" in obs["10.10.1.11"]["evidence"]["observed_protocols"]
+    assert "enip.list_identity" in obs["10.10.1.11"]["evidence"]["source_logs"]
+    assert "opcua" in obs["10.10.1.12"]["evidence"]["observed_protocols"]
+    assert "opcua.hel" in obs["10.10.1.12"]["evidence"]["source_logs"]
+

@@ -44,6 +44,64 @@ _MODBUS_FC_NAMES: dict[int, str] = {
     43: "ENCAPSULATED_INTERFACE_TRANSPORT",
 }
 
+_S7COMM_ROSCTR_NAMES: dict[int, str] = {
+    0x01: "JOB_REQUEST",
+    0x02: "ACK",
+    0x03: "ACK_DATA",
+    0x07: "USERDATA",
+}
+
+_ENIP_COMMAND_NAMES: dict[int, str] = {
+    0x0004: "LIST_SERVICES",
+    0x0063: "LIST_IDENTITY",
+    0x0064: "LIST_INTERFACES",
+    0x0065: "REGISTER_SESSION",
+    0x0066: "UNREGISTER_SESSION",
+    0x006F: "SEND_RR_DATA",
+    0x0070: "SEND_UNIT_DATA",
+}
+
+_OPCUA_MSG_TYPES: set[bytes] = {b"HEL", b"ACK", b"ERR", b"RHE", b"OPN", b"CLO", b"MSG"}
+
+
+def _inspect_industrial_payload(dport: int, sport: int, payload: bytes) -> tuple[str | None, str | None]:
+    """Uygulama katmanı bayt imzasından (DPI) kanıtlanmış endüstriyel protokolü döndürür."""
+    if not payload:
+        return None, None
+
+    # 1. Modbus/TCP (Port 502, MBAP Protocol ID == 0x0000)
+    if (dport == 502 or sport == 502) and len(payload) >= 8:
+        proto_id = struct.unpack("!H", payload[2:4])[0]
+        fc = payload[7] & 0x7F
+        if proto_id == 0 and fc in _MODBUS_FC_NAMES:
+            return "modbus", f"modbus.fc.{_MODBUS_FC_NAMES[fc]}"
+
+    # 2. Siemens S7comm (Port 102, TPKT 0x03 0x00 + COTP + S7 Protocol ID 0x32)
+    if (dport == 102 or sport == 102) and len(payload) >= 8:
+        if payload[0] == 0x03 and payload[1] == 0x00:
+            cotp_len = payload[4]
+            s7_offset = 5 + cotp_len
+            if len(payload) > s7_offset + 1 and payload[s7_offset] == 0x32:
+                rosctr = payload[s7_offset + 1]
+                ros_name = _S7COMM_ROSCTR_NAMES.get(rosctr, f"ROSCTR_{rosctr}")
+                return "s7comm", f"s7comm.{ros_name.lower()}"
+
+    # 3. Rockwell / ODVA EtherNet/IP (Port 44818, 24-byte ENIP Encapsulation Header)
+    if (dport == 44818 or sport == 44818) and len(payload) >= 24:
+        cmd = struct.unpack("<H", payload[0:2])[0]
+        status_code = struct.unpack("<I", payload[8:12])[0]
+        if cmd in _ENIP_COMMAND_NAMES and status_code == 0:
+            return "enip", f"enip.{_ENIP_COMMAND_NAMES[cmd].lower()}"
+
+    # 4. OPC UA Binary Protocol (Port 4840, 3-byte MessageType + 1-byte ChunkType 'F'/'C'/'A')
+    if (dport == 4840 or sport == 4840) and len(payload) >= 8:
+        msg_type = payload[0:3]
+        chunk_type = payload[3:4]
+        if msg_type in _OPCUA_MSG_TYPES and chunk_type in (b"F", b"C", b"A"):
+            return "opcua", f"opcua.{msg_type.decode('ascii').lower()}"
+
+    return None, None
+
 
 def _fmt_mac(raw6: bytes) -> str:
     return ":".join(f"{b:02x}" for b in raw6)
@@ -155,11 +213,12 @@ def parse_pcap_bytes(data: bytes, sensor_id: str) -> dict[str, Any]:
         flow_seqs[flow_key] = flow_seqs.get(flow_key, 0) + 1
         uid = f"pcap-{idx}-{flow_seqs[flow_key]}"
 
-        service = None
-        if len(payload) > 0:
-            if dport in _PORT_SERVICE_MAP:
+        dpi_proto, dpi_log = _inspect_industrial_payload(dport, sport, payload)
+        service = dpi_proto
+        if service is None and len(payload) > 0:
+            if dport in _PORT_SERVICE_MAP and dport not in (502, 102, 44818, 4840):
                 service = _PORT_SERVICE_MAP[dport]
-            elif sport in _PORT_SERVICE_MAP:
+            elif sport in _PORT_SERVICE_MAP and sport not in (502, 102, 44818, 4840):
                 service = _PORT_SERVICE_MAP[sport]
 
         # İstemci -> Sunucu yönünü düşük/bilinen porta göre normalize et
@@ -185,22 +244,24 @@ def parse_pcap_bytes(data: bytes, sensor_id: str) -> dict[str, Any]:
             }
         )
 
-        # Modbus/TCP uygulama katmanı (MBAP + Function Code)
-        if (dport == 502 or sport == 502) and len(payload) >= 8:
-            proto_id = struct.unpack("!H", payload[2:4])[0]
-            fc = payload[7] & 0x7F
-            if proto_id == 0 and fc in _MODBUS_FC_NAMES:
-                normalizer.add_modbus(
-                    {
-                        "ts": ts,
-                        "uid": uid,
-                        "id.orig_h": orig_h,
-                        "id.orig_p": orig_p,
-                        "id.resp_h": resp_h,
-                        "id.resp_p": resp_p,
-                        "func": _MODBUS_FC_NAMES[fc],
-                    }
-                )
+        # Modbus/TCP, S7comm, EtherNet/IP ve OPC UA uygulama katmanı kanıtı
+        if dpi_proto == "modbus" and dpi_log:
+            normalizer.add_modbus(
+                {
+                    "ts": ts,
+                    "uid": uid,
+                    "id.orig_h": orig_h,
+                    "id.orig_p": orig_p,
+                    "id.resp_h": resp_h,
+                    "id.resp_p": resp_p,
+                    "func": dpi_log.removeprefix("modbus.fc."),
+                }
+            )
+            normalizer.add_protocol_evidence(orig_h, "modbus", dpi_log)
+            normalizer.add_protocol_evidence(resp_h, "modbus", dpi_log)
+        elif dpi_proto and dpi_log:
+            normalizer.add_protocol_evidence(orig_h, dpi_proto, dpi_log)
+            normalizer.add_protocol_evidence(resp_h, dpi_proto, dpi_log)
 
     return {
         "sensor_id": sensor_id,
