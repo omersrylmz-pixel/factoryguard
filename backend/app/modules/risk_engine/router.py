@@ -74,6 +74,37 @@ class RiskEvaluateOut(BaseModel):
     total_open: int
 
 
+class RiskBulkStatusUpdate(BaseModel):
+    finding_ids: list[uuid.UUID] | None = None
+    filter_status: str = "open"
+    new_status: str
+
+    @field_validator("new_status")
+    @classmethod
+    def _validate_new_status(cls, v: str) -> str:
+        val = v.strip().lower().replace(" ", "_")
+        if val not in RISK_STATUSES:
+            raise ValueError(f"Durum şunlardan biri olmalı: {', '.join(RISK_STATUSES)}")
+        return val
+
+
+class RiskBulkStatusOut(BaseModel):
+    updated_count: int
+    new_status: str
+
+
+class RiskPostureOut(BaseModel):
+    health_score: int
+    grade: str
+    status_label: str
+    open_critical: int
+    open_high: int
+    open_medium: int
+    open_low: int
+    total_open: int
+    verified_asset_ratio: float
+
+
 def _to_risk_out(finding: RiskFinding, asset: Asset | None) -> RiskFindingOut:
     return RiskFindingOut(
         id=finding.id,
@@ -147,6 +178,111 @@ def list_risks(
         .offset(offset)
     ).all()
     return RiskPage(items=[_to_risk_out(f, a) for f, a in rows], total=total)
+
+
+@router.get("/posture", response_model=RiskPostureOut)
+def get_risk_posture(
+    db: DbSession,
+    ctx: Tenant,
+    site_id: uuid.UUID | None = None,
+):
+    """Fabrika siber güvenlik duruş puanını (0-100) ve harf notunu (A-F) hesaplar."""
+    stmt = (
+        select(RiskFinding)
+        .join(Asset, Asset.id == RiskFinding.asset_id)
+        .where(
+            RiskFinding.organization_id == ctx.organization_id,
+            RiskFinding.status.in_(("open", "investigating")),
+        )
+    )
+    if site_id is not None:
+        stmt = stmt.where(Asset.site_id == site_id)
+    open_findings = list(db.scalars(stmt).all())
+
+    asset_stmt = select(Asset).where(Asset.organization_id == ctx.organization_id)
+    if site_id is not None:
+        asset_stmt = asset_stmt.where(Asset.site_id == site_id)
+    assets = list(db.scalars(asset_stmt).all())
+
+    c_crit = sum(1 for f in open_findings if f.severity == "critical")
+    c_high = sum(1 for f in open_findings if f.severity == "high")
+    c_med = sum(1 for f in open_findings if f.severity == "medium")
+    c_low = sum(1 for f in open_findings if f.severity == "low")
+
+    penalty = (c_crit * 18) + (c_high * 9) + (c_med * 4) + (c_low * 1)
+    verified_ratio = (
+        round(sum(1 for a in assets if a.is_verified) / len(assets), 2)
+        if assets
+        else 1.0
+    )
+    unverified_penalty = int((1.0 - verified_ratio) * 15) if assets else 0
+    health_score = max(0, min(100, 100 - penalty - unverified_penalty))
+
+    if health_score >= 90:
+        grade, label = "A", "Güçlü OT Güvenlik Duruşu"
+    elif health_score >= 75:
+        grade, label = "B", "İyi Duruş · Sınırlı Açık Bulgular"
+    elif health_score >= 60:
+        grade, label = "C", "Orta Risk · İnceleme Gerekiyor"
+    elif health_score >= 40:
+        grade, label = "D", "Yüksek Risk · Acil Müdahale Önerilir"
+    else:
+        grade, label = "F", "Kritik Risk · Üretim Ağı Maruziyeti"
+
+    return RiskPostureOut(
+        health_score=health_score,
+        grade=grade,
+        status_label=label,
+        open_critical=c_crit,
+        open_high=c_high,
+        open_medium=c_med,
+        open_low=c_low,
+        total_open=len(open_findings),
+        verified_asset_ratio=verified_ratio,
+    )
+
+
+@router.post("/bulk-status", response_model=RiskBulkStatusOut)
+def bulk_update_risk_status(
+    body: RiskBulkStatusUpdate,
+    request: Request,
+    db: DbSession,
+    ctx: AnalystTenant,
+):
+    """Birden fazla risk bulgusunun durumunu tek işlemde günceller ve denetim kaydına yazar."""
+    stmt = select(RiskFinding).where(RiskFinding.organization_id == ctx.organization_id)
+    if body.finding_ids:
+        stmt = stmt.where(RiskFinding.id.in_(body.finding_ids))
+    else:
+        stmt = stmt.where(RiskFinding.status == body.filter_status.strip().lower())
+
+    findings = list(db.scalars(stmt).all())
+    now = datetime.now(UTC)
+    updated = 0
+    for f in findings:
+        if f.status != body.new_status:
+            f.status = body.new_status
+            f.resolved_at = now if body.new_status in ("resolved", "false_positive", "accepted") else None
+            updated += 1
+
+    if updated > 0:
+        record(
+            db,
+            "risk.bulk_status_change",
+            user_id=ctx.user.id,
+            organization_id=ctx.organization_id,
+            target_type="risk_finding",
+            target_id=None,
+            metadata={
+                "updated_count": updated,
+                "new_status": body.new_status,
+                "filter_status": body.filter_status,
+            },
+            ip_address=client_ip(request),
+        )
+        db.commit()
+
+    return RiskBulkStatusOut(updated_count=updated, new_status=body.new_status)
 
 
 @router.get("/{finding_id}", response_model=RiskFindingOut)
