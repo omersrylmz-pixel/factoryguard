@@ -3,13 +3,15 @@ FROM python:3.13-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 WORKDIR /app
 
-COPY requirements.txt requirements.lock ./
+COPY backend/requirements.txt backend/requirements.lock ./
 # Kilitli sürümler: yalnızca çalışma zamanı paketlerini lock dosyasından sabitle.
 RUN pip install -r requirements.txt -c requirements.lock
 
-COPY alembic.ini ./
-COPY migrations ./migrations
-COPY app ./app
+COPY backend/alembic.ini ./
+COPY backend/migrations ./migrations
+COPY backend/app ./app
+COPY sensor ./sensor
+COPY sample-data ./sample-data
 
 # root olmayan kullanıcı
 RUN useradd --system --uid 10001 --no-create-home fg && chown -R fg /app

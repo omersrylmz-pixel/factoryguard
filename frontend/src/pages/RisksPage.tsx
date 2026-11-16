@@ -32,6 +32,7 @@ export const RISK_RULE_LABEL: Record<RiskRuleKey, string> = {
   UNEXPECTED_COMMUNICATION: "UNEXPECTED_COMMUNICATION · Beklenmeyen İletişim",
   UNAPPROVED_REMOTE_PATH: "UNAPPROVED_REMOTE_PATH · Onaylanmamış Uzaktan Erişim",
   KNOWN_VULNERABILITY: "KNOWN_VULNERABILITY · Bilinen Güvenlik Açığı",
+  ASSET_NOT_SEEN: "ASSET_NOT_SEEN · Uzun Süredir Gözlemlenmeyen Cihaz",
 };
 
 const BREAKDOWN_LABELS: Record<string, string> = {
@@ -247,7 +248,10 @@ export default function RisksPage() {
               <div className="space-y-4 text-sm">
                 <div>
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs font-semibold text-blue-700">{selected.rule_key}</span>
+                    <span className="font-mono text-xs font-semibold text-blue-700">
+                      {selected.evidence.rule_id ? `${selected.evidence.rule_id} · ` : ""}
+                      {selected.rule_key}
+                    </span>
                     <CriticalityBadge value={selected.severity} />
                   </div>
                   <h3 className="mt-1 text-base font-semibold text-slate-900">{selected.title}</h3>
@@ -257,6 +261,14 @@ export default function RisksPage() {
                       {selected.asset_ip || selected.asset_name || selected.asset_id.slice(0, 8)}
                     </Link>
                   </div>
+                  {selected.evidence.triggering_condition && (
+                    <div className="mt-1 text-[11px] text-slate-500">
+                      Tetiklenme Koşulu:{" "}
+                      <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-slate-700">
+                        {selected.evidence.triggering_condition}
+                      </code>
+                    </div>
+                  )}
                 </div>
 
                 {/* Durum Yönetimi */}

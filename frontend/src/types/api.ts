@@ -152,6 +152,8 @@ export interface Asset {
   created_at: string;
   classification_label: string;
   vendor_status_label: string;
+  observed_protocols?: string[];
+  last_sensor_id?: string | null;
 }
 
 export interface AssetIdentifier {
@@ -209,7 +211,8 @@ export type RiskRuleKey =
   | "UNKNOWN_OT_ASSET"
   | "UNEXPECTED_COMMUNICATION"
   | "UNAPPROVED_REMOTE_PATH"
-  | "KNOWN_VULNERABILITY";
+  | "KNOWN_VULNERABILITY"
+  | "ASSET_NOT_SEEN";
 
 export interface RiskFinding {
   id: string;
@@ -225,6 +228,11 @@ export interface RiskFinding {
   score: number;
   confidence: number;
   evidence: {
+    rule_id?: string;
+    rule_name?: string;
+    finding_category?: "observation" | "potential_concern" | "verified_vulnerability_match";
+    triggering_condition?: string;
+    evaluated_at?: string;
     what_observed?: string;
     why_important?: string;
     supporting_data?: Record<string, unknown>;

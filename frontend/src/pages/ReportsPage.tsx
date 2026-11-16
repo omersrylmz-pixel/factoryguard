@@ -22,6 +22,7 @@ const RULE_LABELS: Record<RiskRuleKey, string> = {
   UNEXPECTED_COMMUNICATION: "Beklenmeyen İletişim",
   UNAPPROVED_REMOTE_PATH: "Onaysız Uzaktan Erişim",
   KNOWN_VULNERABILITY: "Doğrulanmış Zafiyet (CVE)",
+  ASSET_NOT_SEEN: "Uzun Süredir Gözlemlenmeyen Cihaz",
 };
 
 const STATUS_LABELS: Record<RiskStatus, string> = {

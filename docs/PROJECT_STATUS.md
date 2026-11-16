@@ -1,6 +1,6 @@
 # PROJECT STATUS
 
-**Güncel aşama:** Aşama 6 + Faz 1–4 İleri OT Güvenlik Geliştirmeleri ✅ TAMAMLANDI · Son güncelleme: 2026-11-15
+**Güncel aşama:** Aşama 6 + Faz 1–4 + Teknik Denetim & Çekirdek Sertleştirme ✅ TAMAMLANDI · Son güncelleme: 2026-11-16
 
 ## Ortam
 | Bileşen | Sürüm / durum |
@@ -31,6 +31,6 @@ Gerçek Zeek 9.0.1 PCAP çıktısından (`MODBUS-TestDataPart1.pcap`) başlayıp
   - S7comm, EtherNet/IP ve OPC UA derin paket imzası (DPI) ayrıştırıcısı, Fabrika Siber Güvenlik Duruş Endeksi (`GET /api/v1/risks/posture`) ve toplu risk durumu yönetimi (`POST /api/v1/risks/bulk-status`).
 
 ## Son test sonuçları
-- Sensör testleri: `pytest sensor/tests -v` → **17 passed**.
-- Backend testleri (gerçek PostgreSQL `factoryguard_test` üzerinde): `pytest -v` → **56 passed**.
+- Sensör testleri: `pytest sensor/tests -v` → **23 passed**.
+- Backend testleri (gerçek PostgreSQL `factoryguard_test` üzerinde): `pytest -v` → **57 passed**.
 - Frontend tip kontrolü ve üretim derlemesi: `npm run build` (`tsc -b && vite build`) → **0 hata**.
