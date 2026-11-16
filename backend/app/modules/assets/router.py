@@ -66,13 +66,77 @@ _CSV_TYPE_ALIASES: dict[str, str] = {
 }
 
 
-def _to_asset_out(asset: Asset, observed_protocols: list[str] | None = None) -> AssetOut:
+def collect_asset_evidence_maps(
+    db: Session,
+    org_id: uuid.UUID,
+    asset_ids: list[uuid.UUID],
+) -> tuple[dict[uuid.UUID, list[str]], dict[uuid.UUID, uuid.UUID]]:
+    """Varlıklar için doğrulanmış protokolleri (observed) ve son gözlemleyen sensör ID'sini toplar."""
+    if not asset_ids:
+        return {}, {}
+
+    proto_sets: dict[uuid.UUID, set[str]] = {}
+    last_sensor: dict[uuid.UUID, tuple[datetime, uuid.UUID]] = {}
+
+    obs_rows = db.scalars(
+        select(AssetObservation).where(
+            AssetObservation.organization_id == org_id,
+            AssetObservation.asset_id.in_(asset_ids),
+        )
+    ).all()
+    for o in obs_rows:
+        for p in o.evidence.get("observed_protocols") or []:
+            if isinstance(p, str) and p and not p.endswith("?"):
+                proto_sets.setdefault(o.asset_id, set()).add(p.lower())
+        prev = last_sensor.get(o.asset_id)
+        if prev is None or o.observed_at >= prev[0]:
+            last_sensor[o.asset_id] = (o.observed_at, o.sensor_id)
+
+    comm_rows = db.scalars(
+        select(AssetCommunication).where(
+            AssetCommunication.organization_id == org_id,
+            or_(
+                AssetCommunication.source_asset_id.in_(asset_ids),
+                AssetCommunication.target_asset_id.in_(asset_ids),
+            ),
+        )
+    ).all()
+    for c in comm_rows:
+        if (
+            c.protocol
+            and c.protocol != "unknown"
+            and not c.protocol.endswith("?")
+            and c.protocol_confidence == "observed"
+        ):
+            if c.source_asset_id in asset_ids:
+                proto_sets.setdefault(c.source_asset_id, set()).add(c.protocol.lower())
+            if c.target_asset_id in asset_ids:
+                proto_sets.setdefault(c.target_asset_id, set()).add(c.protocol.lower())
+        if c.sensor_id:
+            for aid in (c.source_asset_id, c.target_asset_id):
+                if aid in asset_ids:
+                    prev = last_sensor.get(aid)
+                    if prev is None or c.last_seen_at >= prev[0]:
+                        last_sensor[aid] = (c.last_seen_at, c.sensor_id)
+
+    return (
+        {aid: sorted(ps) for aid, ps in proto_sets.items()},
+        {aid: sid for aid, (_, sid) in last_sensor.items()},
+    )
+
+
+def _to_asset_out(
+    asset: Asset,
+    observed_protocols: list[str] | None = None,
+    last_sensor_id: uuid.UUID | None = None,
+) -> AssetOut:
+    protos = sorted({p.lower() for p in (observed_protocols or []) if p and not p.endswith("?")})
     hint = infer_from_evidence(
         current_type=asset.asset_type,
         is_verified=asset.is_verified,
         vendor=asset.vendor,
         hostname=asset.hostname,
-        observed_protocols=observed_protocols or [],
+        observed_protocols=protos,
         base_confidence=asset.confidence,
         mac_address=asset.mac_address,
     )
@@ -99,6 +163,8 @@ def _to_asset_out(asset: Asset, observed_protocols: list[str] | None = None) -> 
         created_at=asset.created_at,
         classification_label=hint.classification_label,
         vendor_status_label=hint.vendor_status_label,
+        observed_protocols=protos,
+        last_sensor_id=last_sensor_id,
     )
 
 
@@ -159,7 +225,11 @@ def list_assets(
 
     total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     rows = db.scalars(stmt.order_by(Asset.last_seen_at.desc(), Asset.ip_address).limit(limit).offset(offset)).all()
-    return AssetPage(items=[_to_asset_out(a) for a in rows], total=total)
+    proto_map, sensor_map = collect_asset_evidence_maps(db, ctx.organization_id, [a.id for a in rows])
+    return AssetPage(
+        items=[_to_asset_out(a, proto_map.get(a.id), sensor_map.get(a.id)) for a in rows],
+        total=total,
+    )
 
 
 @router.get("/{asset_id}", response_model=AssetDetailOut)
@@ -216,6 +286,9 @@ def get_asset(asset_id: uuid.UUID, db: DbSession, ctx: Tenant):
                 peer_ip=peer.ip_address if peer else None,
                 peer_name=peer.name or (peer.hostname if peer else None),
                 protocol=c.protocol,
+                protocol_confidence=c.protocol_confidence,
+                sensor_id=c.sensor_id,
+                is_baseline_approved=c.is_baseline_approved,
                 source_port=c.source_port,
                 target_port=c.target_port,
                 connection_count=c.connection_count,
@@ -224,12 +297,15 @@ def get_asset(asset_id: uuid.UUID, db: DbSession, ctx: Tenant):
             )
         )
 
+    proto_map, sensor_map = collect_asset_evidence_maps(db, ctx.organization_id, [asset.id])
+    all_protos = sorted(observed_protocols | set(proto_map.get(asset.id, [])))
+
     hint = infer_from_evidence(
         current_type=asset.asset_type,
         is_verified=asset.is_verified,
         vendor=asset.vendor,
         hostname=asset.hostname,
-        observed_protocols=sorted(observed_protocols),
+        observed_protocols=all_protos,
         base_confidence=asset.confidence,
         mac_address=asset.mac_address,
     )
@@ -241,7 +317,7 @@ def get_asset(asset_id: uuid.UUID, db: DbSession, ctx: Tenant):
         )
         .order_by(RiskFinding.score.desc(), RiskFinding.last_seen_at.desc())
     ).all()
-    base = _to_asset_out(asset, sorted(observed_protocols))
+    base = _to_asset_out(asset, all_protos, sensor_map.get(asset.id))
     return AssetDetailOut(
         **base.model_dump(),
         classification_reasons=hint.reasons,
@@ -314,7 +390,8 @@ def update_asset(
         )
     db.commit()
     evaluate_organization_risks(db, ctx.organization_id, site_id=asset.site_id)
-    return _to_asset_out(asset)
+    proto_map, sensor_map = collect_asset_evidence_maps(db, ctx.organization_id, [asset.id])
+    return _to_asset_out(asset, proto_map.get(asset.id), sensor_map.get(asset.id))
 
 
 def _pick_col(row: dict[str, str], *names: str) -> str | None:
@@ -458,7 +535,6 @@ def import_assets_csv(
                 asset.criticality = crit
                 asset.is_verified = is_verified
                 asset.confidence = max(asset.confidence, conf)
-                asset.last_seen_at = now
                 db.flush()
                 updated += 1
 

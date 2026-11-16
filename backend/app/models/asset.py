@@ -33,6 +33,7 @@ ASSET_TYPES = (
     "unknown_device",
 )
 IDENTIFIER_TYPES = ("ip", "mac", "hostname")
+PROTOCOL_CONFIDENCE_LEVELS = ("none", "port_hint", "observed")
 
 
 class Asset(UUIDPk, CreatedAt, Base):
@@ -164,17 +165,31 @@ class AssetCommunication(UUIDPk, Base):
             "target_port",
             name="uq_asset_comm_flow",
         ),
+        CheckConstraint(
+            f"protocol_confidence IN {PROTOCOL_CONFIDENCE_LEVELS}",
+            name="protocol_confidence_valid",
+        ),
     )
 
     organization_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("organizations.id", ondelete="CASCADE"), index=True
     )
     site_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    sensor_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("sensors.id", ondelete="SET NULL"), index=True
+    )
     source_asset_id: Mapped[uuid.UUID] = mapped_column(index=True)
     target_asset_id: Mapped[uuid.UUID] = mapped_column(index=True)
     protocol: Mapped[str] = mapped_column(String(64), default="unknown", server_default="unknown")
+    protocol_confidence: Mapped[str] = mapped_column(
+        String(16), default="observed", server_default="observed"
+    )
     source_port: Mapped[int | None] = mapped_column(Integer)
     target_port: Mapped[int | None] = mapped_column(Integer)
     connection_count: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    is_baseline_approved: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
+    baseline_approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

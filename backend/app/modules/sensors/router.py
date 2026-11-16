@@ -9,9 +9,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
-_REPO_ROOT = str(Path(__file__).resolve().parents[4])
-if _REPO_ROOT not in sys.path:
-    sys.path.insert(0, _REPO_ROOT)
+_CANDIDATE_ROOTS = [
+    Path(__file__).resolve().parents[p]
+    for p in (3, 4)
+    if len(Path(__file__).resolve().parents) > p
+]
+_REPO_ROOT_PATH = next((p for p in _CANDIDATE_ROOTS if (p / "sensor").is_dir()), _CANDIDATE_ROOTS[-1])
+if str(_REPO_ROOT_PATH) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT_PATH))
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -318,14 +323,14 @@ def analyze_sensor_upload(
             "İptal edilmiş (revoked) sensör üzerinden analiz yapılamaz",
         )
 
-    repo_root = Path(__file__).resolve().parents[4]
+    repo_root = _REPO_ROOT_PATH
     if body.sample:
         if body.sample == "real-modbus-pcap":
             sample_dir = repo_root / "sample-data" / "zeek" / "real-modbus-testdata-part1"
             label = "MODBUS-TestDataPart1.pcap (Zeek 9.0.1)"
-        elif body.sample == "synthetic-zeek":
-            sample_dir = repo_root / "sample-data" / "zeek" / "sample"
-            label = "Ornek-Fabrika-Zeek-Paketi"
+        elif body.sample in ("synthetic-zeek", "lab-basic"):
+            sample_dir = repo_root / "sample-data" / "zeek" / "lab-basic"
+            label = "Ornek-Fabrika-Zeek-Paketi (lab-basic)"
         else:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Geçersiz örnek veri adı")
         if not sample_dir.is_dir():
@@ -351,20 +356,29 @@ def analyze_sensor_upload(
             except ValueError as exc:
                 raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
         else:
-            # Zeek JSON veya TSV log dosyası
+            # Zeek JSON veya TSV log dosyası (conn -> dhcp -> modbus -> dns sırasıyla işle)
             with tempfile.TemporaryDirectory() as tmpdir:
-                tmp_path = Path(tmpdir) / "conn.log"
+                tmp_path = Path(tmpdir) / "uploaded.log"
                 tmp_path.write_bytes(raw_bytes)
                 norm = Normalizer(str(sensor.id))
+                conn_recs, dhcp_recs, modbus_recs, dns_recs = [], [], [], []
                 for rec in read_zeek_log(tmp_path):
                     if "func" in rec:
-                        norm.add_modbus(rec)
+                        modbus_recs.append(rec)
                     elif "assigned_addr" in rec or "client_addr" in rec:
-                        norm.add_dhcp(rec)
+                        dhcp_recs.append(rec)
                     elif "query" in rec and "answers" in rec:
-                        norm.add_dns(rec)
+                        dns_recs.append(rec)
                     else:
-                        norm.add_conn(rec)
+                        conn_recs.append(rec)
+                for rec in conn_recs:
+                    norm.add_conn(rec)
+                for rec in dhcp_recs:
+                    norm.add_dhcp(rec)
+                for rec in modbus_recs:
+                    norm.add_modbus(rec)
+                for rec in dns_recs:
+                    norm.add_dns(rec)
                 bundle = {
                     "observations": norm.observations(),
                     "communications": norm.communications(),

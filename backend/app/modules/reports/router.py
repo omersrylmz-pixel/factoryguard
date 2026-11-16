@@ -19,6 +19,7 @@ from sqlalchemy import select
 
 from app.core.deps import DbSession, Tenant, client_ip
 from app.models import Asset, AssetCommunication, Organization, RiskFinding, Sensor, Site, Zone
+from app.modules.assets.router import collect_asset_evidence_maps
 from app.modules.audit.service import record
 from app.modules.discovery.classifier import infer_from_evidence
 from app.modules.reports.pdf_writer import build_pdf_document
@@ -107,22 +108,8 @@ def _observed_protocols_map(
     org_id: uuid.UUID,
     asset_ids: list[uuid.UUID],
 ) -> dict[uuid.UUID, list[str]]:
-    if not asset_ids:
-        return {}
-    comms = db.scalars(
-        select(AssetCommunication).where(
-            AssetCommunication.organization_id == org_id,
-            (AssetCommunication.source_asset_id.in_(asset_ids))
-            | (AssetCommunication.target_asset_id.in_(asset_ids)),
-        )
-    ).all()
-    proto_map: dict[uuid.UUID, set[str]] = {}
-    for c in comms:
-        if not c.protocol or c.protocol.endswith("?"):
-            continue
-        proto_map.setdefault(c.source_asset_id, set()).add(c.protocol)
-        proto_map.setdefault(c.target_asset_id, set()).add(c.protocol)
-    return {aid: sorted(protos) for aid, protos in proto_map.items()}
+    proto_map, _ = collect_asset_evidence_maps(db, org_id, asset_ids)
+    return proto_map
 
 
 @router.get("/summary", response_model=ReportSummaryResponse)
@@ -336,6 +323,7 @@ def export_inventory_report(
                 hostname=a.hostname,
                 observed_protocols=protos,
                 base_confidence=a.confidence,
+                mac_address=a.mac_address,
             )
             writer.writerow(
                 [

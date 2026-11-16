@@ -87,6 +87,14 @@ class CommunicationIn(BaseModel):
     def _ips(cls, v: str) -> str:
         return _validate_ip(v)
 
+    @field_validator("protocol_confidence")
+    @classmethod
+    def _conf(cls, v: str) -> str:
+        val = (v or "none").strip().lower()
+        if val not in ("none", "port_hint", "observed"):
+            raise ValueError("protocol_confidence 'none', 'port_hint' veya 'observed' olmalı")
+        return val
+
 
 class CommunicationsIngestRequest(BaseModel):
     communications: list[CommunicationIn] = Field(min_length=1, max_length=2000)

@@ -12,11 +12,12 @@ Temel kurallar:
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Asset, AssetCommunication, AssetIdentifier, AssetObservation, DiscoveryRun, Sensor
@@ -29,9 +30,24 @@ from app.modules.ingestion.schemas import (
 )
 from app.modules.risk_engine.service import evaluate_organization_risks
 
+_CONF_RANK = {"none": 0, "port_hint": 1, "observed": 2}
+
 
 def _utc(dt: datetime) -> datetime:
     return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
+
+
+def _is_unicast_device_ip(ip_str: str) -> bool:
+    """Multicast, broadcast, loopback ve 0.0.0.0 adreslerinin sahte cihaz olmasını engeller."""
+    try:
+        addr = ipaddress.ip_address(ip_str)
+    except ValueError:
+        return False
+    if addr.is_multicast or addr.is_unspecified or addr.is_loopback or (addr.is_link_local and addr.version == 6):
+        return False
+    if addr.version == 4 and (str(addr) == "255.255.255.255" or str(addr).endswith(".255")):
+        return False
+    return True
 
 
 def _compute_observation_confidence(obs: ObservationIn) -> float:
@@ -209,6 +225,9 @@ def ingest_observations(
     seen_assets: set[uuid.UUID] = set()
 
     for obs in items:
+        if not _is_unicast_device_ip(obs.device.ip):
+            skipped += 1
+            continue
         observed_at = _utc(obs.observed_at)
         first_seen = _utc(obs.first_seen_at) if obs.first_seen_at else observed_at
         if first_seen > observed_at:
@@ -252,6 +271,7 @@ def ingest_observations(
                 hostname=asset.hostname,
                 observed_protocols=obs_protos,
                 base_confidence=asset.confidence,
+                mac_address=asset.mac_address,
             )
             asset.asset_type = hint.inferred_type
             asset.confidence = max(asset.confidence, hint.confidence)
@@ -338,6 +358,9 @@ def ingest_communications(
     skipped = 0
 
     for item in items:
+        if not _is_unicast_device_ip(item.source_ip) or not _is_unicast_device_ip(item.destination_ip):
+            skipped += 1
+            continue
         last_seen = _utc(item.last_seen_at)
         first_seen = _utc(item.first_seen_at) if item.first_seen_at else last_seen
         if first_seen > last_seen:
@@ -345,15 +368,24 @@ def ingest_communications(
 
         src_asset = _get_or_create_endpoint_asset(db, sensor, item.source_ip, first_seen, last_seen)
         dst_asset = _get_or_create_endpoint_asset(db, sensor, item.destination_ip, first_seen, last_seen)
+        for ep in (src_asset, dst_asset):
+            if first_seen < ep.first_seen_at:
+                ep.first_seen_at = first_seen
+            if last_seen > ep.last_seen_at:
+                ep.last_seen_at = last_seen
 
-        proto = (item.protocol or item.transport or "unknown").lower()
+        raw_proto = (item.protocol or item.transport or "unknown").lower()
+        conf = item.protocol_confidence or ("port_hint" if raw_proto.endswith("?") else "none")
+        if conf == "observed" and raw_proto.endswith("?"):
+            raw_proto = raw_proto.rstrip("?")
+
         existing = db.scalar(
             select(AssetCommunication).where(
                 AssetCommunication.organization_id == sensor.organization_id,
                 AssetCommunication.site_id == sensor.site_id,
                 AssetCommunication.source_asset_id == src_asset.id,
                 AssetCommunication.target_asset_id == dst_asset.id,
-                AssetCommunication.protocol == proto,
+                AssetCommunication.protocol == raw_proto,
                 AssetCommunication.target_port.is_(item.destination_port)
                 if item.destination_port is None
                 else AssetCommunication.target_port == item.destination_port,
@@ -364,9 +396,11 @@ def ingest_communications(
                 AssetCommunication(
                     organization_id=sensor.organization_id,
                     site_id=sensor.site_id,
+                    sensor_id=sensor.id,
                     source_asset_id=src_asset.id,
                     target_asset_id=dst_asset.id,
-                    protocol=proto,
+                    protocol=raw_proto,
+                    protocol_confidence=conf,
                     source_port=item.source_port,
                     target_port=item.destination_port,
                     connection_count=item.connection_count,
@@ -377,8 +411,12 @@ def ingest_communications(
             db.flush()
             created += 1
         else:
+            existing.sensor_id = sensor.id
+            upgraded_conf = _CONF_RANK.get(conf, 0) > _CONF_RANK.get(existing.protocol_confidence, 0)
+            if upgraded_conf:
+                existing.protocol_confidence = conf
             # Aynı zaman aralığı ve aynı sayı tekrar gönderildiyse mükerrer sayma (idempotency).
-            if existing.last_seen_at == last_seen and existing.first_seen_at == first_seen:
+            if existing.last_seen_at == last_seen and existing.first_seen_at == first_seen and not upgraded_conf:
                 skipped += 1
                 continue
             if first_seen < existing.first_seen_at:

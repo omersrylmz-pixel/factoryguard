@@ -15,6 +15,7 @@ from sqlalchemy import or_, select
 
 from app.core.deps import DbSession, Tenant, TenantContext, client_ip, require_role
 from app.models import Asset, AssetCommunication, RiskFinding
+from app.modules.assets.router import collect_asset_evidence_maps
 from app.modules.audit.service import record
 from app.modules.discovery.classifier import infer_from_evidence
 
@@ -28,6 +29,7 @@ class CommunicationEdgeOut(BaseModel):
 
     id: uuid.UUID
     site_id: uuid.UUID
+    sensor_id: uuid.UUID | None = None
     source_asset_id: uuid.UUID
     source_ip: str | None
     source_label: str
@@ -37,6 +39,7 @@ class CommunicationEdgeOut(BaseModel):
     target_label: str
     target_type: str
     protocol: str
+    protocol_confidence: str = "observed"
     source_port: int | None
     target_port: int | None
     connection_count: int
@@ -49,7 +52,6 @@ class CommunicationEdgeOut(BaseModel):
 class BaselineApproveResult(BaseModel):
     approved_flows: int
     risks_accepted: int
-
 
 
 class GraphNodeOut(BaseModel):
@@ -134,13 +136,19 @@ def list_communications(
         cross_zone = bool(src and dst and src.zone_id and dst.zone_id and src.zone_id != dst.zone_id)
         proto_low = (c.protocol or "unknown").lower()
         dedup = f"{c.source_asset_id}->{c.target_asset_id}:{proto_low}:{c.target_port}"
-        is_approved = (dedup in accepted_dedups) or (
-            dedup not in open_unexp_dedups and bool(src and dst and src.is_verified and dst.is_verified and not cross_zone)
+        is_approved = (
+            bool(c.is_baseline_approved)
+            or (dedup in accepted_dedups)
+            or (
+                dedup not in open_unexp_dedups
+                and bool(src and dst and src.is_verified and dst.is_verified and not cross_zone)
+            )
         )
         out.append(
             CommunicationEdgeOut(
                 id=c.id,
                 site_id=c.site_id,
+                sensor_id=c.sensor_id,
                 source_asset_id=c.source_asset_id,
                 source_ip=src.ip_address if src else None,
                 source_label=_asset_label(src, c.source_asset_id),
@@ -150,6 +158,7 @@ def list_communications(
                 target_label=_asset_label(dst, c.target_asset_id),
                 target_type=dst.asset_type if dst else "unknown_device",
                 protocol=c.protocol,
+                protocol_confidence=c.protocol_confidence,
                 source_port=c.source_port,
                 target_port=c.target_port,
                 connection_count=c.connection_count,
@@ -160,7 +169,6 @@ def list_communications(
             )
         )
     return out
-
 
 
 @router.get("/graph", response_model=CommunicationGraphOut)
@@ -179,6 +187,7 @@ def get_communications_graph(
         .where(Asset.organization_id == ctx.organization_id, Asset.id.in_(node_ids))
         .order_by(Asset.ip_address)
     ).all()
+    proto_map, _ = collect_asset_evidence_maps(db, ctx.organization_id, [a.id for a in assets])
 
     nodes: list[GraphNodeOut] = []
     for a in assets:
@@ -187,8 +196,9 @@ def get_communications_graph(
             is_verified=a.is_verified,
             vendor=a.vendor,
             hostname=a.hostname,
-            observed_protocols=[],
+            observed_protocols=proto_map.get(a.id, []),
             base_confidence=a.confidence,
+            mac_address=a.mac_address,
         )
         nodes.append(
             GraphNodeOut(
@@ -207,6 +217,11 @@ def get_communications_graph(
 
 
 def _accept_flow_baseline(db: DbSession, org_id: uuid.UUID, comm: AssetCommunication) -> int:
+    """İletişim kaydını doğrudan onaylı baseline olarak işaretler; sahte RiskFinding üretmez."""
+    now = datetime.now(UTC)
+    comm.is_baseline_approved = True
+    comm.baseline_approved_at = now
+
     proto_low = (comm.protocol or "unknown").lower()
     dedup = f"{comm.source_asset_id}->{comm.target_asset_id}:{proto_low}:{comm.target_port}"
     existing = db.scalar(
@@ -216,32 +231,11 @@ def _accept_flow_baseline(db: DbSession, org_id: uuid.UUID, comm: AssetCommunica
             RiskFinding.dedup_key == dedup,
         )
     )
-    now = datetime.now(UTC)
-    if existing is not None:
-        if existing.status != "accepted":
-            existing.status = "accepted"
-            return 1
-        return 0
-
-    db.add(
-        RiskFinding(
-            organization_id=org_id,
-            asset_id=comm.target_asset_id,
-            rule_key="UNEXPECTED_COMMUNICATION",
-            dedup_key=dedup,
-            title=f"Onaylı Baseline Akışı ({proto_low.upper()})",
-            description="Bu iletişim akışı yönetici/analist tarafından onaylı fabrika baseline'ına eklendi.",
-            severity="low",
-            score=10,
-            confidence=1.0,
-            evidence={"what_observed": "Baseline olarak onaylandı"},
-            recommendation="Onaylı iletişim akışı.",
-            status="accepted",
-            first_seen_at=comm.first_seen_at or now,
-            last_seen_at=comm.last_seen_at or now,
-        )
-    )
-    return 1
+    if existing is not None and existing.status not in ("accepted", "resolved", "false_positive"):
+        existing.status = "accepted"
+        existing.resolved_at = now
+        return 1
+    return 0
 
 
 @router.post("/{comm_id}/approve-baseline", response_model=BaselineApproveResult)
@@ -305,4 +299,3 @@ def approve_all_communications_baseline(
     )
     db.commit()
     return BaselineApproveResult(approved_flows=len(comms), risks_accepted=accepted_count)
-

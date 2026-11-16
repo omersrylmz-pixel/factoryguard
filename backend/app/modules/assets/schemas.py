@@ -66,6 +66,8 @@ class AssetOut(BaseModel):
     created_at: datetime
     classification_label: str
     vendor_status_label: str
+    observed_protocols: list[str] = Field(default_factory=list)
+    last_sensor_id: uuid.UUID | None = None
 
 
 class AssetPage(BaseModel):
@@ -102,6 +104,9 @@ class AssetCommunicationOut(BaseModel):
     peer_ip: str | None
     peer_name: str | None
     protocol: str
+    protocol_confidence: str = "observed"
+    sensor_id: uuid.UUID | None = None
+    is_baseline_approved: bool = False
     source_port: int | None
     target_port: int | None
     connection_count: int

@@ -21,7 +21,8 @@ from app.core.deps import DbSession, Tenant, TenantContext, client_ip, require_r
 from app.models import Asset, RiskFinding
 from app.models.risk import RISK_STATUSES
 from app.modules.audit.service import record
-from app.modules.risk_engine.service import evaluate_organization_risks
+from app.modules.risk_engine.scoring import DEFAULT_WEIGHTS
+from app.modules.risk_engine.service import RULE_CATALOG, evaluate_organization_risks
 
 router = APIRouter(prefix="/risks", tags=["risks"])
 
@@ -103,6 +104,24 @@ class RiskPostureOut(BaseModel):
     open_low: int
     total_open: int
     verified_asset_ratio: float
+    formula_explanation: str = (
+        "100 - (critical*18 + high*9 + medium*4 + low*1 + round((1 - verified_asset_ratio)*15))"
+    )
+    penalty_breakdown: dict[str, int] = {}
+
+
+class RiskRuleDefinitionOut(BaseModel):
+    rule_id: str
+    rule_key: str
+    name: str
+    finding_category: str
+    triggering_condition: str
+    description: str
+
+
+class RiskRulesCatalogOut(BaseModel):
+    scoring_weights: dict[str, int]
+    rules: list[RiskRuleDefinitionOut]
 
 
 def _to_risk_out(finding: RiskFinding, asset: Asset | None) -> RiskFindingOut:
@@ -180,6 +199,21 @@ def list_risks(
     return RiskPage(items=[_to_risk_out(f, a) for f, a in rows], total=total)
 
 
+@router.get("/rules", response_model=RiskRulesCatalogOut)
+def list_risk_rules(_ctx: Tenant) -> RiskRulesCatalogOut:
+    """Açıklanabilir risk motorunun aktif kurallarını ve 100 puanlık ağırlık modelini döndürür."""
+    return RiskRulesCatalogOut(
+        scoring_weights={
+            "production_criticality_max": DEFAULT_WEIGHTS.production_criticality_max,
+            "network_exposure_max": DEFAULT_WEIGHTS.network_exposure_max,
+            "verified_vulnerability_max": DEFAULT_WEIGHTS.verified_vulnerability_max,
+            "unexpected_behavior_max": DEFAULT_WEIGHTS.unexpected_behavior_max,
+            "inventory_gap_max": DEFAULT_WEIGHTS.inventory_gap_max,
+        },
+        rules=[RiskRuleDefinitionOut(**meta) for meta in RULE_CATALOG.values()],
+    )
+
+
 @router.get("/posture", response_model=RiskPostureOut)
 def get_risk_posture(
     db: DbSession,
@@ -239,6 +273,13 @@ def get_risk_posture(
         open_low=c_low,
         total_open=len(open_findings),
         verified_asset_ratio=verified_ratio,
+        penalty_breakdown={
+            "critical_findings_penalty": c_crit * 18,
+            "high_findings_penalty": c_high * 9,
+            "medium_findings_penalty": c_med * 4,
+            "low_findings_penalty": c_low * 1,
+            "unverified_inventory_penalty": unverified_penalty,
+        },
     )
 
 
