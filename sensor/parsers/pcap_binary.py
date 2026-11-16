@@ -167,12 +167,19 @@ def _iter_pcapng_packets(data: bytes):
 
 
 def parse_pcap_bytes(data: bytes, sensor_id: str) -> dict[str, Any]:
-    """Ham `.pcap`/`.pcapng` baytlarını ayrıştırıp `Normalizer` çıktısı üretir."""
-    normalizer = Normalizer(sensor_id)
-    flow_seqs: dict[tuple[str, str, int, int, str], int] = {}
+    """Ham `.pcap`/`.pcapng` baytlarını ayrıştırıp `Normalizer` çıktısı üretir.
+
+    Paketler 5'li anahtara (istemci IP/port, sunucu IP/port, taşıma) göre **akışlara** birleştirilir;
+    böylece `connection_count` paket sayısını değil, Zeek `conn.log` ile karşılaştırılabilir akış sayısını
+    ifade eder. Uygulama katmanı protokolü yalnızca bayt imzası (DPI) eşleşirse `observed` sayılır;
+    yalnızca port eşleşmesi Normalizer tarafından `port_hint` olarak işaretlenir.
+    """
+    normalizer = Normalizer(sensor_id, source="pcap")
+    # flow_key -> {first_ts, last_ts, service, orig_l2, resp_l2}
+    flows: dict[tuple[str, int, str, int, str], dict[str, Any]] = {}
     packet_count = 0
 
-    for idx, (ts, pkt) in enumerate(_iter_pcap_packets(data), start=1):
+    for ts, pkt in _iter_pcap_packets(data):
         if len(pkt) < 34:
             continue
         dst_mac = _fmt_mac(pkt[0:6])
@@ -209,19 +216,9 @@ def parse_pcap_bytes(data: bytes, sensor_id: str) -> dict[str, Any]:
             continue
 
         packet_count += 1
-        flow_key = (src_ip, dst_ip, sport, dport, transport)
-        flow_seqs[flow_key] = flow_seqs.get(flow_key, 0) + 1
-        uid = f"pcap-{idx}-{flow_seqs[flow_key]}"
+        dpi_proto, dpi_msg = _inspect_industrial_payload(dport, sport, payload)
 
-        dpi_proto, dpi_log = _inspect_industrial_payload(dport, sport, payload)
-        service = dpi_proto
-        if service is None and len(payload) > 0:
-            if dport in _PORT_SERVICE_MAP and dport not in (502, 102, 44818, 4840):
-                service = _PORT_SERVICE_MAP[dport]
-            elif sport in _PORT_SERVICE_MAP and sport not in (502, 102, 44818, 4840):
-                service = _PORT_SERVICE_MAP[sport]
-
-        # İstemci -> Sunucu yönünü düşük/bilinen porta göre normalize et
+        # İstemci -> Sunucu yönünü bilinen servis portuna göre normalize et (yanıt paketleri aynı akışa düşer)
         if sport in _PORT_SERVICE_MAP and dport not in _PORT_SERVICE_MAP:
             orig_h, orig_p, orig_l2 = dst_ip, dport, dst_mac
             resp_h, resp_p, resp_l2 = src_ip, sport, src_mac
@@ -229,50 +226,66 @@ def parse_pcap_bytes(data: bytes, sensor_id: str) -> dict[str, Any]:
             orig_h, orig_p, orig_l2 = src_ip, sport, src_mac
             resp_h, resp_p, resp_l2 = dst_ip, dport, dst_mac
 
+        key = (orig_h, orig_p, resp_h, resp_p, transport)
+        flow = flows.get(key)
+        if flow is None:
+            flow = flows[key] = {
+                "first_ts": ts,
+                "last_ts": ts,
+                "service": None,
+                "orig_l2": orig_l2,
+                "resp_l2": resp_l2,
+            }
+        flow["first_ts"] = min(flow["first_ts"], ts)
+        flow["last_ts"] = max(flow["last_ts"], ts)
+        if dpi_proto and flow["service"] is None:
+            flow["service"] = dpi_proto
+
+        # Uygulama katmanı kanıtı (paket bazında; ham payload saklanmaz, yalnızca mesaj türü)
+        if dpi_proto == "modbus" and dpi_msg:
+            normalizer.add_modbus(
+                {
+                    "ts": ts,
+                    "id.orig_h": orig_h,
+                    "id.orig_p": orig_p,
+                    "id.resp_h": resp_h,
+                    "id.resp_p": resp_p,
+                    "func": dpi_msg.removeprefix("modbus.fc."),
+                }
+            )
+        elif dpi_proto and dpi_msg:
+            normalizer.add_protocol_evidence(orig_h, dpi_proto, dpi_msg)
+            normalizer.add_protocol_evidence(resp_h, dpi_proto, dpi_msg)
+
+    for n, ((orig_h, orig_p, resp_h, resp_p, transport), flow) in enumerate(sorted(flows.items()), start=1):
         normalizer.add_conn(
             {
-                "ts": ts,
-                "uid": uid,
+                "ts": flow["first_ts"],
+                "duration": flow["last_ts"] - flow["first_ts"],
+                "uid": f"pcap-flow-{n}",
                 "id.orig_h": orig_h,
                 "id.orig_p": orig_p,
                 "id.resp_h": resp_h,
                 "id.resp_p": resp_p,
                 "proto": transport,
-                "service": service,
-                "orig_l2_addr": orig_l2,
-                "resp_l2_addr": resp_l2,
+                "service": flow["service"],
+                "orig_l2_addr": flow["orig_l2"],
+                "resp_l2_addr": flow["resp_l2"],
             }
         )
 
-        # Modbus/TCP, S7comm, EtherNet/IP ve OPC UA uygulama katmanı kanıtı
-        if dpi_proto == "modbus" and dpi_log:
-            normalizer.add_modbus(
-                {
-                    "ts": ts,
-                    "uid": uid,
-                    "id.orig_h": orig_h,
-                    "id.orig_p": orig_p,
-                    "id.resp_h": resp_h,
-                    "id.resp_p": resp_p,
-                    "func": dpi_log.removeprefix("modbus.fc."),
-                }
-            )
-            normalizer.add_protocol_evidence(orig_h, "modbus", dpi_log)
-            normalizer.add_protocol_evidence(resp_h, "modbus", dpi_log)
-        elif dpi_proto and dpi_log:
-            normalizer.add_protocol_evidence(orig_h, dpi_proto, dpi_log)
-            normalizer.add_protocol_evidence(resp_h, dpi_proto, dpi_log)
-
     return {
         "sensor_id": sensor_id,
-        "schema_version": "0.1",
+        "schema_version": "0.2",
         "logs_used": ["pcap_binary"],
         "packets_parsed": packet_count,
+        "flows_parsed": len(flows),
         "observations": normalizer.observations(),
         "communications": normalizer.communications(),
         "stats": {
             "devices": len(normalizer.devices),
             "communications": len(normalizer.comms),
             "rejected_records": normalizer.rejected,
+            "non_unicast_skipped": normalizer.non_unicast_skipped,
         },
     }
