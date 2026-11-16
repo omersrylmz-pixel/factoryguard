@@ -259,6 +259,18 @@ export default function AssetsPage() {
                       <td className="py-2.5 pr-4">
                         <div className="text-xs font-medium text-slate-800">{a.classification_label}</div>
                         <div className="text-[11px] text-slate-500">{ASSET_TYPE_LABEL[a.asset_type]}</div>
+                        {a.observed_protocols && a.observed_protocols.length > 0 && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {a.observed_protocols.map((p) => (
+                              <span
+                                key={p}
+                                className="rounded bg-blue-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase text-blue-700"
+                              >
+                                {p}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </td>
                       <td className="py-2.5 pr-4 text-xs">
                         <div className="text-slate-800">{a.vendor_status_label}</div>

@@ -261,6 +261,18 @@ export default function RisksPage() {
                       {selected.asset_ip || selected.asset_name || selected.asset_id.slice(0, 8)}
                     </Link>
                   </div>
+                  {selected.evidence.finding_category && (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+                      <span className="rounded bg-slate-200 px-1.5 py-0.5 font-medium text-slate-800">
+                        Kategori:{" "}
+                        {selected.evidence.finding_category === "observation"
+                          ? "Pasif Gözlem"
+                          : selected.evidence.finding_category === "verified_vulnerability_match"
+                            ? "Doğrulanmış Sürüm Zafiyeti (CVE)"
+                            : "Olası Güvenlik Endişesi"}
+                      </span>
+                    </div>
+                  )}
                   {selected.evidence.triggering_condition && (
                     <div className="mt-1 text-[11px] text-slate-500">
                       Tetiklenme Koşulu:{" "}
