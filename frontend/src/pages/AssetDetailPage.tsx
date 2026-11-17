@@ -162,6 +162,23 @@ export default function AssetDetailPage() {
               <dt className="text-xs text-slate-500">Son Görülme</dt>
               <dd className="text-xs text-slate-700">{formatDate(asset.last_seen_at)}</dd>
             </div>
+            <div className="col-span-2">
+              <dt className="text-xs text-slate-500">Doğrulanmış Endüstriyel / Ağ Protokolleri</dt>
+              <dd className="mt-1 flex flex-wrap gap-1.5">
+                {asset.observed_protocols && asset.observed_protocols.length > 0 ? (
+                  asset.observed_protocols.map((p) => (
+                    <span
+                      key={p}
+                      className="rounded bg-blue-50 px-2 py-0.5 font-mono text-xs font-semibold uppercase text-blue-700"
+                    >
+                      {p}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-xs text-slate-500">Doğrulanmış uygulama katmanı protokolü gözlenmedi</span>
+                )}
+              </dd>
+            </div>
           </dl>
         </Card>
 
@@ -325,7 +342,9 @@ export default function AssetDetailPage() {
                   <th className="py-2 pr-4">Yön</th>
                   <th className="py-2 pr-4">Karşı Cihaz</th>
                   <th className="py-2 pr-4">Protokol / Hedef Port</th>
-                  <th className="py-2 pr-4">Bağlantı Sayısı</th>
+                  <th className="py-2 pr-4">Kanıt Güveni</th>
+                  <th className="py-2 pr-4">Baseline</th>
+                  <th className="py-2 pr-4">Akış Sayısı</th>
                   <th className="py-2">Son Görülme</th>
                 </tr>
               </thead>
@@ -343,6 +362,32 @@ export default function AssetDetailPage() {
                     </td>
                     <td className="py-2 pr-4 font-mono">
                       {c.protocol.toUpperCase()} {c.target_port ? `:${c.target_port}` : ""}
+                    </td>
+                    <td className="py-2 pr-4">
+                      <span
+                        className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${
+                          c.protocol_confidence === "observed"
+                            ? "bg-blue-50 text-blue-700"
+                            : "bg-slate-100 text-slate-600"
+                        }`}
+                      >
+                        {c.protocol_confidence === "observed"
+                          ? "Doğrulandı (DPI/Zeek)"
+                          : c.protocol_confidence === "port_hint"
+                            ? "Port İpucu"
+                            : "Taşıma"}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-4">
+                      <span
+                        className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${
+                          c.is_baseline_approved
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "bg-amber-50 text-amber-800"
+                        }`}
+                      >
+                        {c.is_baseline_approved ? "Onaylı Baseline" : "İnceleme Bekliyor"}
+                      </span>
                     </td>
                     <td className="py-2 pr-4 font-mono">{c.connection_count}</td>
                     <td className="py-2 text-slate-500">{formatDate(c.last_seen_at)}</td>
@@ -399,13 +444,47 @@ export default function AssetDetailPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {asset.observations.map((o) => (
-                    <tr key={o.id}>
-                      <td className="py-2 pr-4 whitespace-nowrap text-slate-500">{formatDate(o.observed_at)}</td>
-                      <td className="py-2 pr-4 font-mono text-slate-700">{o.source}</td>
-                      <td className="py-2 font-mono text-slate-600">{JSON.stringify(o.evidence)}</td>
-                    </tr>
-                  ))}
+                  {asset.observations.map((o) => {
+                    const funcs = Array.isArray(o.evidence.modbus_functions)
+                      ? (o.evidence.modbus_functions as string[])
+                      : [];
+                    const msgs = Array.isArray(o.evidence.protocol_messages)
+                      ? (o.evidence.protocol_messages as string[])
+                      : [];
+                    return (
+                      <tr key={o.id}>
+                        <td className="py-2 pr-4 whitespace-nowrap text-slate-500">{formatDate(o.observed_at)}</td>
+                        <td className="py-2 pr-4 font-mono text-slate-700">{o.source}</td>
+                        <td className="py-2 text-slate-600">
+                          {funcs.length > 0 && (
+                            <div className="mb-1 flex flex-wrap gap-1">
+                              {funcs.map((fn) => (
+                                <span
+                                  key={fn}
+                                  className="rounded bg-amber-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-amber-800"
+                                >
+                                  Modbus: {fn}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {msgs.length > 0 && (
+                            <div className="mb-1 flex flex-wrap gap-1">
+                              {msgs.map((m) => (
+                                <span
+                                  key={m}
+                                  className="rounded bg-blue-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-blue-800"
+                                >
+                                  DPI: {m}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          <div className="font-mono text-[11px]">{JSON.stringify(o.evidence)}</div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

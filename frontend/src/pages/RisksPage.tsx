@@ -16,7 +16,16 @@ import {
 } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { api } from "../services/api";
-import type { Criticality, Page, RiskBulkStatusResult, RiskFinding, RiskPosture, RiskRuleKey, RiskStatus } from "../types/api";
+import type {
+  Criticality,
+  Page,
+  RiskBulkStatusResult,
+  RiskFinding,
+  RiskPosture,
+  RiskRuleKey,
+  RiskRulesCatalog,
+  RiskStatus,
+} from "../types/api";
 
 export const RISK_STATUS_LABEL: Record<RiskStatus, string> = {
   open: "Open (Açık)",
@@ -88,6 +97,14 @@ export default function RisksPage() {
     enabled: !!activeOrg,
   });
 
+  const rulesCatalogQuery = useQuery({
+    queryKey: ["risks", "rules-catalog"],
+    queryFn: () => api<RiskRulesCatalog>("/risks/rules"),
+    enabled: !!activeOrg,
+  });
+
+  const [showRuleCatalog, setShowRuleCatalog] = useState(false);
+
   const bulkStatusMut = useMutation({
     mutationFn: (new_status: RiskStatus) =>
       api<RiskBulkStatusResult>("/risks/bulk-status", {
@@ -134,20 +151,50 @@ export default function RisksPage() {
       </div>
 
       {postureQuery.data && (
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white p-4">
-          <div>
-            <div className="text-xs font-semibold uppercase text-slate-500">Fabrika Siber Güvenlik Duruşu</div>
-            <div className="mt-1 text-lg font-bold text-slate-900">
-              Not: {postureQuery.data.grade} · Sağlık Endeksi: {postureQuery.data.health_score}/100 —{" "}
-              <span className="font-normal text-slate-600">{postureQuery.data.status_label}</span>
+        <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <div className="text-xs font-semibold uppercase text-slate-500">Fabrika Siber Güvenlik Duruşu</div>
+              <div className="mt-1 text-lg font-bold text-slate-900">
+                Not: {postureQuery.data.grade} · Sağlık Endeksi: {postureQuery.data.health_score}/100 —{" "}
+                <span className="font-normal text-slate-600">{postureQuery.data.status_label}</span>
+              </div>
+              {postureQuery.data.formula_explanation && (
+                <div className="mt-0.5 font-mono text-[11px] text-slate-500">
+                  Hesaplama Formülü: {postureQuery.data.formula_explanation}
+                </div>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600">
+              <span>Kritik: <strong>{postureQuery.data.open_critical}</strong></span>
+              <span>Yüksek: <strong>{postureQuery.data.open_high}</strong></span>
+              <span>Orta: <strong>{postureQuery.data.open_medium}</strong></span>
+              <span>Envanter Doğrulama: <strong>%{Math.round(postureQuery.data.verified_asset_ratio * 100)}</strong></span>
+              <Button variant="secondary" onClick={() => setShowRuleCatalog((v) => !v)}>
+                {showRuleCatalog ? "Kural Kataloğunu Gizle" : "Açıklanabilir Kural Kataloğu (6 Kural)"}
+              </Button>
             </div>
           </div>
-          <div className="flex gap-4 text-xs text-slate-600">
-            <span>Kritik: <strong>{postureQuery.data.open_critical}</strong></span>
-            <span>Yüksek: <strong>{postureQuery.data.open_high}</strong></span>
-            <span>Orta: <strong>{postureQuery.data.open_medium}</strong></span>
-            <span>Envanter Doğrulama: <strong>%{Math.round(postureQuery.data.verified_asset_ratio * 100)}</strong></span>
-          </div>
+
+          {showRuleCatalog && rulesCatalogQuery.data && (
+            <div className="grid grid-cols-1 gap-2 border-t border-slate-200 pt-3 sm:grid-cols-2 lg:grid-cols-3">
+              {rulesCatalogQuery.data.rules.map((rule) => (
+                <div key={rule.rule_id} className="rounded border border-slate-200 bg-slate-50 p-2.5 text-xs">
+                  <div className="flex items-center justify-between font-mono text-[11px] font-bold text-blue-700">
+                    <span>{rule.rule_id} · {rule.rule_key}</span>
+                    <span className="rounded bg-slate-200 px-1.5 py-0.5 font-sans text-[10px] text-slate-700">
+                      {rule.finding_category}
+                    </span>
+                  </div>
+                  <div className="mt-1 font-semibold text-slate-900">{rule.name}</div>
+                  <div className="mt-0.5 text-[11px] text-slate-600">{rule.description}</div>
+                  <div className="mt-1 font-mono text-[10px] text-slate-500">
+                    Koşul: {rule.triggering_condition}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

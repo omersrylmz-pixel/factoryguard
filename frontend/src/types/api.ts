@@ -181,6 +181,8 @@ export interface AssetCommunication {
   peer_ip: string | null;
   peer_name: string | null;
   protocol: string;
+  protocol_confidence?: "observed" | "port_hint" | "none";
+  sensor_id?: string | null;
   source_port: number | null;
   target_port: number | null;
   connection_count: number;
@@ -258,6 +260,8 @@ export interface CommunicationEdge {
   target_label: string;
   target_type: AssetType;
   protocol: string;
+  protocol_confidence?: "observed" | "port_hint" | "none";
+  sensor_id?: string | null;
   source_port: number | null;
   target_port: number | null;
   connection_count: number;
@@ -282,6 +286,22 @@ export interface RiskPosture {
   open_low: number;
   total_open: number;
   verified_asset_ratio: number;
+  formula_explanation?: string;
+  penalty_breakdown?: Record<string, number>;
+}
+
+export interface RiskRuleDefinition {
+  rule_id: string;
+  rule_key: RiskRuleKey;
+  name: string;
+  finding_category: string;
+  triggering_condition: string;
+  description: string;
+}
+
+export interface RiskRulesCatalog {
+  scoring_weights: Record<string, number>;
+  rules: RiskRuleDefinition[];
 }
 
 export interface RiskBulkStatusResult {

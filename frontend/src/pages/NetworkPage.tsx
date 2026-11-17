@@ -272,6 +272,19 @@ export default function NetworkPage() {
                           {e.protocol.toUpperCase()}
                         </span>
                         {e.target_port !== null && <span className="ml-1.5 text-slate-600">:{e.target_port}</span>}
+                        <span
+                          className={`ml-2 rounded px-1.5 py-0.5 font-sans text-[10px] font-medium ${
+                            e.protocol_confidence === "observed"
+                              ? "bg-blue-50 text-blue-700"
+                              : "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {e.protocol_confidence === "observed"
+                            ? "Doğrulandı"
+                            : e.protocol_confidence === "port_hint"
+                              ? "Port İpucu"
+                              : "Taşıma"}
+                        </span>
                         {e.cross_zone && (
                           <span className="ml-2 rounded bg-red-50 px-1.5 py-0.5 font-sans text-[10px] font-medium text-red-700">
                             Cross-Zone
