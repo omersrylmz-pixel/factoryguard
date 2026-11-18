@@ -68,6 +68,8 @@ class AssetOut(BaseModel):
     vendor_status_label: str
     observed_protocols: list[str] = Field(default_factory=list)
     last_sensor_id: uuid.UUID | None = None
+    is_external: bool = False
+    purdue_level: str = "Belirsiz · Sınıflandırılmadı"
 
 
 class AssetPage(BaseModel):
@@ -168,3 +170,13 @@ class CsvImportResult(BaseModel):
     created: int
     updated: int
     errors: list[CsvRowError]
+
+
+class AssetBulkVerifyRequest(BaseModel):
+    asset_ids: list[uuid.UUID] | None = None
+    site_id: uuid.UUID | None = None
+    zone_id: uuid.UUID | None = None
+
+
+class AssetBulkVerifyOut(BaseModel):
+    verified_count: int

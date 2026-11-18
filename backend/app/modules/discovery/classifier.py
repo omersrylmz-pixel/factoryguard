@@ -11,10 +11,52 @@
 """
 from __future__ import annotations
 
+import ipaddress
 import re
 from dataclasses import dataclass
 
 INDUSTRIAL_PROTOCOLS = {"modbus", "s7comm", "enip", "cip", "opcua", "dnp3", "bacnet", "profinet"}
+
+
+def is_external_unicast_ip(ip_str: str | None) -> bool:
+    """Cihaz IP adresinin özel fabrika ağı dışında (genel internet / public) olup olmadığını belirler."""
+    if not ip_str:
+        return False
+    try:
+        addr = ipaddress.ip_address(ip_str)
+    except ValueError:
+        return False
+    if (
+        addr.is_private
+        or addr.is_multicast
+        or addr.is_unspecified
+        or addr.is_loopback
+        or addr.is_link_local
+        or addr.is_reserved
+    ):
+        return False
+    return addr.is_global
+
+
+def infer_purdue_level(
+    *,
+    asset_type: str,
+    observed_protocols: list[str],
+    ip_address: str | None = None,
+) -> str:
+    """ISA-95 / Purdue Referans Modeline göre kanıta dayalı katman etiketi döndürür."""
+    if is_external_unicast_ip(ip_address):
+        return "L4/L5 · Dış Ağ / İnternet"
+    if asset_type == "plc":
+        return "L1 · Saha Kontrol (PLC/RTU)"
+    if asset_type in ("hmi", "scada_server", "industrial_pc", "engineering_workstation"):
+        return "L2 · Süpervizör / HMI / SCADA"
+    if asset_type in ("server", "network_device", "computer"):
+        return "L3 · Tesis Operasyon / Ağ"
+    protos = {p.lower().rstrip("?") for p in observed_protocols if p and not p.endswith("?")}
+    if protos & INDUSTRIAL_PROTOCOLS:
+        return "L1/L2 · Muhtemel OT Kontrol"
+    return "Belirsiz · Sınıflandırılmadı"
 
 # IEEE MAC OUI (ilk 3 bayt) -> Endüstriyel donanım üreticisi ipucu sözlüğü (pasif, kanıta dayalı)
 INDUSTRIAL_OUI_VENDORS: dict[str, str] = {

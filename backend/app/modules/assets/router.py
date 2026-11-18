@@ -16,6 +16,8 @@ from app.models import Asset, AssetCommunication, AssetIdentifier, AssetObservat
 from app.models.asset import ASSET_TYPES
 from app.models.base import CRITICALITY_LEVELS
 from app.modules.assets.schemas import (
+    AssetBulkVerifyOut,
+    AssetBulkVerifyRequest,
     AssetCommunicationOut,
     AssetDetailOut,
     AssetIdentifierOut,
@@ -30,7 +32,11 @@ from app.modules.assets.schemas import (
     _validate_optional_mac,
 )
 from app.modules.audit.service import changes, record
-from app.modules.discovery.classifier import infer_from_evidence
+from app.modules.discovery.classifier import (
+    infer_from_evidence,
+    infer_purdue_level,
+    is_external_unicast_ip,
+)
 from app.modules.ingestion.service import _upsert_identifier
 from app.modules.risk_engine.router import _to_risk_out
 from app.modules.risk_engine.service import evaluate_organization_risks
@@ -165,6 +171,12 @@ def _to_asset_out(
         vendor_status_label=hint.vendor_status_label,
         observed_protocols=protos,
         last_sensor_id=last_sensor_id,
+        is_external=is_external_unicast_ip(asset.ip_address),
+        purdue_level=infer_purdue_level(
+            asset_type=asset.asset_type,
+            observed_protocols=protos,
+            ip_address=asset.ip_address,
+        ),
     )
 
 
@@ -230,6 +242,67 @@ def list_assets(
         items=[_to_asset_out(a, proto_map.get(a.id), sensor_map.get(a.id)) for a in rows],
         total=total,
     )
+
+
+@router.post("/bulk-verify", response_model=AssetBulkVerifyOut)
+def bulk_verify_assets(
+    body: AssetBulkVerifyRequest,
+    request: Request,
+    db: DbSession,
+    ctx: AnalystTenant,
+) -> AssetBulkVerifyOut:
+    """Seçili veya doğrulanmamış yerel fabrika cihazlarını topluca doğrulanmış (is_verified=True) işaretler."""
+    stmt = select(Asset).where(
+        Asset.organization_id == ctx.organization_id,
+        Asset.is_verified.is_(False),
+    )
+    if body.asset_ids:
+        stmt = stmt.where(Asset.id.in_(body.asset_ids))
+    if body.site_id is not None:
+        stmt = stmt.where(Asset.site_id == body.site_id)
+
+    zone: Zone | None = None
+    if body.zone_id is not None:
+        zone = db.scalar(
+            select(Zone).where(
+                Zone.id == body.zone_id,
+                Zone.organization_id == ctx.organization_id,
+            )
+        )
+        if zone is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Bölge bulunamadı")
+
+    assets = list(db.scalars(stmt).all())
+    verified_count = 0
+    for a in assets:
+        # Dış ağ (public IP) uç noktalarını otomatik olarak fabrika cihazı diye doğrulama
+        if not body.asset_ids and is_external_unicast_ip(a.ip_address):
+            continue
+        a.is_verified = True
+        a.confidence = 1.0
+        if zone is not None and a.site_id == zone.site_id:
+            a.zone_id = zone.id
+        verified_count += 1
+
+    if verified_count > 0:
+        record(
+            db,
+            "asset.bulk_verify",
+            user_id=ctx.user.id,
+            organization_id=ctx.organization_id,
+            target_type="asset",
+            target_id=None,
+            metadata={
+                "verified_count": verified_count,
+                "site_id": str(body.site_id) if body.site_id else None,
+                "zone_id": str(body.zone_id) if body.zone_id else None,
+            },
+            ip_address=client_ip(request),
+        )
+        db.commit()
+        evaluate_organization_risks(db, ctx.organization_id, site_id=body.site_id)
+
+    return AssetBulkVerifyOut(verified_count=verified_count)
 
 
 @router.get("/{asset_id}", response_model=AssetDetailOut)
