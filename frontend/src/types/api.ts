@@ -154,6 +154,12 @@ export interface Asset {
   vendor_status_label: string;
   observed_protocols?: string[];
   last_sensor_id?: string | null;
+  is_external?: boolean;
+  purdue_level?: string;
+}
+
+export interface AssetBulkVerifyResult {
+  verified_count: number;
 }
 
 export interface AssetIdentifier {

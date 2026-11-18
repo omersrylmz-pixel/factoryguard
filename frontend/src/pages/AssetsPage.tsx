@@ -17,7 +17,16 @@ import {
 } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { api } from "../services/api";
-import type { Asset, AssetType, Criticality, CsvImportResult, Page, Site, Zone } from "../types/api";
+import type {
+  Asset,
+  AssetBulkVerifyResult,
+  AssetType,
+  Criticality,
+  CsvImportResult,
+  Page,
+  Site,
+  Zone,
+} from "../types/api";
 
 export default function AssetsPage() {
   const { activeOrg, canEditAssets } = useAuth();
@@ -65,6 +74,7 @@ export default function AssetsPage() {
   const [importSiteId, setImportSiteId] = useState("");
   const [csvContent, setCsvContent] = useState("");
   const [importResult, setImportResult] = useState<CsvImportResult | null>(null);
+  const [bulkVerifyNotice, setBulkVerifyNotice] = useState<string | null>(null);
 
   const importMut = useMutation({
     mutationFn: (body: { site_id: string; csv_content: string }) =>
@@ -72,6 +82,23 @@ export default function AssetsPage() {
     onSuccess: async (res) => {
       setImportResult(res);
       await qc.invalidateQueries({ queryKey: ["assets", activeOrg?.id] });
+    },
+  });
+
+  const bulkVerifyMut = useMutation({
+    mutationFn: () =>
+      api<AssetBulkVerifyResult>("/assets/bulk-verify", {
+        method: "POST",
+        body: zoneId ? { zone_id: zoneId } : {},
+      }),
+    onSuccess: async (res) => {
+      setBulkVerifyNotice(
+        `${res.verified_count} yerel cihaz doğrulandı ve ilgili NEW_ASSET risk bulguları otomatik çözüldü.`,
+      );
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["assets", activeOrg?.id] }),
+        qc.invalidateQueries({ queryKey: ["risks", activeOrg?.id] }),
+      ]);
     },
   });
 
@@ -95,11 +122,28 @@ export default function AssetsPage() {
           subtitle="Pasif keşifle tespit edilen veya CSV ile içe aktarılan tüm endüstriyel ve ağ varlıkları"
         />
         {canEditAssets && (
-          <Button variant="secondary" onClick={() => setShowImport(!showImport)}>
-            {showImport ? "CSV İçe Aktarmayı Kapat" : "CSV ile Envanter İçe Aktar"}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="secondary"
+              disabled={bulkVerifyMut.isPending}
+              onClick={() => bulkVerifyMut.mutate()}
+            >
+              {bulkVerifyMut.isPending
+                ? "Doğrulanıyor…"
+                : "Doğrulanmamış Yerel Cihazları Toplu Doğrula"}
+            </Button>
+            <Button variant="secondary" onClick={() => setShowImport(!showImport)}>
+              {showImport ? "CSV İçe Aktarmayı Kapat" : "CSV ile Envanter İçe Aktar"}
+            </Button>
+          </div>
         )}
       </div>
+
+      {bulkVerifyNotice && (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+          {bulkVerifyNotice}
+        </div>
+      )}
 
       {showImport && canEditAssets && (
         <Card title="CSV ile Envanter İçe Aktar">
@@ -253,12 +297,22 @@ export default function AssetsPage() {
                         {a.hostname && <div className="text-xs text-slate-500">{a.hostname}</div>}
                       </td>
                       <td className="py-2.5 pr-4 font-mono text-xs">
-                        <div className="text-slate-900">{a.ip_address ?? "—"}</div>
+                        <div className="flex items-center gap-1.5 text-slate-900">
+                          <span>{a.ip_address ?? "—"}</span>
+                          {a.is_external && (
+                            <span className="rounded bg-red-50 px-1.5 py-0.5 font-sans text-[10px] font-semibold text-red-700">
+                              Dış Ağ
+                            </span>
+                          )}
+                        </div>
                         <div className="text-slate-500">{a.mac_address ?? "—"}</div>
                       </td>
                       <td className="py-2.5 pr-4">
                         <div className="text-xs font-medium text-slate-800">{a.classification_label}</div>
-                        <div className="text-[11px] text-slate-500">{ASSET_TYPE_LABEL[a.asset_type]}</div>
+                        <div className="text-[11px] text-slate-500">
+                          {ASSET_TYPE_LABEL[a.asset_type]}
+                          {a.purdue_level ? ` · ${a.purdue_level}` : ""}
+                        </div>
                         {a.observed_protocols && a.observed_protocols.length > 0 && (
                           <div className="mt-1 flex flex-wrap gap-1">
                             {a.observed_protocols.map((p) => (

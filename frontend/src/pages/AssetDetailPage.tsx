@@ -155,6 +155,16 @@ export default function AssetDetailPage() {
               <dd className="text-slate-800">{site?.name ?? "—"}</dd>
             </div>
             <div>
+              <dt className="text-xs text-slate-500">ISA-95 / Purdue Katmanı</dt>
+              <dd className="text-xs font-medium text-slate-800">{asset.purdue_level ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-slate-500">Ağ Konumu</dt>
+              <dd className="text-xs font-medium text-slate-800">
+                {asset.is_external ? "Dış Ağ / Genel İnternet (Public IP)" : "Yerel Fabrika Ağı (RFC1918)"}
+              </dd>
+            </div>
+            <div>
               <dt className="text-xs text-slate-500">İlk Görülme</dt>
               <dd className="text-xs text-slate-700">{formatDate(asset.first_seen_at)}</dd>
             </div>

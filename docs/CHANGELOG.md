@@ -30,3 +30,9 @@
   - Açıklanabilir risk motoru (`risk_engine/service.py`, `risk_engine/router.py`): 6 kurallı katalog (`GET /api/v1/risks/rules`), `ASSET_NOT_SEEN` kuralı, yapılandırılmış kanıt alanları (`rule_id`, `finding_category`, `triggering_condition`, `evaluated_at`), koşulu ortadan kalkan bulguların otomatik `resolved` yapılması ve tekrar oluştuğunda yeniden açılması.
   - Dağıtım ve örnek veri düzeltmeleri: `backend/Dockerfile` ve `deployment/compose.yaml` içine `sensor/` ve `sample-data/` dahil edilmesi; `synthetic-zeek` örnek veri yolunun `sample-data/zeek/lab-basic` olarak düzeltilmesi.
   - Test doğrulaması: **23 sensör testi** + **57 PostgreSQL backend entegrasyon testi** + **Frontend derlemesi** başarılı.
+
+## 2026-11-18
+- Faz 5:
+  - `sensor/parsers/pcap_binary.py` ve `sensor/normalizer/normalize.py`: **BACnet/IP** (UDP 47808 BVLC `0x81`), **DNP3** (Port 20000 Data Link `0x05 0x64`) ve **PROFINET IO CM** (Port 34964 DCE/RPC `0x04`) pasif derin paket imza analizi (DPI).
+  - `backend/app/modules/discovery/classifier.py` ve `backend/app/modules/assets/router.py`: ISA-95 / **Purdue Referans Modeli** (`L1`, `L2`, `L3`, `L4/L5`) katman sınıflandırması, Dış Ağ (`is_external`) tespiti ve Toplu Cihaz Doğrulama (`POST /api/v1/assets/bulk-verify`) API uç noktası.
+  - `frontend/src/pages/AssetsPage.tsx` ve `AssetDetailPage.tsx`: Purdue katman rozetleri, Dış Ağ uyarı etiketi ve tek tıkla toplu cihaz doğrulama aksiyonu (**24 sensör testi** + **57 PostgreSQL testi** başarılı).

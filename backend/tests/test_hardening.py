@@ -579,6 +579,16 @@ def test_audit_fixes_end_to_end_consistency_and_lifecycle(client, make_org, make
     assert rules_cat.status_code == 200
     assert len(rules_cat.json()["rules"]) == 6
 
+    # 8. Purdue seviyesi ve toplu cihaz doğrulama (bulk-verify) kontrolü
+    assert "L1" in modbus_plc["purdue_level"] or "L2" in modbus_plc["purdue_level"]
+    assert modbus_plc["is_external"] is False
+    r_bv = client.post("/api/v1/assets/bulk-verify", json={}, headers=h_admin)
+    assert r_bv.status_code == 200
+    assert r_bv.json()["verified_count"] >= 1
+    open_new_assets = client.get("/api/v1/risks?rule_key=NEW_ASSET&status=open", headers=h_admin).json()["items"]
+    assert open_new_assets == []
+
+
 
 
 
