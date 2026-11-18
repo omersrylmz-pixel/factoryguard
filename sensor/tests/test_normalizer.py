@@ -228,3 +228,41 @@ def test_zeek_duration_extends_last_seen():
     assert c["first_seen_at"] < c["last_seen_at"]
     assert c["last_seen_at"].startswith("1970-01-01T00:02:40")
 
+
+def test_pcap_dpi_bacnet_dnp3_and_profinet_signatures():
+    import socket
+    import struct
+    from sensor.parsers.pcap_binary import parse_pcap_bytes
+
+    def _udp(src_ip: str, dst_ip: str, sport: int, dport: int, payload: bytes) -> bytes:
+        eth = bytes.fromhex("001b1b112233" "000e8c445566" "0800")
+        udp_len = 8 + len(payload)
+        ip = struct.pack("!BBHHHBBH4s4s", 0x45, 0, 20 + udp_len, 1, 0, 64, 17, 0,
+                         socket.inet_aton(src_ip), socket.inet_aton(dst_ip))
+        udp = struct.pack("!HHHH", sport, dport, udp_len, 0)
+        return eth + ip + udp + payload
+
+    # 1. BACnet/IP Original-Unicast-NPDU (0x81 0x0a + length + NPDU version 0x01)
+    bacnet_payload = bytes([0x81, 0x0A, 0x00, 0x08, 0x01, 0x00, 0x10, 0x08])
+    # 2. DNP3 Data Link Frame (0x05 0x64 + len + ctrl + dst + src + crc)
+    dnp3_payload = bytes([0x05, 0x64, 0x05, 0xC4, 0x01, 0x00, 0x02, 0x00, 0xAA, 0xBB])
+    # 3. PROFINET IO CM DCE/RPC Request (version 0x04, pkt_type 0x00, 20+ bytes)
+    profinet_payload = bytes([0x04, 0x00, 0x20, 0x00]) + b"\x00" * 20
+
+    parsed = parse_pcap_bytes(
+        _pcap_file([
+            _udp("10.30.0.50", "10.30.0.10", 47808, 47808, bacnet_payload),
+            _tcp("10.30.0.50", "10.30.0.11", 51000, 20000, dnp3_payload),
+            _udp("10.30.0.50", "10.30.0.12", 49155, 34964, profinet_payload),
+        ]),
+        "snr-dpi-ext",
+    )
+    obs = {o["device"]["ip"]: o["evidence"] for o in parsed["observations"]}
+    assert "bacnet" in obs["10.30.0.10"]["observed_protocols"]
+    assert "bacnet.original_unicast_npdu" in obs["10.30.0.10"]["protocol_messages"]
+    assert "dnp3" in obs["10.30.0.11"]["observed_protocols"]
+    assert "dnp3.dl_fc_4" in obs["10.30.0.11"]["protocol_messages"]
+    assert "profinet" in obs["10.30.0.12"]["observed_protocols"]
+    assert "profinet.dcerpc_request" in obs["10.30.0.12"]["protocol_messages"]
+
+

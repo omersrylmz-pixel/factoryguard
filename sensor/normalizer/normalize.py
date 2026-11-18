@@ -15,7 +15,15 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 # Port ipuçları: yalnızca yardımcı bilgi, protokol kanıtı DEĞİL.
-PORT_HINTS = {502: "modbus", 102: "s7comm?", 44818: "enip?", 4840: "opcua?", 20000: "dnp3?"}
+PORT_HINTS = {
+    502: "modbus",
+    102: "s7comm?",
+    44818: "enip?",
+    4840: "opcua?",
+    20000: "dnp3?",
+    47808: "bacnet?",
+    34964: "profinet?",
+}
 _CONF_RANK = {"none": 0, "port_hint": 1, "observed": 2}
 
 # Fiziksel prosesi değiştirebilen Modbus fonksiyonları (Zeek modbus.log `func` adları).

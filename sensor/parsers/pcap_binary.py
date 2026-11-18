@@ -21,6 +21,8 @@ _PORT_SERVICE_MAP: dict[int, str] = {
     44818: "enip",
     4840: "opcua",
     47808: "bacnet",
+    20000: "dnp3",
+    34964: "profinet",
     3389: "rdp",
     5900: "vnc",
     22: "ssh",
@@ -63,6 +65,14 @@ _ENIP_COMMAND_NAMES: dict[int, str] = {
 
 _OPCUA_MSG_TYPES: set[bytes] = {b"HEL", b"ACK", b"ERR", b"RHE", b"OPN", b"CLO", b"MSG"}
 
+_BACNET_BVLC_FUNCS: dict[int, str] = {
+    0x00: "RESULT",
+    0x04: "FORWARDED_NPDU",
+    0x09: "DISTRIBUTE_BROADCAST",
+    0x0A: "ORIGINAL_UNICAST_NPDU",
+    0x0B: "ORIGINAL_BROADCAST_NPDU",
+}
+
 
 def _inspect_industrial_payload(dport: int, sport: int, payload: bytes) -> tuple[str | None, str | None]:
     """Uygulama katmanı bayt imzasından (DPI) kanıtlanmış endüstriyel protokolü döndürür."""
@@ -99,6 +109,27 @@ def _inspect_industrial_payload(dport: int, sport: int, payload: bytes) -> tuple
         chunk_type = payload[3:4]
         if msg_type in _OPCUA_MSG_TYPES and chunk_type in (b"F", b"C", b"A"):
             return "opcua", f"opcua.{msg_type.decode('ascii').lower()}"
+
+    # 5. BACnet/IP (UDP Port 47808 / 0xBAC0, BVLC Type == 0x81 + Function + NPDU Version 0x01)
+    if (dport == 47808 or sport == 47808) and len(payload) >= 6:
+        bvlc_type = payload[0]
+        bvlc_func = payload[1]
+        if bvlc_type == 0x81 and bvlc_func in _BACNET_BVLC_FUNCS:
+            return "bacnet", f"bacnet.{_BACNET_BVLC_FUNCS[bvlc_func].lower()}"
+
+    # 6. DNP3 (TCP/UDP Port 20000, Data Link Layer Start Bytes 0x05 0x64)
+    if (dport == 20000 or sport == 20000) and len(payload) >= 10:
+        if payload[0] == 0x05 and payload[1] == 0x64:
+            ctrl_fc = payload[3] & 0x0F
+            return "dnp3", f"dnp3.dl_fc_{ctrl_fc}"
+
+    # 7. PROFINET IO Context Manager / DCE-RPC (UDP/TCP Port 34964, RPC Version 0x04)
+    if (dport == 34964 or sport == 34964) and len(payload) >= 20:
+        rpc_ver = payload[0]
+        pkt_type = payload[1]
+        if rpc_ver == 0x04 and pkt_type in (0x00, 0x02):
+            ptype_label = "request" if pkt_type == 0x00 else "response"
+            return "profinet", f"profinet.dcerpc_{ptype_label}"
 
     return None, None
 
