@@ -115,44 +115,47 @@ export default function AppLayout() {
 
   return (
     <div className="flex min-h-screen flex-col bg-[#F1F4F8] text-slate-900">
-      {/* 1. Nozomi Vantage Üst İnce Lisans ve Bölge Şeridi (#051E2E) */}
-      <div className="flex items-center justify-between bg-[#051E2E] px-5 py-1 text-[10px] text-slate-300">
-        <div className="font-bold tracking-widest text-white uppercase">VANTAGE · FACTORYGUARD</div>
-        <div className="flex items-center gap-5">
+      {/* 1. Nozomi Vantage Üst İnce Lisans ve Bölge Şeridi (#1A2128 + Trapezoid VANTAGE sekmesi) */}
+      <div className="flex h-6 items-center justify-between bg-[#1A2128] pr-5 text-[10px] text-slate-300">
+        <div
+          className="flex h-full items-center bg-[#12516E] pr-8 pl-5 font-bold tracking-wider text-white uppercase"
+          style={{ clipPath: "polygon(0 0, 86% 0, 100% 100%, 0 100%)" }}
+        >
+          VANTAGE
+        </div>
+        <div className="flex items-center gap-6">
           <span>
-            <span className="text-slate-400">LICENSEE</span>{" "}
-            <strong className="text-white">{activeOrg?.name ?? "FactoryGuard SecRes"}</strong>
+            <span className="font-semibold text-slate-400">LICENSEE</span>{" "}
+            <strong className="font-semibold text-white">
+              Nozomi Networks SecRes · {activeOrg?.name ?? "FactoryGuard"}
+            </strong>
           </span>
           <span>
-            <span className="text-slate-400">DATA LOCATION</span>{" "}
-            <strong className="text-white">Europe · TR</strong>
+            <span className="font-semibold text-slate-400">DATA LOCATION</span>{" "}
+            <strong className="font-semibold text-white">Europe</strong>
           </span>
         </div>
-        <div className="hidden items-center gap-2 sm:flex">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-          <span className="font-mono text-[10px] text-emerald-300">PASSIVE OT ENGINE</span>
-        </div>
+        <div className="hidden w-24 text-right font-mono text-[9px] text-slate-400 sm:block">PASSIVE OT</div>
       </div>
 
-      {/* 2. Nozomi Networks Vantage Ana Koyu Petrol-Lacivert Üst Navigasyon Çubuğu (#0A425F) */}
-      <header className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-[#08354E] via-[#0B4B6C] to-[#08354E] px-5 py-2 text-white shadow-sm">
+      {/* 2. Nozomi Networks Vantage Ana Koyu Petrol-Teal Üst Navigasyon Çubuğu (#0B4F6C) */}
+      <header className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 bg-[#0B4F6C] px-5 py-2 text-white shadow-xs">
         {/* Sol: Logo + Hamburger + Yatay Sekmeler */}
         <div className="flex flex-wrap items-center gap-4">
           <Link to="/" className="flex items-center gap-2.5 pr-1">
-            {/* Nozomi tarzı geometrik izometrik küp/altıgen ikon */}
-            <svg className="h-7 w-7 text-cyan-300" viewBox="0 0 32 32" fill="none">
+            <svg className="h-7 w-7 text-white" viewBox="0 0 32 32" fill="none">
               <polygon
-                points="16,2 28,9 28,23 16,30 4,23 4,9"
+                points="16,3 28,10 28,22 16,29 4,22 4,10"
                 stroke="currentColor"
                 strokeWidth="2.2"
-                fill="#0D5C84"
+                fill="none"
               />
-              <polyline points="4,9 16,16 28,9" stroke="currentColor" strokeWidth="1.8" />
-              <line x1="16" y1="16" x2="16" y2="30" stroke="currentColor" strokeWidth="1.8" />
+              <polyline points="8,14 16,9 24,14" stroke="currentColor" strokeWidth="2" />
+              <polyline points="8,19 16,14 24,19" stroke="currentColor" strokeWidth="2" />
             </svg>
-            <div className="leading-none">
-              <div className="text-sm font-extrabold tracking-wider text-white">FACTORYGUARD</div>
-              <div className="text-[9px] font-medium tracking-[0.22em] text-cyan-200 uppercase">NETWORKS</div>
+            <div className="leading-tight">
+              <div className="text-sm font-extrabold tracking-widest text-white">NOZOMI · FG</div>
+              <div className="text-[8.5px] font-medium tracking-[0.26em] text-cyan-100 uppercase">NETWORKS</div>
             </div>
           </Link>
 
@@ -160,7 +163,7 @@ export default function AppLayout() {
             type="button"
             onClick={() => setShowSidebar((v) => !v)}
             className="rounded p-1.5 text-cyan-100 hover:bg-white/10"
-            title="Sol Menüyü Aç/Kapat"
+            title="Menü"
           >
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="3" y1="6" x2="21" y2="6" />
@@ -169,25 +172,25 @@ export default function AppLayout() {
             </svg>
           </button>
 
-          {/* Yatay Navigasyon Öğeleri (Nozomi Image 5) */}
-          <nav className="flex flex-wrap items-center gap-1">
+          {/* Yatay Navigasyon Öğeleri (Nozomi Image: Aktif sekme açık gri/buz mavisi kutu #DCE6EA) */}
+          <nav className="flex flex-wrap items-center gap-1.5">
             {TOP_NAV.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 end={item.to === "/"}
                 className={({ isActive }) =>
-                  `inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium transition ${
+                  `inline-flex items-center gap-2 rounded-[4px] px-3 py-1.5 text-xs transition ${
                     isActive
-                      ? "border border-cyan-300/70 bg-[#2C7DA0]/70 font-semibold text-white shadow-xs"
-                      : "text-cyan-100/90 hover:bg-white/10 hover:text-white"
+                      ? "bg-[#DCE6EA] font-semibold text-[#0B4F6C] shadow-2xs"
+                      : "font-normal text-cyan-50/90 hover:bg-white/10 hover:text-white"
                   }`
                 }
               >
                 <TopIcon name={item.icon} />
                 <span>{item.label}</span>
                 {item.badge !== undefined && item.badge > 0 && (
-                  <span className="rounded-full bg-amber-500 px-1.5 py-0.2 font-mono text-[10px] font-bold text-slate-950">
+                  <span className="rounded-full bg-amber-400 px-1.5 py-0.2 font-mono text-[10px] font-bold text-slate-950">
                     {item.badge}
                   </span>
                 )}

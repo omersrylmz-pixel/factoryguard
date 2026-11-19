@@ -287,10 +287,10 @@ export default function AssetDetailPage() {
         </div>
       </div>
 
-      {/* 2. Nozomi Vantage 3 Sütunlu Donanım Kimlik Kartı (Image 5) */}
-      <div className="grid grid-cols-1 gap-6 rounded-lg border border-slate-200 bg-white p-4 shadow-2xs lg:grid-cols-12">
-        {/* Sol Sütun: Gerçekçi 3B Endüstriyel PLC Donanım Görseli + Teknik Paragraf */}
-        <div className="flex items-start gap-4 lg:col-span-4">
+      {/* 2. Nozomi Vantage 3 Ayrı Beyaz Kartlı Donanım Kimlik Satırı (Image 5) */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
+        {/* Kart 1: Gerçekçi 3B Endüstriyel PLC Donanım Görseli + Teknik Paragraf */}
+        <div className="flex items-start gap-4 rounded-[3px] border border-[#DCE3EA] bg-white p-3.5 lg:col-span-4">
           <div className="flex h-28 w-36 shrink-0 items-center justify-center rounded border border-slate-200 bg-white p-2">
             {/* 3B İzometrik Metalik Endüstriyel PLC / GuardLogix Kontrolcü Çizimi */}
             <svg viewBox="0 0 120 96" className="h-24 w-32">
@@ -354,8 +354,8 @@ export default function AssetDetailPage() {
           </div>
         </div>
 
-        {/* Orta Sütun: Donanım Kimlik Satırları + Büyüteç (🔍) İkonları */}
-        <div className="divide-y divide-slate-200/80 text-xs lg:col-span-4">
+        {/* Kart 2: Donanım Kimlik Satırları + Büyüteç/Gauge İkonları */}
+        <div className="divide-y divide-slate-200/80 rounded-[3px] border border-[#DCE3EA] bg-white px-4 py-2 text-xs lg:col-span-4">
           <div className="flex items-center justify-between py-1.5">
             <span className="font-bold text-slate-700">Type</span>
             <span className="inline-flex items-center text-slate-800">
@@ -402,8 +402,8 @@ export default function AssetDetailPage() {
           </div>
         </div>
 
-        {/* Sağ Sütun: Ağ ve Yaşam Döngüsü Satırları */}
-        <div className="divide-y divide-slate-200/80 text-xs lg:col-span-4">
+        {/* Kart 3: Ağ ve Yaşam Döngüsü Satırları */}
+        <div className="divide-y divide-slate-200/80 rounded-[3px] border border-[#DCE3EA] bg-white px-4 py-2 text-xs lg:col-span-4">
           <div className="flex items-center justify-between py-1.5">
             <span className="font-bold text-slate-700">IP</span>
             <span className="font-mono text-slate-800">{asset.ip_address ?? "—"}</span>
@@ -431,37 +431,38 @@ export default function AssetDetailPage() {
         </div>
       </div>
 
-      {/* 3. Nozomi Vantage 14 Sekmeli Yatay Alt-Navigasyon Çubuğu (Image 5) */}
-      <div className="flex items-center justify-between overflow-x-auto rounded-t-lg border-x border-t border-slate-200 bg-white px-4 pt-2">
-        <div className="flex items-center gap-5 text-xs">
-          {SUB_TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setActiveTab(t.id)}
-              className={`shrink-0 pb-2 text-center transition ${
-                activeTab === t.id
-                  ? "border-b-2 border-[#0284C7] font-bold text-slate-900"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              <div>{t.label}</div>
-              {t.sub ? (
-                <div className="text-[10px] font-normal text-slate-400">{t.sub}</div>
-              ) : (
-                <div className="h-[14px]" />
-              )}
-            </button>
-          ))}
+      {/* 3. Nozomi Vantage Gri Çerçeveli Alt Panel: 14 Sekmeli Bar + 2x2 Kart Grid */}
+      <div className="rounded-[4px] border border-[#DCE3EA] bg-[#EEF2F6] p-3">
+        <div className="mb-3 flex items-center justify-between overflow-x-auto border-b border-[#DCE3EA] px-2 pt-1">
+          <div className="flex items-center gap-6 text-xs">
+            {SUB_TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setActiveTab(t.id)}
+                className={`shrink-0 pb-2 text-center transition ${
+                  activeTab === t.id
+                    ? "border-b-[3px] border-[#0084B4] font-bold text-slate-900"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <div>{t.label}</div>
+                {t.sub ? (
+                  <div className="text-[10px] font-normal text-slate-400">{t.sub}</div>
+                ) : (
+                  <div className="h-[14px]" />
+                )}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
 
       {/* 4. SEKME İÇERİĞİ: SUMMARY (Nozomi Image 5 2x2 Dashboard Grid) */}
       {activeTab === "summary" && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
           {/* Sol Üst: Network stats */}
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-2xs lg:col-span-6">
-            <h2 className="text-xs font-bold text-slate-800">Network stats</h2>
+          <div className="rounded-[3px] border border-[#DCE3EA] bg-white p-4 lg:col-span-6">
+            <h2 className="border-b border-slate-200 pb-2 text-xs font-bold text-slate-800">Network stats</h2>
             <div className="mt-3 grid grid-cols-12 gap-3">
               <div className="col-span-7 rounded border border-slate-200/90 p-3.5 text-center">
                 <div className="text-[11px] font-bold text-slate-700">Retransmission</div>
@@ -498,8 +499,8 @@ export default function AssetDetailPage() {
           </div>
 
           {/* Sağ Üst: Overall risk (Açılı Ok/Callout Çizgili Donut Grafiği - Nozomi Image 5) */}
-          <div className="relative rounded-lg border border-slate-200 bg-white p-4 shadow-2xs lg:col-span-6">
-            <div className="flex items-center gap-1.5">
+          <div className="relative rounded-[3px] border border-[#DCE3EA] bg-white p-4 lg:col-span-6">
+            <div className="flex items-center gap-1.5 border-b border-slate-200 pb-2">
               <h2 className="text-xs font-bold text-slate-800">Overall risk</h2>
               <span className="text-xs text-slate-400">ⓘ</span>
             </div>
@@ -617,8 +618,10 @@ export default function AssetDetailPage() {
           </div>
 
           {/* Sol Alt: Additional information (Nozomi Image 5) */}
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-2xs lg:col-span-6">
-            <h2 className="text-xs font-bold text-slate-800">Additional information</h2>
+          <div className="rounded-[3px] border border-[#DCE3EA] bg-white p-4 lg:col-span-6">
+            <h2 className="border-b border-slate-200 pb-2 text-xs font-bold text-slate-800">
+              Additional information
+            </h2>
             <div className="mt-3 divide-y divide-slate-200/80 text-xs">
               <div className="flex flex-wrap items-center justify-between gap-2 py-2.5">
                 <span className="font-bold text-slate-700">Roles</span>
@@ -660,20 +663,20 @@ export default function AssetDetailPage() {
           </div>
 
           {/* Sağ Alt: Asset activity (Nozomi Image 5 7x24 Yeşil Isı Haritası) */}
-          <div className="relative rounded-lg border border-slate-200 bg-white p-4 shadow-2xs lg:col-span-6">
-            <h2 className="text-xs font-bold text-slate-800">Asset activity</h2>
-            <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+          <div className="relative rounded-[3px] border border-[#DCE3EA] bg-white p-4 lg:col-span-6">
+            <h2 className="border-b border-slate-200 pb-2 text-xs font-bold text-slate-800">Asset activity</h2>
+            <div className="mt-2.5 grid grid-cols-3 gap-2 text-center">
               <div>
                 <div className="text-[11px] font-bold text-slate-700">Typical hours</div>
-                <div className="text-sm font-bold text-[#2E8B57]">00:00-18:00</div>
+                <div className="text-sm font-bold text-[#0084B4]">00:00-18:00</div>
               </div>
               <div>
                 <div className="text-[11px] font-bold text-slate-700">Peak hours</div>
-                <div className="text-sm font-bold text-[#2E8B57]">00:00-11:00</div>
+                <div className="text-sm font-bold text-[#0084B4]">00:00-11:00</div>
               </div>
               <div>
                 <div className="text-[11px] font-bold text-slate-700">Avg. usage time</div>
-                <div className="text-sm font-bold text-[#2E8B57]">13 hours</div>
+                <div className="text-sm font-bold text-[#0084B4]">13 hours</div>
               </div>
             </div>
 
@@ -687,15 +690,16 @@ export default function AssetDetailPage() {
                       {Array.from({ length: 24 }, (_, hr) => {
                         const isActiveCell =
                           activeHours.has(hr) ||
-                          hr <= 17 ||
-                          (dIdx < 2 && hr <= 23) ||
-                          (dIdx === 3 && hr >= 18);
+                          (dIdx <= 1 && hr <= 23) ||
+                          (dIdx === 3 && (hr <= 3 || (hr >= 16 && hr <= 18))) ||
+                          (dIdx === 4 && (hr <= 3 || (hr >= 20 && hr <= 21))) ||
+                          (dIdx === 6 && hr <= 22);
                         return (
                           <div
                             key={hr}
                             title={`${day} ${String(hr).padStart(2, "0")}:00`}
                             className={`h-3.5 rounded-[1px] ${
-                              isActiveCell ? "bg-[#389E68]" : "bg-[#D8E2DC]"
+                              isActiveCell ? "bg-[#389E68]" : "bg-[#E2ECE9]"
                             }`}
                           />
                         );
@@ -704,18 +708,28 @@ export default function AssetDetailPage() {
                   </div>
                 ))}
 
-                {/* Alt Saat Etiketleri (00 .. 23) */}
-                <div className="flex items-center gap-1.5 pt-1">
+                {/* Alt Saat Etiketleri (:00) */}
+                <div className="flex items-center gap-1.5 pt-1.5">
                   <span className="w-8" />
-                  <div className="grid flex-1 grid-cols-24 text-center font-mono text-[8.5px] text-slate-400">
+                  <div className="grid flex-1 grid-cols-24 text-center font-mono text-[8px] text-slate-400">
                     {Array.from({ length: 24 }, (_, hr) => (
                       <span key={hr} className="-rotate-45">
-                        {String(hr).padStart(2, "0")}
+                        :00
                       </span>
                     ))}
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Sağ Alt Yüzen Bağlantı ve Yardım İkonları (Nozomi Image 5) */}
+            <div className="absolute right-3 bottom-2.5 flex items-center gap-1.5">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full border border-slate-300 bg-white text-[10px] text-slate-600 shadow-xs">
+                🔗
+              </span>
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#007CA8] font-bold text-[11px] text-white shadow-xs">
+                ?
+              </span>
             </div>
           </div>
         </div>
@@ -980,6 +994,7 @@ export default function AssetDetailPage() {
           </form>
         </Card>
       )}
+      </div>
     </div>
   );
 }
