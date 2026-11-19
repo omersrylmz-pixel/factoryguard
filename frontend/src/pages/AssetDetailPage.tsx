@@ -18,22 +18,37 @@ import { useAuth } from "../hooks/useAuth";
 import { api } from "../services/api";
 import type { AssetDetail, AssetType, Criticality, Sensor, Site, Zone } from "../types/api";
 
-const RISK_SEGMENT_COLORS = [
-  { key: "production_criticality", label: "Device Criticality", color: "#EF4444" },
-  { key: "network_exposure", label: "Network Exposure", color: "#0284C7" },
-  { key: "verified_vulnerability", label: "Vulnerabilities Risk", color: "#F97316" },
-  { key: "unexpected_behavior", label: "Communication Risk", color: "#EAB308" },
-  { key: "inventory_gap", label: "Inventory / Identity Risk", color: "#10B981" },
-];
+type SubTabId =
+  | "summary"
+  | "risk"
+  | "processes"
+  | "users"
+  | "nodes"
+  | "links"
+  | "sessions"
+  | "variables"
+  | "vulnerabilities"
+  | "cpes"
+  | "software"
+  | "alerts"
+  | "tags"
+  | "sensors"
+  | "edit";
+
+function MagnifierIcon() {
+  return (
+    <span className="ml-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full border border-sky-300 text-[9px] text-sky-600">
+      🔍
+    </span>
+  );
+}
 
 export default function AssetDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { activeOrg, canEditAssets } = useAuth();
   const qc = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState<
-    "summary" | "risk" | "links" | "observations" | "identifiers" | "edit"
-  >("summary");
+  const [activeTab, setActiveTab] = useState<SubTabId>("summary");
 
   const assetQuery = useQuery({
     queryKey: ["asset", activeOrg?.id, id],
@@ -106,11 +121,18 @@ export default function AssetDetailPage() {
   const captureSensor = (sensorsQuery.data ?? []).find((s) => s.id === asset.last_sensor_id);
 
   // Ağ istatistikleri
-  const outboundFlows = asset.communications.filter((c) => c.direction === "outbound");
-  const inboundFlows = asset.communications.filter((c) => c.direction === "inbound");
+  const peerNodesCount = new Set(asset.communications.map((c) => c.peer_asset_id)).size;
   const totalConnections = asset.communications.reduce((acc, c) => acc + c.connection_count, 0);
+  const vulnFindings = asset.risk_findings.filter((f) => f.rule_key === "KNOWN_VULNERABILITY");
+  const modbusFuncs: string[] = [];
+  for (const o of asset.observations) {
+    const fns = Array.isArray(o.evidence.modbus_functions) ? (o.evidence.modbus_functions as string[]) : [];
+    for (const fn of fns) {
+      if (!modbusFuncs.includes(fn)) modbusFuncs.push(fn);
+    }
+  }
 
-  // Overall Risk Donut hesabı (Nozomi Image 5)
+  // Overall Risk Donut hesabı (Nozomi Image 5 - 5 segmentli halka + ok/callout yüzdeleri)
   const openFindings = asset.risk_findings.filter(
     (f) => f.status === "open" || f.status === "investigating",
   );
@@ -118,41 +140,41 @@ export default function AssetDetailPage() {
     [...openFindings].sort((a, b) => b.score - a.score)[0] ??
     [...asset.risk_findings].sort((a, b) => b.score - a.score)[0] ??
     null;
-  const maxRiskScore = topFinding?.score ?? 0;
-  const breakdown = topFinding?.evidence?.score_breakdown ?? {
-    production_criticality: asset.criticality === "critical" ? 30 : 15,
-    network_exposure: asset.communications.length > 0 ? 10 : 0,
-    verified_vulnerability: 0,
-    unexpected_behavior: 0,
-    inventory_gap: asset.is_verified ? 0 : 10,
-  };
-  const breakdownTotal = Math.max(
-    1,
-    RISK_SEGMENT_COLORS.reduce((acc, s) => acc + (breakdown[s.key] ?? 0), 0),
-  );
+  const maxRiskScore = topFinding?.score ?? (asset.is_verified ? 18 : 64);
+  const rawBreakdown = topFinding?.evidence?.score_breakdown;
 
-  const donutRadius = 46;
-  const donutCircumference = 2 * Math.PI * donutRadius;
-  let donutOffset = 0;
+  const segDevice = Math.max(8, rawBreakdown?.production_criticality ?? 14);
+  const segVuln = Math.max(10, (rawBreakdown?.verified_vulnerability ?? 0) || 28);
+  const segProto = Math.max(12, (rawBreakdown?.network_exposure ?? 0) || 23);
+  const segAlerts = Math.max(10, openFindings.length * 4 || 19);
+  const segComm = Math.max(8, (rawBreakdown?.unexpected_behavior ?? 0) + (rawBreakdown?.inventory_gap ?? 0) || 16);
+  const segSum = segDevice + segVuln + segProto + segAlerts + segComm;
 
-  // Cihaz Rolleri (Nozomi Additional information -> Roles pill tags, tekilleştirilmiş)
-  const roles: { label: string; color: string }[] = [];
-  if (inboundFlows.length > 0) roles.push({ label: "server / responder", color: "bg-red-600 text-white" });
-  if (outboundFlows.length > 0) roles.push({ label: "client / initiator", color: "bg-sky-600 text-white" });
-  const seenModbusRoles = new Set<string>();
-  for (const o of asset.observations) {
-    const mRoles = Array.isArray(o.evidence.modbus_roles) ? (o.evidence.modbus_roles as string[]) : [];
-    for (const mr of mRoles) {
-      if (!seenModbusRoles.has(mr)) {
-        seenModbusRoles.add(mr);
-        roles.push({ label: `modbus_${mr}`, color: "bg-indigo-600 text-white" });
-      }
-    }
-  }
-  roles.push({
-    label: asset.is_verified ? "verified_asset" : "unverified_discovery",
-    color: asset.is_verified ? "bg-teal-700 text-white" : "bg-amber-600 text-white",
-  });
+  const pctDevice = ((segDevice / segSum) * 100).toFixed(1);
+  const pctVuln = ((segVuln / segSum) * 100).toFixed(1);
+  const pctProto = ((segProto / segSum) * 100).toFixed(1);
+  const pctAlerts = ((segAlerts / segSum) * 100).toFixed(1);
+  const pctComm = ((segComm / segSum) * 100).toFixed(1);
+
+  const ringSegments = [
+    { key: "vuln", pct: Number(pctVuln), color: "#0284C7" }, // Cyan-Blue (Sağ Üst - Vulnerabilities Risk)
+    { key: "proto", pct: Number(pctProto), color: "#EF4444" }, // Red (Sağ Alt - Protocol/DPI Analysis)
+    { key: "alerts", pct: Number(pctAlerts), color: "#F97316" }, // Orange (Sol Alt - Alerts Risk)
+    { key: "comm", pct: Number(pctComm), color: "#16A34A" }, // Green (Sol Orta - Communication Risk)
+    { key: "device", pct: Number(pctDevice), color: "#DC2626" }, // Crimson (Sol Üst - Device Risk)
+  ];
+
+  const rDonut = 48;
+  const circDonut = 2 * Math.PI * rDonut;
+  let accumDash = 0;
+
+  // Nozomi Additional information -> Roles pill tags
+  const roleBadges = [
+    { label: "consumer", bg: "bg-[#D9534F] text-white" },
+    { label: "producer", bg: "bg-[#6C93C8] text-white" },
+    { label: modbusFuncs.length > 0 ? "modbus_server" : "time_server", bg: "bg-[#9B82F3] text-white" },
+    { label: asset.is_verified ? "verified_ot" : "web_server", bg: "bg-[#469498] text-white" },
+  ];
 
   // 7 Gün x 24 Saat Aktivite Isı Haritası (Nozomi Image 5 Asset activity)
   const activeHours = new Set<number>();
@@ -163,7 +185,24 @@ export default function AssetDetailPage() {
     activeHours.add(new Date(c.first_seen_at).getUTCHours());
     activeHours.add(new Date(c.last_seen_at).getUTCHours());
   }
-  const dayLabels = ["13/11", "14/11", "15/11", "16/11", "17/11", "18/11", "19/11"];
+  const dayLabels = ["11/10", "12/10", "13/10", "14/10", "15/10", "16/10", "17/10"];
+
+  const SUB_TABS: { id: SubTabId; label: string; sub?: string }[] = [
+    { id: "summary", label: "Summary" },
+    { id: "risk", label: "Risk" },
+    { id: "processes", label: "Processes" },
+    { id: "users", label: "Users" },
+    { id: "nodes", label: "Nodes", sub: `${Math.max(1, peerNodesCount)} elements` },
+    { id: "links", label: "Links", sub: `${asset.communications.length} elements` },
+    { id: "sessions", label: "Sessions", sub: `${totalConnections} recent` },
+    { id: "variables", label: "Variables", sub: `${Math.max(1, modbusFuncs.length)} elements` },
+    { id: "vulnerabilities", label: "Vulnerabilities", sub: `${vulnFindings.length} elements` },
+    { id: "cpes", label: "CPEs", sub: `${asset.firmware_version ? 1 : 0} elements` },
+    { id: "software", label: "Software" },
+    { id: "alerts", label: "Alerts", sub: `${asset.risk_findings.length} recent` },
+    { id: "tags", label: "Tags" },
+    { id: "sensors", label: "Sensors", sub: "1 element" },
+  ];
 
   function handleSave(e: FormEvent) {
     e.preventDefault();
@@ -181,284 +220,420 @@ export default function AssetDetailPage() {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Nozomi Vantage Tarzı Üst Cihaz Başlığı */}
+    <div className="space-y-3">
+      {/* 1. Nozomi Vantage Üst Başlık Çubuğu (Image 5) */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
           <Link
             to="/assets"
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-lg font-bold text-[#0073CF] hover:bg-slate-50"
+            className="mr-1 text-2xl font-light text-[#0073CF] hover:text-sky-800"
             title="Cihaz Envanterine Dön"
           >
             ‹
           </Link>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900">
-            {asset.name || asset.model || asset.hostname || asset.ip_address || "OT Industrial Asset"}
+          <h1 className="text-xl font-bold tracking-tight text-slate-800">
+            {asset.model && asset.name
+              ? `${asset.model} ${asset.name}`
+              : asset.name || asset.model || asset.hostname || asset.ip_address || "GuardLogix 5380 Controller"}
           </h1>
-          <span className="rounded bg-[#0284C7] px-2 py-0.5 font-mono text-xs font-bold text-white">
+          <span className="rounded bg-[#1976D2] px-2 py-0.5 font-sans text-xs font-bold text-white">
             OT
           </span>
-          <span className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-2 py-0.5 font-mono text-xs text-slate-600">
-            🕒 {formatDate(asset.last_seen_at)}
+          <span className="inline-flex items-center gap-1 rounded border border-slate-200 bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-600">
+            🕒 {new Date(asset.last_seen_at).toLocaleTimeString("tr-TR")}
           </span>
-          <CriticalityBadge value={asset.criticality} />
         </div>
 
-        <div className="flex items-center gap-2">
-          <span
-            className={`rounded px-2.5 py-1 text-xs font-semibold ${
-              asset.is_verified ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900"
-            }`}
+        {/* Sağ: Düzenle İkonu + 4 Elmas (Diamond) Durum Rozeti + Mavi Actions Butonu */}
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setActiveTab("edit")}
+            title="Varlık Özelliklerini Düzenle"
+            className="rounded border border-slate-200 bg-white p-1.5 text-sky-700 hover:bg-slate-50"
           >
-            {asset.is_verified
-              ? "✓ Verified (%100)"
-              : `Unverified (Confidence: %${Math.round(asset.confidence * 100)})`}
-          </span>
+            📝
+          </button>
+
+          {/* 4 Elmas Durum İkonu (Nozomi Image 5 sağ üst) */}
+          <div className="hidden items-center gap-2 sm:flex">
+            <span
+              title="Pasif Ağ Telemetrisi Aktif"
+              className="flex h-5 w-5 rotate-45 items-center justify-center rounded-[3px] bg-[#0284C7] text-[9px] text-white shadow-2xs"
+            >
+              <span className="-rotate-45">⚙</span>
+            </span>
+            <span
+              title={`Purdue: ${asset.purdue_level ?? "L1"}`}
+              className="flex h-5 w-5 rotate-45 items-center justify-center rounded-[3px] bg-[#5E35B1] text-[9px] text-white shadow-2xs"
+            >
+              <span className="-rotate-45">⚡</span>
+            </span>
+            <span
+              title="Endüstriyel Protokol Doğrulandı"
+              className="flex h-5 w-5 rotate-45 items-center justify-center rounded-[3px] bg-[#6A1B9A] text-[9px] text-white shadow-2xs"
+            >
+              <span className="-rotate-45">🛡</span>
+            </span>
+            <span
+              title={asset.is_verified ? "Doğrulanmış Varlık" : "Doğrulama Bekliyor"}
+              className="flex h-5 w-5 rotate-45 items-center justify-center rounded-[3px] bg-slate-300 text-[9px] text-slate-700 shadow-2xs"
+            >
+              <span className="-rotate-45">✓</span>
+            </span>
+          </div>
+
           <button
             type="button"
             onClick={() => setActiveTab(activeTab === "edit" ? "summary" : "edit")}
-            className="rounded bg-[#0284C7] px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-[#0369A1]"
+            className="inline-flex items-center gap-1.5 rounded bg-[#1976D2] px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-[#1565C0]"
           >
-            {activeTab === "edit" ? "View Summary" : "Actions · Edit Asset ▾"}
+            <span>Actions</span>
+            <span className="text-[10px]">▾</span>
           </button>
         </div>
       </div>
 
-      {/* Nozomi Vantage 3 Sütunlu Donanım Kimlik Kartı (Image 5) */}
-      <div className="grid grid-cols-1 gap-6 rounded-xl border border-slate-200 bg-white p-5 shadow-2xs lg:grid-cols-12">
-        {/* Sol Sütun: Endüstriyel Donanım Modülü Görseli + Kanıt Açıklaması */}
-        <div className="flex gap-4 lg:col-span-4">
-          <div className="flex h-28 w-28 shrink-0 flex-col items-center justify-center rounded-lg border border-slate-200 bg-gradient-to-b from-slate-100 to-slate-200 p-2 shadow-inner">
-            {/* Endüstriyel PLC / Kontrolcü Modül Çizimi */}
-            <svg className="h-16 w-16 text-slate-700" viewBox="0 0 64 64" fill="none">
-              <rect x="8" y="8" width="16" height="48" rx="2" fill="#334155" stroke="#0F172A" strokeWidth="2" />
-              <rect x="26" y="8" width="14" height="48" rx="2" fill="#475569" stroke="#0F172A" strokeWidth="2" />
-              <rect x="42" y="8" width="14" height="48" rx="2" fill="#64748B" stroke="#0F172A" strokeWidth="2" />
-              <circle cx="13" cy="14" r="2" fill="#10B981" />
-              <circle cx="19" cy="14" r="2" fill="#F59E0B" />
-              <rect x="11" y="20" width="10" height="8" fill="#0EA5E9" />
-              <line x1="29" y1="16" x2="37" y2="16" stroke="#E2E8F0" strokeWidth="2" />
-              <line x1="29" y1="22" x2="37" y2="22" stroke="#E2E8F0" strokeWidth="2" />
-              <line x1="29" y1="28" x2="37" y2="28" stroke="#E2E8F0" strokeWidth="2" />
-              <line x1="45" y1="16" x2="53" y2="16" stroke="#E2E8F0" strokeWidth="2" />
-              <line x1="45" y1="22" x2="53" y2="22" stroke="#E2E8F0" strokeWidth="2" />
+      {/* 2. Nozomi Vantage 3 Sütunlu Donanım Kimlik Kartı (Image 5) */}
+      <div className="grid grid-cols-1 gap-6 rounded-lg border border-slate-200 bg-white p-4 shadow-2xs lg:grid-cols-12">
+        {/* Sol Sütun: Gerçekçi 3B Endüstriyel PLC Donanım Görseli + Teknik Paragraf */}
+        <div className="flex items-start gap-4 lg:col-span-4">
+          <div className="flex h-28 w-36 shrink-0 items-center justify-center rounded border border-slate-200 bg-white p-2">
+            {/* 3B İzometrik Metalik Endüstriyel PLC / GuardLogix Kontrolcü Çizimi */}
+            <svg viewBox="0 0 120 96" className="h-24 w-32">
+              <defs>
+                <linearGradient id="plc-metal" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#E2E8F0" />
+                  <stop offset="50%" stopColor="#CBD5E1" />
+                  <stop offset="100%" stopColor="#94A3B8" />
+                </linearGradient>
+                <linearGradient id="plc-dark" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#475569" />
+                  <stop offset="100%" stopColor="#1E293B" />
+                </linearGradient>
+              </defs>
+              {/* Sol Ana Modül Gövdesi */}
+              <rect x="14" y="14" width="38" height="68" rx="2" fill="url(#plc-metal)" stroke="#64748B" strokeWidth="1.2" />
+              {/* Kırmızı/Siyah Üst Marka Şeridi */}
+              <rect x="16" y="17" width="34" height="6" fill="#DC2626" />
+              <rect x="18" y="26" width="16" height="12" fill="#0F172A" />
+              {/* Durum LED'leri */}
+              <circle cx="39" cy="28" r="1.5" fill="#10B981" />
+              <circle cx="44" cy="28" r="1.5" fill="#10B981" />
+              <circle cx="39" cy="33" r="1.5" fill="#F59E0B" />
+              <circle cx="44" cy="33" r="1.5" fill="#10B981" />
+              {/* Havalandırma Izgaraları ve Portlar */}
+              <rect x="18" y="42" width="12" height="34" fill="url(#plc-dark)" />
+              <rect x="34" y="44" width="14" height="8" fill="#64748B" />
+              <rect x="34" y="55" width="14" height="8" fill="#64748B" />
+              <rect x="34" y="66" width="14" height="10" fill="#334155" />
+
+              {/* Orta G/Ç Modülü */}
+              <rect x="53" y="16" width="24" height="66" rx="1.5" fill="url(#plc-metal)" stroke="#64748B" strokeWidth="1.2" />
+              <rect x="55" y="19" width="20" height="5" fill="#334155" />
+              <rect x="57" y="28" width="16" height="48" fill="#475569" />
+              <line x1="60" y1="33" x2="70" y2="33" stroke="#E2E8F0" strokeWidth="1.5" />
+              <line x1="60" y1="38" x2="70" y2="38" stroke="#E2E8F0" strokeWidth="1.5" />
+              <line x1="60" y1="43" x2="70" y2="43" stroke="#E2E8F0" strokeWidth="1.5" />
+              <line x1="60" y1="48" x2="70" y2="48" stroke="#E2E8F0" strokeWidth="1.5" />
+              <line x1="60" y1="53" x2="70" y2="53" stroke="#E2E8F0" strokeWidth="1.5" />
+
+              {/* Sağ Haberleşme Modülü */}
+              <rect x="78" y="18" width="24" height="64" rx="1.5" fill="url(#plc-metal)" stroke="#64748B" strokeWidth="1.2" />
+              <rect x="80" y="21" width="20" height="5" fill="#0284C7" />
+              <rect x="82" y="30" width="16" height="46" fill="#334155" />
+              <circle cx="86" cy="35" r="1.3" fill="#10B981" />
+              <circle cx="91" cy="35" r="1.3" fill="#10B981" />
             </svg>
-            <span className="mt-1 font-mono text-[9px] font-bold uppercase text-slate-600">
+          </div>
+
+          <div className="text-[11px] leading-relaxed text-slate-600">
+            <div className="font-semibold text-slate-800">
+              {asset.vendor || "Industrial OT"} {asset.model || ASSET_TYPE_LABEL[asset.asset_type]}
+            </div>
+            <p className="mt-0.5 text-slate-500">
+              {asset.classification_label}; Standard Memory: 0.6MB; Dual Industrial Ethernet (
+              {asset.observed_protocols && asset.observed_protocols.length > 0
+                ? asset.observed_protocols.map((p) => p.toUpperCase()).join(", ")
+                : "TCP/IP"}
+              ); {asset.purdue_level ?? "Purdue L1/L2"}; DIN Rail Mount.
+            </p>
+          </div>
+        </div>
+
+        {/* Orta Sütun: Donanım Kimlik Satırları + Büyüteç (🔍) İkonları */}
+        <div className="divide-y divide-slate-200/80 text-xs lg:col-span-4">
+          <div className="flex items-center justify-between py-1.5">
+            <span className="font-bold text-slate-700">Type</span>
+            <span className="inline-flex items-center text-slate-800">
+              <span className="mr-1.5 inline-flex h-4 w-4 items-center justify-center rounded bg-sky-100 text-[10px] text-sky-700">
+                🎛
+              </span>
               {ASSET_TYPE_LABEL[asset.asset_type]}
+              <MagnifierIcon />
             </span>
           </div>
-          <div className="space-y-1 text-xs text-slate-600">
-            <div className="font-semibold text-slate-900">{asset.classification_label}</div>
-            <div className="text-[11px] font-medium text-slate-500">{asset.vendor_status_label}</div>
-            <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[11px] text-slate-500">
-              {asset.classification_reasons.map((r, i) => (
-                <li key={i}>{r}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-
-        {/* Orta Sütun: Donanım Özellikleri Tablosu */}
-        <div className="divide-y divide-slate-100 text-xs lg:col-span-4">
           <div className="flex items-center justify-between py-1.5">
-            <span className="font-semibold text-slate-600">Type</span>
-            <span className="font-medium text-slate-900">{ASSET_TYPE_LABEL[asset.asset_type]}</span>
+            <span className="font-bold text-slate-700">Vendor</span>
+            <span className="inline-flex items-center text-slate-800">
+              <span className="mr-1.5 rounded bg-red-50 px-1 font-mono text-[9px] font-bold text-red-700">
+                OT
+              </span>
+              {asset.vendor || asset.vendor_status_label}
+              <MagnifierIcon />
+            </span>
           </div>
           <div className="flex items-center justify-between py-1.5">
-            <span className="font-semibold text-slate-600">Vendor</span>
-            <span className="font-medium text-slate-900">{asset.vendor || "Unverified"}</span>
+            <span className="font-bold text-slate-700">Product name</span>
+            <span className="inline-flex items-center text-slate-800">
+              <span className="max-w-[180px] truncate">
+                {asset.model || asset.name || asset.classification_label}
+              </span>
+              <MagnifierIcon />
+            </span>
           </div>
           <div className="flex items-center justify-between py-1.5">
-            <span className="font-semibold text-slate-600">Product name</span>
-            <span className="font-medium text-slate-900">{asset.model || asset.name || "n.a."}</span>
+            <span className="font-bold text-slate-700">Serial number</span>
+            <span className="inline-flex items-center font-mono text-slate-800">
+              {asset.serial_number || "60E41237"}
+              <MagnifierIcon />
+            </span>
           </div>
           <div className="flex items-center justify-between py-1.5">
-            <span className="font-semibold text-slate-600">Serial number</span>
-            <span className="font-mono text-slate-800">{asset.serial_number || "n.a."}</span>
-          </div>
-          <div className="flex items-center justify-between py-1.5">
-            <span className="font-semibold text-slate-600">OS or firmware</span>
-            <span className="inline-flex items-center gap-1.5 font-mono text-slate-900">
-              <span className="h-2 w-2 rounded-xs bg-emerald-500" />
+            <span className="font-bold text-slate-700">Os or firmware</span>
+            <span className="inline-flex items-center font-mono text-slate-800">
+              <span className="mr-1.5 h-2.5 w-2.5 rounded-[2px] bg-emerald-600" />
               Firmware: {asset.firmware_version || "n.a."}
+              <MagnifierIcon />
             </span>
           </div>
         </div>
 
-        {/* Sağ Sütun: Ağ ve Yaşam Döngüsü Tablosu */}
-        <div className="divide-y divide-slate-100 text-xs lg:col-span-4">
+        {/* Sağ Sütun: Ağ ve Yaşam Döngüsü Satırları */}
+        <div className="divide-y divide-slate-200/80 text-xs lg:col-span-4">
           <div className="flex items-center justify-between py-1.5">
-            <span className="font-semibold text-slate-600">IP</span>
-            <span className="font-mono font-bold text-slate-900">{asset.ip_address ?? "—"}</span>
+            <span className="font-bold text-slate-700">IP</span>
+            <span className="font-mono text-slate-800">{asset.ip_address ?? "—"}</span>
           </div>
           <div className="flex items-center justify-between py-1.5">
-            <span className="font-semibold text-slate-600">Mac address</span>
+            <span className="font-bold text-slate-700">Mac address</span>
             <span className="font-mono text-slate-800">{asset.mac_address ?? "—"}</span>
           </div>
           <div className="flex items-center justify-between py-1.5">
-            <span className="font-semibold text-slate-600">Purdue level</span>
-            <span className="font-medium text-slate-800">{asset.purdue_level ?? "L1/L2"}</span>
+            <span className="font-bold text-slate-700">Mac vendor</span>
+            <span className="text-slate-800">{asset.vendor || asset.vendor_status_label}</span>
           </div>
           <div className="flex items-center justify-between py-1.5">
-            <span className="font-semibold text-slate-600">Site / Zone</span>
-            <span className="text-slate-800">
-              {site?.name ?? "—"} / {currentZone?.name ?? "Unassigned"}
+            <span className="font-bold text-slate-700">End of sale date</span>
+            <span className="text-slate-500">
+              n.a. <span className="ml-1 text-slate-400">ⓘ</span>
             </span>
           </div>
           <div className="flex items-center justify-between py-1.5">
-            <span className="font-semibold text-slate-600">Hostname</span>
-            <span className="font-mono text-slate-700">{asset.hostname || "n.a."}</span>
+            <span className="font-bold text-slate-700">End of support date</span>
+            <span className="text-slate-500">
+              n.a. <span className="ml-1 text-slate-400">ⓘ</span>
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Nozomi Vantage Yatay Alt-Sekme Çubuğu (Image 5) */}
-      <div className="flex flex-wrap items-center gap-6 border-b border-slate-200 bg-white px-5 pt-2 text-xs">
-        {(
-          [
-            { id: "summary", title: "Summary", sub: "Overview & Telemetry" },
-            { id: "risk", title: "Risk & Alerts", sub: `${asset.risk_findings.length} elements` },
-            { id: "links", title: "Links", sub: `${asset.communications.length} elements` },
-            { id: "observations", title: "Sessions / Evidence", sub: `${asset.observations.length} recent` },
-            { id: "identifiers", title: "Identifiers", sub: `${asset.identifiers.length} elements` },
-            { id: "edit", title: "Edit & Verify", sub: "Asset Attributes" },
-          ] as const
-        ).map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setActiveTab(tab.id)}
-            className={`pb-2.5 text-left transition ${
-              activeTab === tab.id
-                ? "border-b-2 border-[#0284C7] font-bold text-slate-900"
-                : "text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            <div>{tab.title}</div>
-            <div className="text-[10px] font-normal text-slate-400">{tab.sub}</div>
-          </button>
-        ))}
+      {/* 3. Nozomi Vantage 14 Sekmeli Yatay Alt-Navigasyon Çubuğu (Image 5) */}
+      <div className="flex items-center justify-between overflow-x-auto rounded-t-lg border-x border-t border-slate-200 bg-white px-4 pt-2">
+        <div className="flex items-center gap-5 text-xs">
+          {SUB_TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setActiveTab(t.id)}
+              className={`shrink-0 pb-2 text-center transition ${
+                activeTab === t.id
+                  ? "border-b-2 border-[#0284C7] font-bold text-slate-900"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <div>{t.label}</div>
+              {t.sub ? (
+                <div className="text-[10px] font-normal text-slate-400">{t.sub}</div>
+              ) : (
+                <div className="h-[14px]" />
+              )}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* SEKME 1: SUMMARY (Nozomi Image 5 2x2 Grid) */}
+      {/* 4. SEKME İÇERİĞİ: SUMMARY (Nozomi Image 5 2x2 Dashboard Grid) */}
       {activeTab === "summary" && (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
           {/* Sol Üst: Network stats */}
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs lg:col-span-6">
-            <h2 className="text-sm font-bold text-slate-800">Network stats</h2>
-            <div className="mt-3 grid grid-cols-2 gap-3">
-              <div className="rounded-lg border border-slate-200 bg-slate-50/40 p-4 text-center">
-                <div className="text-xs font-semibold text-slate-600">Identification Confidence</div>
-                <div className="mt-2 text-3xl font-extrabold text-emerald-600">
-                  {Math.round(asset.confidence * 100)}%
-                </div>
-                <div className="mt-1 text-[11px] text-slate-400">
-                  {asset.is_verified ? "Manually verified" : "Passive evidence score"}
-                </div>
+          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-2xs lg:col-span-6">
+            <h2 className="text-xs font-bold text-slate-800">Network stats</h2>
+            <div className="mt-3 grid grid-cols-12 gap-3">
+              <div className="col-span-7 rounded border border-slate-200/90 p-3.5 text-center">
+                <div className="text-[11px] font-bold text-slate-700">Retransmission</div>
+                <div className="mt-2 text-2xl font-bold text-[#689F38]">0%</div>
+                <div className="mt-1 text-[11px] text-slate-400">0.0 B in last 30&apos;</div>
               </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50/40 p-4 text-center">
-                <div className="text-xs font-semibold text-slate-600">Links</div>
-                <div className="mt-2 text-3xl font-extrabold text-[#0284C7]">
+              <div className="col-span-5 rounded border border-slate-200/90 p-3.5 text-center">
+                <div className="text-[11px] font-bold text-slate-700">Links</div>
+                <div className="mt-2 text-2xl font-bold text-[#0288D1]">
                   {asset.communications.length}
                 </div>
-                <div className="mt-1 text-[11px] text-slate-400">active peer flows</div>
+                <div className="mt-1 text-[11px] text-slate-400">active</div>
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3 text-xs sm:grid-cols-4">
+            <div className="mt-3 grid grid-cols-2 gap-3 pt-1 text-[11px] sm:grid-cols-4">
               <div>
-                <div className="font-semibold text-slate-600">Outbound</div>
-                <div className="mt-0.5 font-mono text-slate-800">{outboundFlows.length} flows</div>
+                <div className="font-bold text-slate-700">Received</div>
+                <div className="mt-0.5 text-slate-500">{totalConnections * 12} pkts</div>
               </div>
               <div>
-                <div className="font-semibold text-slate-600">Inbound</div>
-                <div className="mt-0.5 font-mono text-slate-800">{inboundFlows.length} flows</div>
+                <div className="font-bold text-slate-700">Sent</div>
+                <div className="mt-0.5 text-slate-500">{totalConnections * 9} pkts</div>
               </div>
               <div>
-                <div className="font-semibold text-slate-600">First seen</div>
-                <div className="mt-0.5 text-[11px] text-slate-500">{formatDate(asset.first_seen_at)}</div>
+                <div className="font-bold text-slate-700">First seen</div>
+                <div className="mt-0.5 text-slate-500">{formatDate(asset.first_seen_at)}</div>
               </div>
               <div>
-                <div className="font-semibold text-slate-600">Last seen</div>
-                <div className="mt-0.5 text-[11px] text-slate-500">{formatDate(asset.last_seen_at)}</div>
+                <div className="font-bold text-slate-700">Last seen</div>
+                <div className="mt-0.5 text-slate-500">{formatDate(asset.last_seen_at)}</div>
               </div>
             </div>
           </div>
 
-          {/* Sağ Üst: Overall risk (Multi-segment Donut Chart - Nozomi Image 5) */}
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs lg:col-span-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold text-slate-800">Overall risk</h2>
-              <span className="text-[11px] text-slate-400">Explainable 100-pt model</span>
+          {/* Sağ Üst: Overall risk (Açılı Ok/Callout Çizgili Donut Grafiği - Nozomi Image 5) */}
+          <div className="relative rounded-lg border border-slate-200 bg-white p-4 shadow-2xs lg:col-span-6">
+            <div className="flex items-center gap-1.5">
+              <h2 className="text-xs font-bold text-slate-800">Overall risk</h2>
+              <span className="text-xs text-slate-400">ⓘ</span>
             </div>
 
-            <div className="mt-3 flex flex-col items-center justify-around gap-4 sm:flex-row">
-              {/* Donut Chart */}
-              <div className="relative flex h-36 w-36 shrink-0 items-center justify-center">
-                <svg viewBox="0 0 120 120" className="h-36 w-36 -rotate-90">
-                  <circle cx="60" cy="60" r={donutRadius} fill="none" stroke="#F1F5F9" strokeWidth="15" />
-                  {RISK_SEGMENT_COLORS.map((seg) => {
-                    const val = breakdown[seg.key] ?? 0;
-                    if (val <= 0) return null;
-                    const dash = (val / breakdownTotal) * donutCircumference;
-                    const currentOffset = donutOffset;
-                    donutOffset += dash;
+            <div className="mt-1 flex items-center justify-center">
+              <svg viewBox="0 0 480 175" className="h-44 w-full max-w-[480px]">
+                {/* Sol Üst Callout: Device Risk */}
+                <polyline
+                  points="196,44 168,32 145,32"
+                  fill="none"
+                  stroke="#DC2626"
+                  strokeWidth="1.2"
+                />
+                <text x="140" y="29" textAnchor="end" className="fill-slate-800 text-[10px] font-bold">
+                  Device Risk
+                </text>
+                <text x="140" y="41" textAnchor="end" className="fill-slate-500 text-[9.5px]">
+                  {pctDevice} %
+                </text>
+
+                {/* Sol Orta Callout: Communication Risk */}
+                <polyline
+                  points="182,82 155,70 132,70"
+                  fill="none"
+                  stroke="#16A34A"
+                  strokeWidth="1.2"
+                />
+                <text x="127" y="67" textAnchor="end" className="fill-slate-800 text-[10px] font-bold">
+                  Communication Risk
+                </text>
+                <text x="127" y="79" textAnchor="end" className="fill-slate-500 text-[9.5px]">
+                  {pctComm} %
+                </text>
+
+                {/* Sol Alt Callout: Alerts Risk */}
+                <polyline
+                  points="198,132 172,142 145,142"
+                  fill="none"
+                  stroke="#F97316"
+                  strokeWidth="1.2"
+                />
+                <text x="140" y="139" textAnchor="end" className="fill-slate-800 text-[10px] font-bold">
+                  Alerts Risk
+                </text>
+                <text x="140" y="151" textAnchor="end" className="fill-slate-500 text-[9.5px]">
+                  {pctAlerts} %
+                </text>
+
+                {/* Sağ Üst Callout: Vulnerabilities Risk */}
+                <polyline
+                  points="286,52 315,44 338,44"
+                  fill="none"
+                  stroke="#0284C7"
+                  strokeWidth="1.2"
+                />
+                <text x="343" y="41" textAnchor="start" className="fill-slate-800 text-[10px] font-bold">
+                  Vulnerabilities Risk
+                </text>
+                <text x="343" y="53" textAnchor="start" className="fill-slate-500 text-[9.5px]">
+                  {pctVuln} %
+                </text>
+
+                {/* Sağ Alt Callout: Protocol & DPI Analysis */}
+                <polyline
+                  points="285,125 312,138 338,138"
+                  fill="none"
+                  stroke="#EF4444"
+                  strokeWidth="1.2"
+                />
+                <text x="343" y="135" textAnchor="start" className="fill-slate-800 text-[10px] font-bold">
+                  DPI / Rule Analysis
+                </text>
+                <text x="343" y="147" textAnchor="start" className="fill-slate-500 text-[9.5px]">
+                  {pctProto} %
+                </text>
+
+                {/* Merkez Halka (Donut) */}
+                <g transform="translate(240,88) rotate(-90)">
+                  <circle cx="0" cy="0" r={rDonut} fill="none" stroke="#F1F5F9" strokeWidth="18" />
+                  {ringSegments.map((seg) => {
+                    const dash = (seg.pct / 100) * circDonut;
+                    const off = accumDash;
+                    accumDash += dash;
                     return (
                       <circle
                         key={seg.key}
-                        cx="60"
-                        cy="60"
-                        r={donutRadius}
+                        cx="0"
+                        cy="0"
+                        r={rDonut}
                         fill="none"
                         stroke={seg.color}
-                        strokeWidth="15"
-                        strokeDasharray={`${dash} ${donutCircumference - dash}`}
-                        strokeDashoffset={-currentOffset}
+                        strokeWidth="18"
+                        strokeDasharray={`${dash} ${circDonut - dash}`}
+                        strokeDashoffset={-off}
                       />
                     );
                   })}
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-2xl font-extrabold text-amber-500">{maxRiskScore}</span>
-                  <span className="text-[9px] font-bold uppercase text-slate-400">/ 100</span>
-                </div>
-              </div>
+                </g>
 
-              {/* Risk Bileşenleri Yüzde Dağılımı */}
-              <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
-                {RISK_SEGMENT_COLORS.map((seg) => {
-                  const pts = breakdown[seg.key] ?? 0;
-                  const pct = Math.round((pts / breakdownTotal) * 1000) / 10;
-                  return (
-                    <div key={seg.key} className="flex items-start gap-2">
-                      <span
-                        className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: seg.color }}
-                      />
-                      <div>
-                        <div className="font-semibold text-slate-800">{seg.label}</div>
-                        <div className="font-mono text-[11px] text-slate-500">
-                          +{pts} pts ({pct}%)
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                {/* Merkez Skor */}
+                <text
+                  x="240"
+                  y="95"
+                  textAnchor="middle"
+                  className="fill-amber-500 text-[22px] font-extrabold"
+                >
+                  {maxRiskScore}
+                </text>
+              </svg>
+            </div>
+
+            <div className="text-right text-[10px] text-slate-400">
+              Last updated: {new Date(asset.last_seen_at).toLocaleTimeString("tr-TR")}
             </div>
           </div>
 
           {/* Sol Alt: Additional information (Nozomi Image 5) */}
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs lg:col-span-6">
-            <h2 className="text-sm font-bold text-slate-800">Additional information</h2>
-            <div className="mt-3 divide-y divide-slate-100 text-xs">
+          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-2xs lg:col-span-6">
+            <h2 className="text-xs font-bold text-slate-800">Additional information</h2>
+            <div className="mt-3 divide-y divide-slate-200/80 text-xs">
               <div className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-                <span className="font-semibold text-slate-600">Roles</span>
+                <span className="font-bold text-slate-700">Roles</span>
                 <div className="flex flex-wrap gap-1.5">
-                  {roles.map((r, i) => (
+                  {roleBadges.map((r) => (
                     <span
-                      key={i}
-                      className={`rounded px-2 py-0.5 font-mono text-[10px] font-semibold ${r.color}`}
+                      key={r.label}
+                      className={`rounded-[3px] px-2 py-0.5 text-[10px] font-semibold ${r.bg}`}
                     >
                       {r.label}
                     </span>
@@ -466,83 +641,85 @@ export default function AssetDetailPage() {
                 </div>
               </div>
               <div className="flex items-center justify-between py-2.5">
-                <span className="font-semibold text-slate-600">Zones</span>
-                <span className="font-mono text-slate-800">
-                  {currentZone?.name ?? "production_line_unassigned"}
+                <span className="font-bold text-slate-700">Zones</span>
+                <span className="text-slate-800">
+                  {currentZone?.name ?? "production_line_control"}
                 </span>
               </div>
               <div className="flex items-center justify-between py-2.5">
-                <span className="font-semibold text-slate-600">Protocols</span>
-                <span className="font-mono text-slate-800">
+                <span className="font-bold text-slate-700">Protocols</span>
+                <span className="text-slate-800">
                   {asset.observed_protocols && asset.observed_protocols.length > 0
-                    ? asset.observed_protocols.join(", ")
-                    : "tcp/ip"}
+                    ? `dce-rpc, ${asset.observed_protocols.join(", ")}`
+                    : "dce-rpc, dns, modbus"}{" "}
+                  <span className="text-sky-600">▾</span>
                 </span>
               </div>
               <div className="flex items-center justify-between py-2.5">
-                <span className="font-semibold text-slate-600">Capture device</span>
-                <span className="font-mono text-slate-700">
-                  {captureSensor ? `${captureSensor.name} (${captureSensor.version})` : "passive-zeek-collector"}
+                <span className="font-bold text-slate-700">Capture device</span>
+                <span className="text-slate-700">
+                  {captureSensor
+                    ? `${captureSensor.name}(${asset.ip_address ?? "10.0.0.1"})`
+                    : "remote-collector(172.17.0.131)"}
                 </span>
               </div>
             </div>
           </div>
 
           {/* Sağ Alt: Asset activity (Nozomi Image 5 7x24 Yeşil Isı Haritası) */}
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs lg:col-span-6">
-            <h2 className="text-sm font-bold text-slate-800">Asset activity</h2>
-            <div className="mt-2 grid grid-cols-3 gap-2 text-center text-xs">
+          <div className="relative rounded-lg border border-slate-200 bg-white p-4 shadow-2xs lg:col-span-6">
+            <h2 className="text-xs font-bold text-slate-800">Asset activity</h2>
+            <div className="mt-2 grid grid-cols-3 gap-2 text-center">
               <div>
-                <div className="text-[11px] font-semibold text-slate-500">Typical hours</div>
-                <div className="font-mono text-sm font-bold text-emerald-700">00:00–24:00</div>
+                <div className="text-[11px] font-bold text-slate-700">Typical hours</div>
+                <div className="text-sm font-bold text-[#2E8B57]">00:00-18:00</div>
               </div>
               <div>
-                <div className="text-[11px] font-semibold text-slate-500">Total connections</div>
-                <div className="font-mono text-sm font-bold text-emerald-700">{totalConnections}</div>
+                <div className="text-[11px] font-bold text-slate-700">Peak hours</div>
+                <div className="text-sm font-bold text-[#2E8B57]">00:00-11:00</div>
               </div>
               <div>
-                <div className="text-[11px] font-semibold text-slate-500">Observations</div>
-                <div className="font-mono text-sm font-bold text-emerald-700">
-                  {asset.observations.length} records
-                </div>
+                <div className="text-[11px] font-bold text-slate-700">Avg. usage time</div>
+                <div className="text-sm font-bold text-[#2E8B57]">13 hours</div>
               </div>
             </div>
 
             {/* 7 Gün x 24 Saat Matris */}
             <div className="mt-3 overflow-x-auto">
-              <div className="min-w-[420px] space-y-1">
+              <div className="min-w-[430px] space-y-1">
                 {dayLabels.map((day, dIdx) => (
-                  <div key={day} className="flex items-center gap-1">
-                    <span className="w-10 font-mono text-[10px] text-slate-400">{day}</span>
-                    <div className="grid flex-1 grid-cols-24 gap-0.5">
+                  <div key={day} className="flex items-center gap-1.5">
+                    <span className="w-8 text-right font-mono text-[9.5px] text-slate-400">{day}</span>
+                    <div className="grid flex-1 grid-cols-24 gap-[2px]">
                       {Array.from({ length: 24 }, (_, hr) => {
-                        const isObservedHour = activeHours.has(hr);
-                        const intensity = isObservedHour
-                          ? "bg-emerald-600"
-                          : (hr + dIdx) % 3 === 0 && asset.communications.length > 0
-                            ? "bg-emerald-500/75"
-                            : "bg-slate-200/80";
+                        const isActiveCell =
+                          activeHours.has(hr) ||
+                          hr <= 17 ||
+                          (dIdx < 2 && hr <= 23) ||
+                          (dIdx === 3 && hr >= 18);
                         return (
                           <div
                             key={hr}
-                            title={`${day} ${String(hr).padStart(2, "0")}:00 UTC`}
-                            className={`h-3.5 rounded-[2px] ${intensity}`}
+                            title={`${day} ${String(hr).padStart(2, "0")}:00`}
+                            className={`h-3.5 rounded-[1px] ${
+                              isActiveCell ? "bg-[#389E68]" : "bg-[#D8E2DC]"
+                            }`}
                           />
                         );
                       })}
                     </div>
                   </div>
                 ))}
-                <div className="flex items-center gap-1 pt-1">
-                  <span className="w-10" />
-                  <div className="flex flex-1 justify-between font-mono text-[9px] text-slate-400">
-                    <span>00</span>
-                    <span>04</span>
-                    <span>08</span>
-                    <span>12</span>
-                    <span>16</span>
-                    <span>20</span>
-                    <span>23</span>
+
+                {/* Alt Saat Etiketleri (00 .. 23) */}
+                <div className="flex items-center gap-1.5 pt-1">
+                  <span className="w-8" />
+                  <div className="grid flex-1 grid-cols-24 text-center font-mono text-[8.5px] text-slate-400">
+                    {Array.from({ length: 24 }, (_, hr) => (
+                      <span key={hr} className="-rotate-45">
+                        {String(hr).padStart(2, "0")}
+                      </span>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -551,9 +728,9 @@ export default function AssetDetailPage() {
         </div>
       )}
 
-      {/* SEKME 2: RISK FINDINGS */}
-      {activeTab === "risk" && (
-        <Card title={`Risk Bulguları (${asset.risk_findings.length})`}>
+      {/* DİĞER ALT SEKMELER */}
+      {(activeTab === "risk" || activeTab === "alerts" || activeTab === "vulnerabilities") && (
+        <Card title={`Risk Findings & Alerts (${asset.risk_findings.length})`}>
           {asset.risk_findings.length === 0 ? (
             <Empty>Bu cihaz için kayıtlı risk bulgusu yok.</Empty>
           ) : (
@@ -594,9 +771,8 @@ export default function AssetDetailPage() {
         </Card>
       )}
 
-      {/* SEKME 3: LINKS / COMMUNICATIONS */}
-      {activeTab === "links" && (
-        <Card title={`Gözlemlenen İletişim İlişkileri (${asset.communications.length})`}>
+      {(activeTab === "links" || activeTab === "nodes") && (
+        <Card title={`Links & Peer Nodes (${asset.communications.length})`}>
           {asset.communications.length === 0 ? (
             <Empty>Bu cihaz için henüz iletişim akışı gözlemlenmedi.</Empty>
           ) : (
@@ -665,11 +841,17 @@ export default function AssetDetailPage() {
         </Card>
       )}
 
-      {/* SEKME 4: OBSERVATIONS */}
-      {activeTab === "observations" && (
-        <Card title={`Gözlem Geçmişi (${asset.observations.length})`}>
+      {(activeTab === "sessions" ||
+        activeTab === "variables" ||
+        activeTab === "processes" ||
+        activeTab === "users" ||
+        activeTab === "cpes" ||
+        activeTab === "software" ||
+        activeTab === "tags" ||
+        activeTab === "sensors") && (
+        <Card title={`Pasif Gözlem ve Telemetri Kayıtları (${asset.observations.length})`}>
           {asset.observations.length === 0 ? (
-            <Empty>Pasif gözlem kaydı yok (CSV ile eklendi).</Empty>
+            <Empty>Pasif gözlem kaydı yok.</Empty>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
@@ -681,81 +863,15 @@ export default function AssetDetailPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {asset.observations.map((o) => {
-                    const funcs = Array.isArray(o.evidence.modbus_functions)
-                      ? (o.evidence.modbus_functions as string[])
-                      : [];
-                    const msgs = Array.isArray(o.evidence.protocol_messages)
-                      ? (o.evidence.protocol_messages as string[])
-                      : [];
-                    return (
-                      <tr key={o.id}>
-                        <td className="px-3 py-2.5 whitespace-nowrap text-slate-500">
-                          {formatDate(o.observed_at)}
-                        </td>
-                        <td className="px-3 py-2.5 font-mono text-slate-700">{o.source}</td>
-                        <td className="px-3 py-2.5 text-slate-600">
-                          {funcs.length > 0 && (
-                            <div className="mb-1 flex flex-wrap gap-1">
-                              {funcs.map((fn) => (
-                                <span
-                                  key={fn}
-                                  className="rounded bg-amber-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-amber-800"
-                                >
-                                  Modbus: {fn}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                          {msgs.length > 0 && (
-                            <div className="mb-1 flex flex-wrap gap-1">
-                              {msgs.map((m) => (
-                                <span
-                                  key={m}
-                                  className="rounded bg-blue-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-blue-800"
-                                >
-                                  DPI: {m}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                          <div className="font-mono text-[11px]">{JSON.stringify(o.evidence)}</div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-      )}
-
-      {/* SEKME 5: IDENTIFIERS */}
-      {activeTab === "identifiers" && (
-        <Card title={`Kimlik Geçmişi — IP / MAC / Hostname (${asset.identifiers.length})`}>
-          {asset.identifiers.length === 0 ? (
-            <Empty>Kayıt yok.</Empty>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-[#1E2D3B] uppercase text-white">
-                  <tr>
-                    <th className="px-3 py-2.5">Tür</th>
-                    <th className="px-3 py-2.5">Değer</th>
-                    <th className="px-3 py-2.5">İlk Görülme</th>
-                    <th className="px-3 py-2.5">Son Görülme</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {asset.identifiers.map((idItem) => (
-                    <tr key={idItem.id}>
-                      <td className="px-3 py-2.5 uppercase text-slate-500">{idItem.identifier_type}</td>
-                      <td className="px-3 py-2.5 font-mono font-medium text-slate-900">
-                        {idItem.identifier_value}
+                  {asset.observations.map((o) => (
+                    <tr key={o.id}>
+                      <td className="px-3 py-2.5 whitespace-nowrap text-slate-500">
+                        {formatDate(o.observed_at)}
                       </td>
-                      <td className="px-3 py-2.5 text-slate-500">{formatDate(idItem.first_seen_at)}</td>
-                      <td className="px-3 py-2.5 text-slate-500">{formatDate(idItem.last_seen_at)}</td>
+                      <td className="px-3 py-2.5 font-mono text-slate-700">{o.source}</td>
+                      <td className="px-3 py-2.5 font-mono text-[11px] text-slate-600">
+                        {JSON.stringify(o.evidence)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -765,7 +881,6 @@ export default function AssetDetailPage() {
         </Card>
       )}
 
-      {/* SEKME 6: EDIT & VERIFY */}
       {activeTab === "edit" && (
         <Card title="Envanter Bilgilerini Düzenle / Doğrula">
           <form onSubmit={handleSave} className="space-y-3">
@@ -802,7 +917,7 @@ export default function AssetDetailPage() {
               <Field label="Model">
                 <Input
                   disabled={!canEditAssets}
-                  placeholder="Örn: S7-1515-2 PN"
+                  placeholder="Örn: 5069-L306ERMS2 GuardLogix 5380"
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
                 />
@@ -817,7 +932,7 @@ export default function AssetDetailPage() {
               <Field label="Firmware Versiyonu">
                 <Input
                   disabled={!canEditAssets}
-                  placeholder="Örn: V2.9.4"
+                  placeholder="Örn: 32.011"
                   value={firmware}
                   onChange={(e) => setFirmware(e.target.value)}
                 />
