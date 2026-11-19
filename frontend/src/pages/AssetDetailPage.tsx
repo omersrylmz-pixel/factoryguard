@@ -115,7 +115,6 @@ export default function AssetDetailPage() {
   if (assetQuery.isLoading) return <Empty>Cihaz bilgileri yükleniyor…</Empty>;
   if (assetQuery.error || !asset) return <ErrorBox error={assetQuery.error ?? "Cihaz bulunamadı"} />;
 
-  const site = (sitesQuery.data ?? []).find((s) => s.id === asset.site_id);
   const siteZones = (zonesQuery.data ?? []).filter((z) => z.site_id === asset.site_id);
   const currentZone = (zonesQuery.data ?? []).find((z) => z.id === asset.zone_id);
   const captureSensor = (sensorsQuery.data ?? []).find((s) => s.id === asset.last_sensor_id);
