@@ -18,5 +18,5 @@ RUN useradd --system --uid 10001 --no-create-home fg && chown -R fg /app
 USER fg
 
 EXPOSE 8000
-# Başlangıçta migration'ları uygula, sonra API'yi başlat.
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers"]
+# Başlangıçta migration'ları uygula, demo verisini hazırla, sonra API'yi başlat.
+CMD ["sh", "-c", "alembic upgrade head && python -m app.cli seed-demo && uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers"]
