@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
-import { ASSET_TYPE_LABEL, Card, CriticalityBadge, Empty, ErrorBox, formatDate } from "../components/ui";
+import { Card, CriticalityBadge, Empty, ErrorBox, formatDate } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { api, apiDownload } from "../services/api";
 import type {
