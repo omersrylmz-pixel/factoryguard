@@ -5,6 +5,7 @@ import { Button, Card, Empty, ErrorBox, Field, Input, PageHeader, Select, format
 import { useAuth } from "../hooks/useAuth";
 import { api } from "../services/api";
 import type {
+  CommunicationGraph,
   Sensor,
   SensorDetail,
   SensorEnrollResponse,
@@ -38,6 +39,12 @@ export default function SensorsPage() {
   const sensorsQuery = useQuery({
     queryKey: ["sensors", activeOrg?.id],
     queryFn: () => api<Sensor[]>("/sensors"),
+    enabled: !!activeOrg,
+  });
+
+  const graphQuery = useQuery({
+    queryKey: ["communications-graph", activeOrg?.id, ""],
+    queryFn: () => api<CommunicationGraph>("/communications/graph"),
     enabled: !!activeOrg,
   });
 
@@ -96,8 +103,31 @@ export default function SensorsPage() {
 
   const sites = sitesQuery.data ?? [];
   const sensors = sensorsQuery.data ?? [];
+  const edges = graphQuery.data?.edges ?? [];
   const effectiveSiteId = siteId || sites[0]?.id || "";
   const effectiveUploadSensorId = uploadSensorId || sensors[0]?.id || "";
+
+  // Allegro Packets tarzı Top IPs ve Top Protocols özet tabloları
+  const ipStats = new Map<string, { id: string; ip: string; name: string; flows: number; conns: number }>();
+  const protoStats = new Map<string, { proto: string; flows: number; conns: number }>();
+  for (const e of edges) {
+    for (const [aid, ip, label] of [
+      [e.source_asset_id, e.source_ip ?? "—", e.source_label],
+      [e.target_asset_id, e.target_ip ?? "—", e.target_label],
+    ] as const) {
+      const cur = ipStats.get(aid) ?? { id: aid, ip, name: label, flows: 0, conns: 0 };
+      cur.flows += 1;
+      cur.conns += e.connection_count;
+      ipStats.set(aid, cur);
+    }
+    const pUp = (e.protocol || "unknown").toUpperCase();
+    const pCur = protoStats.get(pUp) ?? { proto: pUp, flows: 0, conns: 0 };
+    pCur.flows += 1;
+    pCur.conns += e.connection_count;
+    protoStats.set(pUp, pCur);
+  }
+  const topIps = Array.from(ipStats.values()).sort((a, b) => b.conns - a.conns).slice(0, 5);
+  const topProtos = Array.from(protoStats.values()).sort((a, b) => b.conns - a.conns).slice(0, 5);
 
   function handleEnroll(e: FormEvent) {
     e.preventDefault();
@@ -132,10 +162,181 @@ export default function SensorsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Sensör Yönetimi ve Canlı PCAP Analizi"
-        subtitle="Pasif trafik analiz sensörlerinin durumu, tek tıkla PCAP / Zeek log analizi ve keşif çalışmaları"
-      />
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <PageHeader
+          title="Network Multimeter & Sensor Management"
+          subtitle="Pasif trafik analiz sensörlerinin arayüz telemetrisi, tek tıkla PCAP / Zeek log analizi ve protokol istatistikleri"
+        />
+        <span className="inline-flex items-center gap-1.5 rounded bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white shadow-2xs">
+          <span className="h-2 w-2 rounded-full bg-white" />
+          LIVE view
+        </span>
+      </div>
+
+      {/* Allegro Packets Görsel 4: Interface overview + Total throughput graph + Top IPs / Top Protocols */}
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs space-y-5">
+        <div>
+          <h2 className="text-lg font-normal text-[#2B7CB3]">Interface & Sensor Overview</h2>
+          <div className="mt-2 overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <tbody className="divide-y divide-slate-200">
+                <tr>
+                  <td className="py-2 font-bold text-slate-800">Sensor / SPAN Port:</td>
+                  {sensors.length === 0 ? (
+                    <td className="py-2 text-slate-500">Kayıtlı sensör yok</td>
+                  ) : (
+                    sensors.map((s, idx) => (
+                      <td key={s.id} className="py-2 text-right font-mono font-semibold text-slate-800">
+                        Port {idx + 1} ({s.name})
+                      </td>
+                    ))
+                  )}
+                </tr>
+                <tr>
+                  <td className="py-2 font-bold text-slate-800">Link status:</td>
+                  {sensors.map((s) => (
+                    <td key={s.id} className="py-2 text-right font-mono">
+                      <span className={s.is_connected ? "font-bold text-emerald-700" : "text-slate-500"}>
+                        1G · {s.is_connected ? "ACTIVE" : "STANDBY"}
+                      </span>
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="py-2 font-bold text-slate-800">PCAP / Sample Capture:</td>
+                  {sensors.map((s) => (
+                    <td key={s.id} className="py-2 text-right">
+                      <button
+                        type="button"
+                        disabled={analyzeUploadMut.isPending}
+                        onClick={() => {
+                          setUploadSensorId(s.id);
+                          handleSampleAnalyze("real-modbus-pcap");
+                        }}
+                        className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                      >
+                        ⬇ Analyze PCAP
+                      </button>
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="py-2 font-bold text-slate-800">Observed active flows:</td>
+                  {sensors.map((s) => (
+                    <td key={s.id} className="py-2 text-right font-mono text-slate-700">
+                      {edges.length} flows ({edges.reduce((acc, e) => acc + e.connection_count, 0)} conns)
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Golden-Amber Total Throughput / Flow Activity Graph (Allegro Packets Image 4) */}
+        <div>
+          <div className="mb-1 flex items-center justify-between text-xs">
+            <span className="font-bold text-slate-800">Total flow & packet activity graph:</span>
+            <span className="inline-flex items-center gap-1.5 font-mono text-[11px] text-slate-500">
+              <span className="h-2.5 w-2.5 rounded-xs bg-amber-400" />
+              processed industrial flows / interval
+            </span>
+          </div>
+          <div className="rounded border border-slate-200 bg-slate-50/40 p-2">
+            <svg viewBox="0 0 760 110" className="h-28 w-full">
+              <line x1="35" y1="15" x2="750" y2="15" stroke="#E2E8F0" strokeWidth="1" />
+              <line x1="35" y1="45" x2="750" y2="45" stroke="#E2E8F0" strokeWidth="1" />
+              <line x1="35" y1="75" x2="750" y2="75" stroke="#E2E8F0" strokeWidth="1" />
+              <line x1="35" y1="95" x2="750" y2="95" stroke="#CBD5E1" strokeWidth="1" />
+              <text x="4" y="18" className="fill-slate-400 font-mono text-[9px]">80f</text>
+              <text x="4" y="48" className="fill-slate-400 font-mono text-[9px]">40f</text>
+              <text x="4" y="78" className="fill-slate-400 font-mono text-[9px]">20f</text>
+              <text x="10" y="95" className="fill-slate-400 font-mono text-[9px]">0</text>
+              <polygon
+                points="35,95 35,78 95,62 155,70 215,54 275,74 335,48 395,22 455,66 515,58 575,64 635,52 695,68 750,56 750,95"
+                fill="#F59E0B"
+                fillOpacity="0.18"
+              />
+              <polyline
+                fill="none"
+                stroke="#D97706"
+                strokeWidth="2"
+                points="35,78 95,62 155,70 215,54 275,74 335,48 395,22 455,66 515,58 575,64 635,52 695,68 750,56"
+              />
+            </svg>
+          </div>
+        </div>
+
+        {/* 2-Column Analytics Tables: Top IPs & Top Protocols (Allegro Packets Image 4) */}
+        <div className="grid grid-cols-1 gap-6 pt-2 lg:grid-cols-2">
+          <div>
+            <h3 className="text-base font-normal text-[#2B7CB3]">Top IPs during passive capture</h3>
+            <table className="mt-2 w-full text-left text-xs">
+              <thead className="border-b border-slate-200 font-bold text-slate-700">
+                <tr>
+                  <th className="py-1.5 pr-2">IP (name)</th>
+                  <th className="py-1.5 pr-2 text-right">Active Flows</th>
+                  <th className="py-1.5 pr-2 text-right">Connections</th>
+                  <th className="py-1.5 text-right">Inspect</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {topIps.map((item) => (
+                  <tr key={item.id}>
+                    <td className="py-2 pr-2">
+                      <Link to={`/assets/${item.id}`} className="font-mono text-[#2B7CB3] hover:underline">
+                        {item.ip}
+                      </Link>
+                      <div className="text-[11px] text-slate-500">({item.name})</div>
+                    </td>
+                    <td className="py-2 pr-2 text-right font-mono">{item.flows} flows</td>
+                    <td className="py-2 pr-2 text-right font-mono font-semibold">{item.conns} conns</td>
+                    <td className="py-2 text-right">
+                      <Link
+                        to={`/assets/${item.id}`}
+                        className="inline-block rounded border border-slate-300 px-2 py-0.5 text-[11px] text-slate-700 hover:bg-slate-50"
+                      >
+                        Detail
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div>
+            <h3 className="text-base font-normal text-[#2B7CB3]">Top protocols during passive capture</h3>
+            <table className="mt-2 w-full text-left text-xs">
+              <thead className="border-b border-slate-200 font-bold text-slate-700">
+                <tr>
+                  <th className="py-1.5 pr-2">Protocol</th>
+                  <th className="py-1.5 pr-2 text-right">Flows</th>
+                  <th className="py-1.5 pr-2 text-right">Connections</th>
+                  <th className="py-1.5 text-right">Map</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {topProtos.map((p) => (
+                  <tr key={p.proto}>
+                    <td className="py-2 pr-2 font-mono font-semibold text-[#2B7CB3]">{p.proto}</td>
+                    <td className="py-2 pr-2 text-right font-mono">{p.flows} flows</td>
+                    <td className="py-2 pr-2 text-right font-mono font-semibold">{p.conns} conns</td>
+                    <td className="py-2 text-right">
+                      <Link
+                        to="/network"
+                        className="inline-block rounded border border-slate-300 px-2 py-0.5 text-[11px] text-slate-700 hover:bg-slate-50"
+                      >
+                        View
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
 
       {enrolledToken && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
