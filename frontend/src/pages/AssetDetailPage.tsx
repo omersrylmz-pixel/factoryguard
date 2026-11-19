@@ -288,9 +288,9 @@ export default function AssetDetailPage() {
       </div>
 
       {/* 2. Nozomi Vantage 3 Ayrı Beyaz Kartlı Donanım Kimlik Satırı (Image 5) */}
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
+      <div className="grid grid-cols-1 gap-2.5 md:grid-cols-12">
         {/* Kart 1: Gerçekçi 3B Endüstriyel PLC Donanım Görseli + Teknik Paragraf */}
-        <div className="flex items-start gap-4 rounded-[3px] border border-[#DCE3EA] bg-white p-3.5 lg:col-span-4">
+        <div className="flex items-start gap-3 rounded-[3px] border border-[#DCE3EA] bg-white p-3 md:col-span-4">
           <div className="flex h-28 w-36 shrink-0 items-center justify-center rounded border border-slate-200 bg-white p-2">
             {/* 3B İzometrik Metalik Endüstriyel PLC / GuardLogix Kontrolcü Çizimi */}
             <svg viewBox="0 0 120 96" className="h-24 w-32">
@@ -355,7 +355,7 @@ export default function AssetDetailPage() {
         </div>
 
         {/* Kart 2: Donanım Kimlik Satırları + Büyüteç/Gauge İkonları */}
-        <div className="divide-y divide-slate-200/80 rounded-[3px] border border-[#DCE3EA] bg-white px-4 py-2 text-xs lg:col-span-4">
+        <div className="divide-y divide-slate-200/80 rounded-[3px] border border-[#DCE3EA] bg-white px-3 py-1.5 text-[11px] md:col-span-4">
           <div className="flex items-center justify-between py-1.5">
             <span className="font-bold text-slate-700">Type</span>
             <span className="inline-flex items-center text-slate-800">
@@ -403,7 +403,7 @@ export default function AssetDetailPage() {
         </div>
 
         {/* Kart 3: Ağ ve Yaşam Döngüsü Satırları */}
-        <div className="divide-y divide-slate-200/80 rounded-[3px] border border-[#DCE3EA] bg-white px-4 py-2 text-xs lg:col-span-4">
+        <div className="divide-y divide-slate-200/80 rounded-[3px] border border-[#DCE3EA] bg-white px-3 py-1.5 text-[11px] md:col-span-4">
           <div className="flex items-center justify-between py-1.5">
             <span className="font-bold text-slate-700">IP</span>
             <span className="font-mono text-slate-800">{asset.ip_address ?? "—"}</span>
@@ -432,15 +432,15 @@ export default function AssetDetailPage() {
       </div>
 
       {/* 3. Nozomi Vantage Gri Çerçeveli Alt Panel: 14 Sekmeli Bar + 2x2 Kart Grid */}
-      <div className="rounded-[4px] border border-[#DCE3EA] bg-[#EEF2F6] p-3">
-        <div className="mb-3 flex items-center justify-between overflow-x-auto border-b border-[#DCE3EA] px-2 pt-1">
-          <div className="flex items-center gap-6 text-xs">
+      <div className="rounded-[4px] border border-[#DCE3EA] bg-[#EEF2F6] p-2.5">
+        <div className="mb-2.5 flex items-center justify-between border-b border-[#DCE3EA] px-1 pt-0.5">
+          <div className="flex w-full items-center justify-between gap-1 text-[11px]">
             {SUB_TABS.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => setActiveTab(t.id)}
-                className={`shrink-0 pb-2 text-center transition ${
+                className={`shrink-0 pb-1.5 text-center transition ${
                   activeTab === t.id
                     ? "border-b-[3px] border-[#0084B4] font-bold text-slate-900"
                     : "text-slate-600 hover:text-slate-900"
@@ -448,9 +448,9 @@ export default function AssetDetailPage() {
               >
                 <div>{t.label}</div>
                 {t.sub ? (
-                  <div className="text-[10px] font-normal text-slate-400">{t.sub}</div>
+                  <div className="text-[9px] font-normal text-slate-400">{t.sub}</div>
                 ) : (
-                  <div className="h-[14px]" />
+                  <div className="h-[13px]" />
                 )}
               </button>
             ))}
@@ -459,10 +459,10 @@ export default function AssetDetailPage() {
 
       {/* 4. SEKME İÇERİĞİ: SUMMARY (Nozomi Image 5 2x2 Dashboard Grid) */}
       {activeTab === "summary" && (
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
+        <div className="grid grid-cols-1 gap-2.5 md:grid-cols-12">
           {/* Sol Üst: Network stats */}
-          <div className="rounded-[3px] border border-[#DCE3EA] bg-white p-4 lg:col-span-6">
-            <h2 className="border-b border-slate-200 pb-2 text-xs font-bold text-slate-800">Network stats</h2>
+          <div className="rounded-[3px] border border-[#DCE3EA] bg-white p-3.5 md:col-span-6">
+            <h2 className="border-b border-slate-200 pb-1.5 text-xs font-bold text-slate-800">Network stats</h2>
             <div className="mt-3 grid grid-cols-12 gap-3">
               <div className="col-span-7 rounded border border-slate-200/90 p-3.5 text-center">
                 <div className="text-[11px] font-bold text-slate-700">Retransmission</div>
@@ -499,7 +499,7 @@ export default function AssetDetailPage() {
           </div>
 
           {/* Sağ Üst: Overall risk (Açılı Ok/Callout Çizgili Donut Grafiği - Nozomi Image 5) */}
-          <div className="relative rounded-[3px] border border-[#DCE3EA] bg-white p-4 lg:col-span-6">
+          <div className="relative rounded-[3px] border border-[#DCE3EA] bg-white p-3.5 md:col-span-6">
             <div className="flex items-center gap-1.5 border-b border-slate-200 pb-2">
               <h2 className="text-xs font-bold text-slate-800">Overall risk</h2>
               <span className="text-xs text-slate-400">ⓘ</span>
@@ -618,7 +618,7 @@ export default function AssetDetailPage() {
           </div>
 
           {/* Sol Alt: Additional information (Nozomi Image 5) */}
-          <div className="rounded-[3px] border border-[#DCE3EA] bg-white p-4 lg:col-span-6">
+          <div className="rounded-[3px] border border-[#DCE3EA] bg-white p-3.5 md:col-span-6">
             <h2 className="border-b border-slate-200 pb-2 text-xs font-bold text-slate-800">
               Additional information
             </h2>
@@ -663,7 +663,7 @@ export default function AssetDetailPage() {
           </div>
 
           {/* Sağ Alt: Asset activity (Nozomi Image 5 7x24 Yeşil Isı Haritası) */}
-          <div className="relative rounded-[3px] border border-[#DCE3EA] bg-white p-4 lg:col-span-6">
+          <div className="relative rounded-[3px] border border-[#DCE3EA] bg-white p-3.5 md:col-span-6">
             <h2 className="border-b border-slate-200 pb-2 text-xs font-bold text-slate-800">Asset activity</h2>
             <div className="mt-2.5 grid grid-cols-3 gap-2 text-center">
               <div>
@@ -681,8 +681,8 @@ export default function AssetDetailPage() {
             </div>
 
             {/* 7 Gün x 24 Saat Matris */}
-            <div className="mt-3 overflow-x-auto">
-              <div className="min-w-[430px] space-y-1">
+            <div className="mt-2.5 overflow-x-auto">
+              <div className="space-y-1">
                 {dayLabels.map((day, dIdx) => (
                   <div key={day} className="flex items-center gap-1.5">
                     <span className="w-8 text-right font-mono text-[9.5px] text-slate-400">{day}</span>

@@ -101,10 +101,10 @@ export default function AppLayout() {
     { to: "/sensors", label: "Sensors", icon: "sensors" },
     { to: "/risks", label: "Alerts", icon: "alerts", badge: openRiskCount },
     { to: "/assets", label: "Assets", icon: "assets" },
-    { to: "/network", label: "Wireless / Map", icon: "map" },
-    { to: "/", label: "Overview", icon: "overview" },
-    { to: "/reports", label: "Vulnerabilities & Reports", icon: "vulns" },
-    { to: "/settings", label: "IQ / Settings", icon: "settings" },
+    { to: "/network", label: "Wireless", icon: "map" },
+    { to: "/", label: "Queries", icon: "overview" },
+    { to: "/reports", label: "Vulnerabilities", icon: "vulns" },
+    { to: "/settings", label: "IQ", icon: "settings" },
   ];
 
   function handleSearchSubmit(e: FormEvent) {
@@ -139,11 +139,11 @@ export default function AppLayout() {
       </div>
 
       {/* 2. Nozomi Networks Vantage Ana Koyu Petrol-Teal Üst Navigasyon Çubuğu (#0B4F6C) */}
-      <header className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 bg-[#0B4F6C] px-5 py-2 text-white shadow-xs">
+      <header className="sticky top-0 z-30 flex items-center justify-between gap-2 bg-[#0B4F6C] px-3 py-1.5 text-white shadow-xs">
         {/* Sol: Logo + Hamburger + Yatay Sekmeler */}
-        <div className="flex flex-wrap items-center gap-4">
-          <Link to="/" className="flex items-center gap-2.5 pr-1">
-            <svg className="h-7 w-7 text-white" viewBox="0 0 32 32" fill="none">
+        <div className="flex items-center gap-2">
+          <Link to="/" className="flex items-center gap-1.5 pr-1">
+            <svg className="h-6 w-6 text-white" viewBox="0 0 32 32" fill="none">
               <polygon
                 points="16,3 28,10 28,22 16,29 4,22 4,10"
                 stroke="currentColor"
@@ -153,16 +153,16 @@ export default function AppLayout() {
               <polyline points="8,14 16,9 24,14" stroke="currentColor" strokeWidth="2" />
               <polyline points="8,19 16,14 24,19" stroke="currentColor" strokeWidth="2" />
             </svg>
-            <div className="leading-tight">
-              <div className="text-sm font-extrabold tracking-widest text-white">NOZOMI · FG</div>
-              <div className="text-[8.5px] font-medium tracking-[0.26em] text-cyan-100 uppercase">NETWORKS</div>
+            <div className="leading-none">
+              <div className="text-xs font-extrabold tracking-widest text-white">NOZOMI</div>
+              <div className="text-[7.5px] font-medium tracking-[0.22em] text-cyan-100 uppercase">NETWORKS</div>
             </div>
           </Link>
 
           <button
             type="button"
             onClick={() => setShowSidebar((v) => !v)}
-            className="rounded p-1.5 text-cyan-100 hover:bg-white/10"
+            className="rounded p-1 text-cyan-100 hover:bg-white/10"
             title="Menü"
           >
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -173,14 +173,14 @@ export default function AppLayout() {
           </button>
 
           {/* Yatay Navigasyon Öğeleri (Nozomi Image: Aktif sekme açık gri/buz mavisi kutu #DCE6EA) */}
-          <nav className="flex flex-wrap items-center gap-1.5">
+          <nav className="flex items-center gap-0.5">
             {TOP_NAV.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 end={item.to === "/"}
                 className={({ isActive }) =>
-                  `inline-flex items-center gap-2 rounded-[4px] px-3 py-1.5 text-xs transition ${
+                  `inline-flex items-center gap-1.5 rounded-[4px] px-2 py-1 text-[11px] whitespace-nowrap transition ${
                     isActive
                       ? "bg-[#DCE6EA] font-semibold text-[#0B4F6C] shadow-2xs"
                       : "font-normal text-cyan-50/90 hover:bg-white/10 hover:text-white"
@@ -189,11 +189,6 @@ export default function AppLayout() {
               >
                 <TopIcon name={item.icon} />
                 <span>{item.label}</span>
-                {item.badge !== undefined && item.badge > 0 && (
-                  <span className="rounded-full bg-amber-400 px-1.5 py-0.2 font-mono text-[10px] font-bold text-slate-950">
-                    {item.badge}
-                  </span>
-                )}
               </NavLink>
             ))}
           </nav>
