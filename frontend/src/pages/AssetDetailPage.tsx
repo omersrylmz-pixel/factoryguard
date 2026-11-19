@@ -16,7 +16,7 @@ import {
 } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { api } from "../services/api";
-import type { AssetDetail, AssetType, Criticality, Sensor, Site, Zone } from "../types/api";
+import type { AssetDetail, AssetType, Criticality, Sensor, Zone } from "../types/api";
 
 type SubTabId =
   | "summary"
@@ -54,12 +54,6 @@ export default function AssetDetailPage() {
     queryKey: ["asset", activeOrg?.id, id],
     queryFn: () => api<AssetDetail>(`/assets/${id}`),
     enabled: !!activeOrg && !!id,
-  });
-
-  const sitesQuery = useQuery({
-    queryKey: ["sites", activeOrg?.id],
-    queryFn: () => api<Site[]>("/sites"),
-    enabled: !!activeOrg,
   });
 
   const zonesQuery = useQuery({
