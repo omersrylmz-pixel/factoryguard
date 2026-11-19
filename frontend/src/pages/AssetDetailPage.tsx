@@ -135,14 +135,18 @@ export default function AssetDetailPage() {
   const donutCircumference = 2 * Math.PI * donutRadius;
   let donutOffset = 0;
 
-  // Cihaz Rolleri (Nozomi Additional information -> Roles pill tags)
+  // Cihaz Rolleri (Nozomi Additional information -> Roles pill tags, tekilleştirilmiş)
   const roles: { label: string; color: string }[] = [];
   if (inboundFlows.length > 0) roles.push({ label: "server / responder", color: "bg-red-600 text-white" });
   if (outboundFlows.length > 0) roles.push({ label: "client / initiator", color: "bg-sky-600 text-white" });
+  const seenModbusRoles = new Set<string>();
   for (const o of asset.observations) {
     const mRoles = Array.isArray(o.evidence.modbus_roles) ? (o.evidence.modbus_roles as string[]) : [];
     for (const mr of mRoles) {
-      roles.push({ label: `modbus_${mr}`, color: "bg-indigo-600 text-white" });
+      if (!seenModbusRoles.has(mr)) {
+        seenModbusRoles.add(mr);
+        roles.push({ label: `modbus_${mr}`, color: "bg-indigo-600 text-white" });
+      }
     }
   }
   roles.push({
