@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router";
 import {
+  Badge,
   Button,
   Card,
   CRITICALITY_LABEL,
@@ -12,6 +13,7 @@ import {
   Input,
   PageHeader,
   Select,
+  StatCard,
   formatDate,
 } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
@@ -28,11 +30,11 @@ import type {
 } from "../types/api";
 
 export const RISK_STATUS_LABEL: Record<RiskStatus, string> = {
-  open: "Open (Açık)",
-  investigating: "Investigating (İnceleniyor)",
-  accepted: "Accepted (Kabul Edildi)",
-  resolved: "Resolved (Çözüldü)",
-  false_positive: "False Positive (Yanlış Alarm)",
+  open: "Açık (Open)",
+  investigating: "İnceleniyor",
+  accepted: "Kabul Edildi",
+  resolved: "Çözüldü",
+  false_positive: "Yanlış Alarm",
 };
 
 export const RISK_RULE_LABEL: Record<RiskRuleKey, string> = {
@@ -44,51 +46,51 @@ export const RISK_RULE_LABEL: Record<RiskRuleKey, string> = {
   ASSET_NOT_SEEN: "ASSET_NOT_SEEN · Uzun Süredir Gözlemlenmeyen Cihaz",
 };
 
-const BREAKDOWN_LABELS: Record<string, string> = {
-  production_criticality: "Üretim Kritiklik Seviyesi (Maks 30)",
-  network_exposure: "Ağ Erişilebilirliği ve Maruziyet (Maks 25)",
-  verified_vulnerability: "Doğrulanmış Güvenlik Açığı (Maks 25)",
-  unexpected_behavior: "Beklenmeyen Davranış / İletişim (Maks 10)",
-  inventory_gap: "Envanter ve Sahiplik Eksikliği (Maks 10)",
+const BREAKDOWN_LABELS: Record<string, { label: string; max: number }> = {
+  production_criticality: { label: "Üretim Kritiklik Seviyesi", max: 30 },
+  network_exposure: { label: "Ağ Erişilebilirliği ve Maruziyet", max: 25 },
+  verified_vulnerability: { label: "Doğrulanmış Güvenlik Açığı", max: 25 },
+  unexpected_behavior: { label: "Beklenmeyen Davranış / İletişim", max: 10 },
+  inventory_gap: { label: "Envanter Doğrulama Eksikliği", max: 10 },
 };
+
+function statusTone(st: RiskStatus): "red" | "amber" | "teal" | "emerald" | "slate" {
+  switch (st) {
+    case "open":
+      return "red";
+    case "investigating":
+      return "amber";
+    case "accepted":
+      return "teal";
+    case "resolved":
+      return "emerald";
+    case "false_positive":
+      return "slate";
+  }
+}
 
 export default function RisksPage() {
   const { activeOrg, canEditAssets } = useAuth();
   const qc = useQueryClient();
 
-  // Filtreler (Bölüm 10.6: Severity, Status, Asset, Rule, Tarih)
-  const [severity, setSeverity] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [ruleKey, setRuleKey] = useState("");
-  const [sinceDate, setSinceDate] = useState("");
-  const [selectedRiskId, setSelectedRiskId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>("open");
+  const [severityFilter, setSeverityFilter] = useState<string>("");
+  const [ruleFilter, setRuleFilter] = useState<string>("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [checkedIds, setCheckedIds] = useState<string[]>([]);
+  const [note, setNote] = useState("");
+  const [showRulesCatalog, setShowRulesCatalog] = useState(false);
 
   const params = new URLSearchParams();
-  if (severity) params.set("severity", severity);
   if (statusFilter) params.set("status", statusFilter);
-  if (ruleKey) params.set("rule_key", ruleKey);
-  if (sinceDate) params.set("since", new Date(sinceDate).toISOString());
-  params.set("limit", "100");
+  if (severityFilter) params.set("severity", severityFilter);
+  if (ruleFilter) params.set("rule_key", ruleFilter);
+  params.set("limit", "200");
 
   const risksQuery = useQuery({
     queryKey: ["risks", activeOrg?.id, params.toString()],
     queryFn: () => api<Page<RiskFinding>>(`/risks?${params.toString()}`),
     enabled: !!activeOrg,
-  });
-
-  const statusMut = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: RiskStatus }) =>
-      api<RiskFinding>(`/risks/${id}`, { method: "PATCH", body: { status } }),
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["risks", activeOrg?.id] });
-    },
-  });
-
-  const evaluateMut = useMutation({
-    mutationFn: () => api("/risks/evaluate", { method: "POST" }),
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["risks", activeOrg?.id] });
-    },
   });
 
   const postureQuery = useQuery({
@@ -98,119 +100,207 @@ export default function RisksPage() {
   });
 
   const rulesCatalogQuery = useQuery({
-    queryKey: ["risks", "rules-catalog"],
+    queryKey: ["risks", activeOrg?.id, "rules-catalog"],
     queryFn: () => api<RiskRulesCatalog>("/risks/rules"),
     enabled: !!activeOrg,
   });
 
-  const [showRuleCatalog, setShowRuleCatalog] = useState(false);
-
-  const bulkStatusMut = useMutation({
-    mutationFn: (new_status: RiskStatus) =>
-      api<RiskBulkStatusResult>("/risks/bulk-status", {
-        method: "POST",
-        body: { filter_status: "open", new_status },
-      }),
+  const evalMut = useMutation({
+    mutationFn: () => api<Record<string, number>>("/risks/evaluate", { method: "POST" }),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["risks", activeOrg?.id] });
     },
   });
 
-  const risks = risksQuery.data?.items ?? [];
-  const total = risksQuery.data?.total ?? 0;
-  const selected = risks.find((r) => r.id === selectedRiskId) ?? risks[0] ?? null;
+  const statusMut = useMutation({
+    mutationFn: (args: { id: string; status: RiskStatus; resolution_note?: string }) =>
+      api<RiskFinding>(`/risks/${args.id}/status`, {
+        method: "PATCH",
+        body: { status: args.status, resolution_note: args.resolution_note || null },
+      }),
+    onSuccess: async () => {
+      setNote("");
+      await qc.invalidateQueries({ queryKey: ["risks", activeOrg?.id] });
+    },
+  });
+
+  const bulkStatusMut = useMutation({
+    mutationFn: (args: { finding_ids: string[]; status: RiskStatus; resolution_note?: string }) =>
+      api<RiskBulkStatusResult>("/risks/bulk-status", {
+        method: "POST",
+        body: args,
+      }),
+    onSuccess: async () => {
+      setCheckedIds([]);
+      setNote("");
+      await qc.invalidateQueries({ queryKey: ["risks", activeOrg?.id] });
+    },
+  });
+
+  const findings = risksQuery.data?.items ?? [];
+  const selected = findings.find((f) => f.id === selectedId) ?? findings[0] ?? null;
+  const posture = postureQuery.data;
+  const rulesList = rulesCatalogQuery.data?.rules ?? [];
+
+  function toggleChecked(id: string) {
+    setCheckedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <PageHeader
-          title="Risk Merkezi"
-          subtitle="Açıklanabilir, kanıta dayalı kurallarla tespit edilen güvenlik riskleri ve aksiyon önerileri"
+      <PageHeader
+        breadcrumb="Events & Risk Findings"
+        title="Olaylar, Gözlemler & Açıklanabilir Risk Merkezi"
+        subtitle="Kara kutu skorlar yerine her bulgunun teknik kanıtı, tetiklenen deterministik kuralı ve sahada uygulanabilir çözüm adımı"
+        actions={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setShowRulesCatalog((v) => !v)}
+            >
+              {showRulesCatalog ? "Kural Kataloğunu Gizle" : "Deterministik Kural Kataloğu (6 Kural)"}
+            </Button>
+            {canEditAssets && (
+              <Button
+                variant="primary"
+                disabled={evalMut.isPending}
+                onClick={() => evalMut.mutate()}
+              >
+                {evalMut.isPending ? "Hesaplanıyor…" : "Risk Motorunu Çalıştır"}
+              </Button>
+            )}
+          </>
+        }
+      />
+
+      {/* 4 TailAdmin StatCard — Fabrika Güvenlik Duruşu & Risk Özeti */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Fabrika Güvenlik Duruşu"
+          value={posture ? `${posture.health_score}/100` : "—"}
+          hint={
+            posture
+              ? `${posture.status_label} · %${Math.round(posture.verified_asset_ratio * 100)} doğrulanmış varlık`
+              : "Hesaplanıyor…"
+          }
+          tone={
+            !posture
+              ? "teal"
+              : posture.health_score >= 85
+                ? "emerald"
+                : posture.health_score >= 65
+                  ? "amber"
+                  : "red"
+          }
+          badge={
+            posture
+              ? {
+                  text: `Derece ${posture.grade}`,
+                  tone:
+                    posture.health_score >= 85
+                      ? "emerald"
+                      : posture.health_score >= 65
+                        ? "amber"
+                        : "red",
+                }
+              : undefined
+          }
+          icon={
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+          }
         />
-        {canEditAssets && (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="secondary"
-              onClick={() => bulkStatusMut.mutate("investigating")}
-              disabled={bulkStatusMut.isPending}
-            >
-              Açık Bulguları İncelemeye Al
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => bulkStatusMut.mutate("resolved")}
-              disabled={bulkStatusMut.isPending}
-            >
-              Açık Bulguları Çözüldü İşaretle
-            </Button>
-            <Button variant="secondary" onClick={() => evaluateMut.mutate()} disabled={evaluateMut.isPending}>
-              {evaluateMut.isPending ? "Değerlendiriliyor…" : "Kuralları Şimdi Yeniden Çalıştır"}
-            </Button>
-          </div>
-        )}
+
+        <StatCard
+          label="Kritik & Yüksek Bulgular"
+          value={posture ? posture.open_critical + posture.open_high : "—"}
+          hint={
+            posture
+              ? `${posture.open_critical} Kritik · ${posture.open_high} Yüksek`
+              : "Açık bulgular"
+          }
+          tone={
+            posture && posture.open_critical + posture.open_high > 0 ? "red" : "emerald"
+          }
+          badge={{
+            text: "Öncelikli Müdahale",
+            tone: posture && posture.open_critical + posture.open_high > 0 ? "red" : "emerald",
+          }}
+          icon={
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+          }
+        />
+
+        <StatCard
+          label="Orta & Düşük Bulgular"
+          value={posture ? posture.open_medium + posture.open_low : "—"}
+          hint={
+            posture
+              ? `${posture.open_medium} Orta · ${posture.open_low} Düşük`
+              : "İzlenen bulgular"
+          }
+          tone="amber"
+          icon={
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+          }
+        />
+
+        <StatCard
+          label="Aktif Deterministik Kural"
+          value={rulesList.length || 6}
+          hint="FG-RULE-001 .. FG-RULE-006"
+          tone="teal"
+          badge={{ text: "%100 Açıklanabilir", tone: "teal" }}
+          icon={
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <polyline points="9 11 12 14 22 4" />
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+            </svg>
+          }
+        />
       </div>
 
-      {postureQuery.data && (
-        <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <div className="text-xs font-semibold uppercase text-slate-500">Fabrika Siber Güvenlik Duruşu</div>
-              <div className="mt-1 text-lg font-bold text-slate-900">
-                Not: {postureQuery.data.grade} · Sağlık Endeksi: {postureQuery.data.health_score}/100 —{" "}
-                <span className="font-normal text-slate-600">{postureQuery.data.status_label}</span>
+      {/* Deterministik 6 Kural Kataloğu */}
+      {showRulesCatalog && rulesList.length > 0 && (
+        <Card
+          title={`FactoryGuard Deterministik OT Risk Kural Kataloğu (${rulesList.length} Aktif Kural)`}
+          subtitle="Yapay zeka tahmini değil; kanıta dayalı deterministik endüstriyel güvenlik kuralları"
+        >
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {rulesList.map((r) => (
+              <div
+                key={r.rule_id}
+                className="rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] p-3.5 text-xs"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono font-bold text-[#0D9488]">{r.rule_id}</span>
+                  <Badge tone="teal">{r.finding_category}</Badge>
+                </div>
+                <div className="mt-1.5 font-semibold text-[#1C2434]">{r.name}</div>
+                <div className="mt-0.5 font-mono text-[11px] text-slate-500">{r.rule_key}</div>
+                <p className="mt-2 leading-relaxed text-slate-600">{r.triggering_condition}</p>
+                <div className="mt-2 border-t border-[#E2E8F0] pt-1.5 text-[11px] text-slate-700">
+                  {r.description}
+                </div>
               </div>
-              {postureQuery.data.formula_explanation && (
-                <div className="mt-0.5 font-mono text-[11px] text-slate-500">
-                  Hesaplama Formülü: {postureQuery.data.formula_explanation}
-                </div>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600">
-              <span>Kritik: <strong>{postureQuery.data.open_critical}</strong></span>
-              <span>Yüksek: <strong>{postureQuery.data.open_high}</strong></span>
-              <span>Orta: <strong>{postureQuery.data.open_medium}</strong></span>
-              <span>Envanter Doğrulama: <strong>%{Math.round(postureQuery.data.verified_asset_ratio * 100)}</strong></span>
-              <Button variant="secondary" onClick={() => setShowRuleCatalog((v) => !v)}>
-                {showRuleCatalog ? "Kural Kataloğunu Gizle" : "Açıklanabilir Kural Kataloğu (6 Kural)"}
-              </Button>
-            </div>
+            ))}
           </div>
-
-          {showRuleCatalog && rulesCatalogQuery.data && (
-            <div className="grid grid-cols-1 gap-2 border-t border-slate-200 pt-3 sm:grid-cols-2 lg:grid-cols-3">
-              {rulesCatalogQuery.data.rules.map((rule) => (
-                <div key={rule.rule_id} className="rounded border border-slate-200 bg-slate-50 p-2.5 text-xs">
-                  <div className="flex items-center justify-between font-mono text-[11px] font-bold text-blue-700">
-                    <span>{rule.rule_id} · {rule.rule_key}</span>
-                    <span className="rounded bg-slate-200 px-1.5 py-0.5 font-sans text-[10px] text-slate-700">
-                      {rule.finding_category}
-                    </span>
-                  </div>
-                  <div className="mt-1 font-semibold text-slate-900">{rule.name}</div>
-                  <div className="mt-0.5 text-[11px] text-slate-600">{rule.description}</div>
-                  <div className="mt-1 font-mono text-[10px] text-slate-500">
-                    Koşul: {rule.triggering_condition}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        </Card>
       )}
 
-      <Card title="Filtreler">
+      {/* Filtre & Toplu İşlem Çubuğu */}
+      <Card>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-          <Field label="Risk Seviyesi (Severity)">
-            <Select value={severity} onChange={(e) => setSeverity(e.target.value)}>
-              <option value="">Tümü</option>
-              {(Object.keys(CRITICALITY_LABEL) as Criticality[]).map((c) => (
-                <option key={c} value={c}>
-                  {CRITICALITY_LABEL[c]}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Durum (Status)">
+          <Field label="Durum">
             <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="">Tümü</option>
               {(Object.keys(RISK_STATUS_LABEL) as RiskStatus[]).map((s) => (
@@ -220,187 +310,304 @@ export default function RisksPage() {
               ))}
             </Select>
           </Field>
-          <Field label="Kural (Rule)">
-            <Select value={ruleKey} onChange={(e) => setRuleKey(e.target.value)}>
-              <option value="">Tüm Kurallar</option>
-              {(Object.keys(RISK_RULE_LABEL) as RiskRuleKey[]).map((rk) => (
-                <option key={rk} value={rk}>
-                  {RISK_RULE_LABEL[rk]}
+          <Field label="Önem Derecesi">
+            <Select value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)}>
+              <option value="">Tümü</option>
+              {(["critical", "high", "medium", "low"] as Criticality[]).map((c) => (
+                <option key={c} value={c}>
+                  {CRITICALITY_LABEL[c]}
                 </option>
               ))}
             </Select>
           </Field>
-          <Field label="Son Görülme Tarihi (Başlangıç)">
-            <Input type="date" value={sinceDate} onChange={(e) => setSinceDate(e.target.value)} />
+          <Field label="Tetiklenen Kural">
+            <Select value={ruleFilter} onChange={(e) => setRuleFilter(e.target.value)}>
+              <option value="">Tümü</option>
+              {(Object.keys(RISK_RULE_LABEL) as RiskRuleKey[]).map((r) => (
+                <option key={r} value={r}>
+                  {RISK_RULE_LABEL[r]}
+                </option>
+              ))}
+            </Select>
           </Field>
+          <div className="flex items-end">
+            <Button
+              variant="secondary"
+              className="w-full"
+              onClick={() => {
+                setStatusFilter("");
+                setSeverityFilter("");
+                setRuleFilter("");
+              }}
+            >
+              Filtreleri Sıfırla
+            </Button>
+          </div>
         </div>
+
+        {canEditAssets && checkedIds.length > 0 && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-[4px] border border-teal-200 bg-teal-50/70 px-4 py-2.5 text-xs">
+            <span className="font-semibold text-[#0F766E]">
+              {checkedIds.length} risk bulgusu seçildi
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {(["investigating", "accepted", "resolved", "false_positive"] as RiskStatus[]).map(
+                (st) => (
+                  <Button
+                    key={st}
+                    size="sm"
+                    variant="secondary"
+                    disabled={bulkStatusMut.isPending}
+                    onClick={() =>
+                      bulkStatusMut.mutate({
+                        finding_ids: checkedIds,
+                        status: st,
+                        resolution_note: "Toplu durum güncellemesi",
+                      })
+                    }
+                  >
+                    Toplu → {RISK_STATUS_LABEL[st]}
+                  </Button>
+                ),
+              )}
+              <Button size="sm" variant="ghost" onClick={() => setCheckedIds([])}>
+                Seçimi Temizle
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
 
-      <ErrorBox error={risksQuery.error ?? statusMut.error ?? evaluateMut.error} />
+      <ErrorBox error={risksQuery.error || evalMut.error || statusMut.error || bulkStatusMut.error} />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        {/* Sol: Risk Listesi */}
-        <div className="lg:col-span-3">
-          <Card title={`Risk Bulguları (Toplam: ${total})`}>
+      {/* 12 Sütunlu Bulgular Tablosu + Açıklanabilir Risk İnceleme Paneli */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="lg:col-span-7">
+          <Card
+            title={`Bulgular Listesi (${risksQuery.data?.total ?? 0})`}
+            subtitle="Detaylı kanıt ve çözüm adımlarını incelemek için bir bulguya tıklayın"
+            noPadding
+          >
             {risksQuery.isLoading ? (
-              <Empty>Yükleniyor…</Empty>
-            ) : risks.length === 0 ? (
-              <Empty>Seçilen filtrelere uygun risk bulgusu yok.</Empty>
+              <div className="p-6">
+                <Empty>Yükleniyor…</Empty>
+              </div>
+            ) : findings.length === 0 ? (
+              <div className="p-6">
+                <Empty>Seçilen kriterlere uygun risk bulgusu yok.</Empty>
+              </div>
             ) : (
-              <div className="divide-y divide-slate-200">
-                {risks.map((r) => {
-                  const isSelected = selected?.id === r.id;
-                  return (
-                    <div
-                      key={r.id}
-                      onClick={() => setSelectedRiskId(r.id)}
-                      className={`cursor-pointer p-3 transition-colors ${
-                        isSelected ? "bg-blue-50/70" : "hover:bg-slate-50"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="text-sm font-semibold text-slate-900">{r.title}</div>
-                          <div className="mt-0.5 text-xs text-slate-500">
-                            Kural: <span className="font-mono font-medium text-slate-700">{r.rule_key}</span> · Cihaz:{" "}
-                            <span className="font-mono text-slate-700">{r.asset_ip ?? r.asset_name ?? "—"}</span>
-                          </div>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          <span className="rounded bg-slate-900 px-2 py-0.5 font-mono text-xs font-bold text-white">
-                            {r.score} / 100
-                          </span>
-                          <CriticalityBadge value={r.severity} />
-                        </div>
-                      </div>
-                      <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
-                        <span>Durum: {RISK_STATUS_LABEL[r.status]}</span>
-                        <span>Bulgu Güveni: %{Math.round(r.confidence * 100)}</span>
-                        <span>{formatDate(r.last_seen_at)}</span>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                    <tr>
+                      {canEditAssets && <th className="w-8 px-4 py-3" />}
+                      <th className="px-4 py-3">Önem & Puan</th>
+                      <th className="px-4 py-3">Bulgu Başlığı & Kural</th>
+                      <th className="px-4 py-3">Durum</th>
+                      <th className="px-4 py-3 text-right">Son Görülme</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E2E8F0]">
+                    {findings.map((f) => {
+                      const active = selected?.id === f.id;
+                      const isChecked = checkedIds.includes(f.id);
+                      return (
+                        <tr
+                          key={f.id}
+                          onClick={() => setSelectedId(f.id)}
+                          className={`cursor-pointer transition-colors ${
+                            active ? "bg-teal-50/60" : "hover:bg-[#F8FAFC]"
+                          }`}
+                        >
+                          {canEditAssets && (
+                            <td
+                              className="px-4 py-3"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => toggleChecked(f.id)}
+                                className="h-3.5 w-3.5 rounded border-slate-300 text-[#0D9488] focus:ring-[#0D9488]"
+                              />
+                            </td>
+                          )}
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <CriticalityBadge value={f.severity} />
+                              <span className="font-mono font-bold text-[#1C2434]">
+                                {f.score}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="font-semibold text-[#1C2434]">{f.title}</div>
+                            <div className="mt-0.5 font-mono text-[11px] text-slate-500">
+                              {f.rule_key} {f.asset_ip ? `· ${f.asset_ip}` : ""}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <Badge tone={statusTone(f.status)}>
+                              {RISK_STATUS_LABEL[f.status]}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono text-[11px] whitespace-nowrap text-slate-500">
+                            {formatDate(f.last_seen_at)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
           </Card>
         </div>
 
-        {/* Sağ: Açıklanabilir Risk Detay Paneli (Bölüm 10.6) */}
-        <div className="lg:col-span-2">
-          <Card title="Açıklanabilir Risk İncelemesi">
+        {/* Sağ: Açıklanabilir Risk İnceleme Paneli (5 Soru Modeli) */}
+        <div className="lg:col-span-5">
+          <Card
+            title="Açıklanabilir Risk İnceleme Paneli"
+            subtitle="5 adımlı kanıt ve aksiyon doğrulaması"
+          >
             {!selected ? (
-              <Empty>Detaylarını incelemek için listeden bir risk bulgusu seçin.</Empty>
+              <Empty>İncelemek için soldaki tablodan bir bulgu seçin.</Empty>
             ) : (
               <div className="space-y-4 text-sm">
-                <div>
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs font-semibold text-blue-700">
-                      {selected.evidence.rule_id ? `${selected.evidence.rule_id} · ` : ""}
-                      {selected.rule_key}
-                    </span>
+                <div className="border-b border-[#E2E8F0] pb-3">
+                  <div className="flex flex-wrap items-center gap-2">
                     <CriticalityBadge value={selected.severity} />
+                    <Badge tone="navy">Puan: {selected.score}/100</Badge>
+                    <Badge tone={statusTone(selected.status)}>
+                      {RISK_STATUS_LABEL[selected.status]}
+                    </Badge>
                   </div>
-                  <h3 className="mt-1 text-base font-semibold text-slate-900">{selected.title}</h3>
-                  <div className="mt-1 text-xs text-slate-500">
-                    Etkilenen Cihaz:{" "}
-                    <Link to={`/assets/${selected.asset_id}`} className="font-mono text-blue-700 hover:underline">
-                      {selected.asset_ip || selected.asset_name || selected.asset_id.slice(0, 8)}
-                    </Link>
+                  <h3 className="mt-2 text-base font-bold text-[#1C2434]">{selected.title}</h3>
+                  <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                    <span className="font-mono">{selected.rule_key}</span>
+                    {selected.asset_id && (
+                      <Link
+                        to={`/assets/${selected.asset_id}`}
+                        className="font-semibold text-[#0D9488] hover:underline"
+                      >
+                        İlgili Cihaz Konsoluna Git ({selected.asset_ip ?? selected.asset_name ?? "Cihaz"}) →
+                      </Link>
+                    )}
                   </div>
-                  {selected.evidence.finding_category && (
-                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
-                      <span className="rounded bg-slate-200 px-1.5 py-0.5 font-medium text-slate-800">
-                        Kategori:{" "}
-                        {selected.evidence.finding_category === "observation"
-                          ? "Pasif Gözlem"
-                          : selected.evidence.finding_category === "verified_vulnerability_match"
-                            ? "Doğrulanmış Sürüm Zafiyeti (CVE)"
-                            : "Olası Güvenlik Endişesi"}
-                      </span>
-                    </div>
-                  )}
-                  {selected.evidence.triggering_condition && (
-                    <div className="mt-1 text-[11px] text-slate-500">
-                      Tetiklenme Koşulu:{" "}
-                      <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-slate-700">
-                        {selected.evidence.triggering_condition}
-                      </code>
-                    </div>
-                  )}
                 </div>
 
-                {/* Durum Yönetimi */}
-                <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                  <Field label="Bulgu Durumu (Değişiklikler denetim kaydına yazılır)">
-                    <Select
-                      disabled={!canEditAssets || statusMut.isPending}
-                      value={selected.status}
-                      onChange={(e) =>
-                        statusMut.mutate({ id: selected.id, status: e.target.value as RiskStatus })
-                      }
-                    >
-                      {(Object.keys(RISK_STATUS_LABEL) as RiskStatus[]).map((st) => (
-                        <option key={st} value={st}>
-                          {RISK_STATUS_LABEL[st]}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
-                </div>
-
-                {/* 1. Ne gözlendi? */}
+                {/* 1. Ne tespit edildi? */}
                 <div>
-                  <div className="text-xs font-semibold uppercase text-slate-500">1. Ne Gözlendi?</div>
-                  <p className="mt-1 text-xs text-slate-800">
-                    {selected.evidence.what_observed || selected.description}
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    1. Ne Tespit Edildi?
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-[#1C2434]">
+                    {selected.evidence.what_observed ?? selected.description}
                   </p>
                 </div>
 
                 {/* 2. Neden önemli? */}
                 <div>
-                  <div className="text-xs font-semibold uppercase text-slate-500">2. Neden Önemli?</div>
-                  <p className="mt-1 text-xs text-slate-800">
-                    {selected.evidence.why_important || selected.description}
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    2. Üretim Güvenliği İçin Neden Önemli?
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-700">
+                    {selected.evidence.why_important ?? selected.description}
                   </p>
                 </div>
 
-                {/* 3. Önerilen aksiyon nedir? */}
-                <div className="rounded-md border border-blue-200 bg-blue-50/70 p-3">
-                  <div className="text-xs font-semibold uppercase text-blue-900">3. Önerilen Aksiyon</div>
-                  <p className="mt-1 text-xs text-blue-950">{selected.recommendation}</p>
+                {/* 3. Ne yapılmalı? */}
+                <div className="rounded-[4px] border border-teal-200 bg-teal-50/70 p-3.5">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-[#0F766E]">
+                    3. Önerilen Müdahale (Ne Yapılmalı?)
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-800">
+                    {selected.recommendation}
+                  </p>
                 </div>
 
-                {/* 4. Risk Puanı ve Güven Seviyesi (Birbirinden ayrı) */}
+                {/* 4. Puan Kırılımı ve Güven */}
                 <div>
-                  <div className="flex items-center justify-between text-xs font-semibold uppercase text-slate-500">
-                    <span>4. Risk Puanı: {selected.score}/100</span>
-                    <span>Bulgu Güveni: %{Math.round(selected.confidence * 100)}</span>
+                  <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    <span>4. Puan Kırılımı ({selected.score}/100)</span>
+                    <span className="text-[#0D9488]">
+                      Bulgu Güveni: %{Math.round(selected.confidence * 100)}
+                    </span>
                   </div>
                   {selected.evidence.score_breakdown && (
-                    <div className="mt-2 space-y-1 rounded border border-slate-200 bg-slate-50 p-2.5 text-xs">
-                      {Object.entries(BREAKDOWN_LABELS).map(([k, label]) => (
-                        <div key={k} className="flex justify-between">
-                          <span className="text-slate-600">{label}</span>
-                          <span className="font-mono font-medium text-slate-900">
-                            +{selected.evidence.score_breakdown?.[k] ?? 0}
-                          </span>
-                        </div>
-                      ))}
-                      <div className="border-t border-slate-200 pt-1 text-[11px] text-slate-500">
-                        Not: Bu ağırlık modeli önceliklendirme amaçlı ürün hipotezidir; bulgu güven seviyesinden ayrıdır.
-                      </div>
+                    <div className="mt-2 space-y-2 rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] p-3 text-xs">
+                      {Object.entries(BREAKDOWN_LABELS).map(([k, meta]) => {
+                        const val = selected.evidence.score_breakdown?.[k] ?? 0;
+                        const pct = Math.min(100, Math.round((val / meta.max) * 100));
+                        return (
+                          <div key={k}>
+                            <div className="flex justify-between text-[11px]">
+                              <span className="text-slate-600">
+                                {meta.label} (Maks {meta.max})
+                              </span>
+                              <span className="font-mono font-bold text-[#1C2434]">+{val}</span>
+                            </div>
+                            <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
+                              <div
+                                className="h-full rounded-full bg-[#0D9488]"
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
 
-                {/* 5. Hangi kanıta dayanıyor? */}
+                {/* 5. Teknik Kanıt */}
                 <div>
-                  <div className="text-xs font-semibold uppercase text-slate-500">5. Teknik Kanıt (Evidence)</div>
-                  <pre className="mt-1 max-h-44 overflow-auto rounded border border-slate-200 bg-slate-900 p-2.5 font-mono text-[11px] text-slate-100">
-                    {JSON.stringify(selected.evidence.supporting_data ?? selected.evidence, null, 2)}
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    5. Ham Teknik Kanıt (Evidence JSON)
+                  </div>
+                  <pre className="mt-1.5 max-h-40 overflow-auto rounded-[4px] border border-[#E2E8F0] bg-[#1C2434] p-3 font-mono text-[11px] text-slate-100">
+                    {JSON.stringify(
+                      selected.evidence.supporting_data ?? selected.evidence,
+                      null,
+                      2,
+                    )}
                   </pre>
                 </div>
+
+                {/* Durum Güncelleme */}
+                {canEditAssets && (
+                  <div className="border-t border-[#E2E8F0] pt-3">
+                    <Field label="Çözüm / İnceleme Notu">
+                      <Input
+                        placeholder="Örn: Bakım ekibi PLC erişimini doğruladı..."
+                        value={note}
+                        onChange={(e) => setNote(e.target.value)}
+                      />
+                    </Field>
+                    <div className="mt-2.5 flex flex-wrap gap-1.5">
+                      {(
+                        ["open", "investigating", "accepted", "resolved", "false_positive"] as RiskStatus[]
+                      ).map((st) => (
+                        <Button
+                          key={st}
+                          size="sm"
+                          variant={selected.status === st ? "primary" : "secondary"}
+                          disabled={statusMut.isPending || selected.status === st}
+                          onClick={() =>
+                            statusMut.mutate({
+                              id: selected.id,
+                              status: st,
+                              resolution_note: note,
+                            })
+                          }
+                        >
+                          {RISK_STATUS_LABEL[st]}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </Card>

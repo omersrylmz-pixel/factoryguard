@@ -3,6 +3,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router";
 import {
   ASSET_TYPE_LABEL,
+  Badge,
   Button,
   Card,
   CRITICALITY_LABEL,
@@ -11,7 +12,10 @@ import {
   ErrorBox,
   Field,
   Input,
+  PageHeader,
+  ProtocolBadge,
   Select,
+  StatCard,
   formatDate,
 } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
@@ -32,10 +36,7 @@ export default function AssetsPage() {
   const qc = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // Görünüm sekmeleri (Dragos ASSET INVENTORY / ZONES + MON5 Summary / Detail)
   const [activeTab, setActiveTab] = useState<"inventory" | "zones">("inventory");
-  const [viewMode, setViewMode] = useState<"detail" | "summary">("detail");
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [rowsPerPage, setRowsPerPage] = useState(15);
   const [pageIdx, setPageIdx] = useState(1);
@@ -117,18 +118,6 @@ export default function AssetsPage() {
     },
   });
 
-  const quickVerifyOneMut = useMutation({
-    mutationFn: (assetId: string) =>
-      api(`/assets/${assetId}`, { method: "PATCH", body: { is_verified: true } }),
-    onSuccess: async () => {
-      setOpenMenuId(null);
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ["assets", activeOrg?.id] }),
-        qc.invalidateQueries({ queryKey: ["risks", activeOrg?.id] }),
-      ]);
-    },
-  });
-
   const sites = sitesQuery.data ?? [];
   const zones = zonesQuery.data ?? [];
   const assets = assetsQuery.data?.items ?? [];
@@ -137,6 +126,10 @@ export default function AssetsPage() {
 
   const verifiedCount = assets.filter((a) => a.is_verified).length;
   const unverifiedCount = assets.length - verifiedCount;
+  const otDeviceCount = assets.filter(
+    (a) => (a.observed_protocols ?? []).length > 0 || ["plc", "hmi", "scada_server"].includes(a.asset_type),
+  ).length;
+  const highCritAssets = assets.filter((a) => a.criticality === "critical" || a.criticality === "high").length;
 
   // Sayfalama
   const totalPages = Math.max(1, Math.ceil(assets.length / rowsPerPage));
@@ -144,12 +137,12 @@ export default function AssetsPage() {
   const startOffset = (safePage - 1) * rowsPerPage;
   const pagedAssets = assets.slice(startOffset, startOffset + rowsPerPage);
 
-  // Aktif filtre rozetleri (Dragos tarzı)
+  // Aktif filtre rozetleri
   const activeFilterChips: { key: string; label: string; clear: () => void }[] = [];
   if (q.trim()) {
     activeFilterChips.push({
       key: "q",
-      label: `Search = "${q.trim()}"`,
+      label: `Arama: "${q.trim()}"`,
       clear: () => {
         setQ("");
         setSearchParams({});
@@ -159,14 +152,14 @@ export default function AssetsPage() {
   if (assetType) {
     activeFilterChips.push({
       key: "type",
-      label: `Type = ${ASSET_TYPE_LABEL[assetType]}`,
+      label: `Tür: ${ASSET_TYPE_LABEL[assetType]}`,
       clear: () => setAssetType(""),
     });
   }
   if (vendor.trim()) {
     activeFilterChips.push({
       key: "vendor",
-      label: `Hardware Vendor = ${vendor.trim()}`,
+      label: `Üretici: ${vendor.trim()}`,
       clear: () => setVendor(""),
     });
   }
@@ -174,21 +167,21 @@ export default function AssetsPage() {
     const zName = zones.find((z) => z.id === zoneId)?.name ?? zoneId;
     activeFilterChips.push({
       key: "zone",
-      label: `Zone = ${zName}`,
+      label: `Bölge: ${zName}`,
       clear: () => setZoneId(""),
     });
   }
   if (criticality) {
     activeFilterChips.push({
       key: "crit",
-      label: `Criticality = ${CRITICALITY_LABEL[criticality as Criticality]}`,
+      label: `Kritiklik: ${CRITICALITY_LABEL[criticality as Criticality]}`,
       clear: () => setCriticality(""),
     });
   }
   if (verified !== "") {
     activeFilterChips.push({
       key: "ver",
-      label: `Verified = ${verified}`,
+      label: `Doğrulama: ${verified === "true" ? "Doğrulanmış" : "Doğrulanmamış"}`,
       clear: () => setVerified(""),
     });
   }
@@ -204,587 +197,471 @@ export default function AssetsPage() {
   }
 
   return (
-    <div className="space-y-5">
-      {/* Dragos & MON5 Birleşik Üst Başlık */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#1E2D3B] text-white shadow-xs">
+    <div className="space-y-6">
+      <PageHeader
+        title="Device Inventory"
+        subtitle="Pasif trafik gözlemiyle keşfedilen veya CSV ile içe aktarılan merkezi endüstriyel cihaz envanteri"
+        breadcrumb="Device Inventory"
+        actions={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => void apiDownload("/reports/inventory?format=csv", "factoryguard-envanter.csv")}
+            >
+              ↓ CSV Dışa Aktar
+            </Button>
+            {canEditAssets && (
+              <Button variant="primary" onClick={() => setShowImport((v) => !v)}>
+                {showImport ? "İçe Aktarmayı Kapat" : "+ CSV Envanter İçe Aktar"}
+              </Button>
+            )}
+          </>
+        }
+      />
+
+      {/* TailAdmin 4 Sütunlu Envanter Özeti */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Toplam Envanter Varlığı"
+          value={total}
+          badge={`${sites.length} Fabrika`}
+          badgeTone="teal"
+          icon={
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="2" y="4" width="20" height="6" rx="1.5" />
+              <rect x="2" y="14" width="20" height="6" rx="1.5" />
+            </svg>
+          }
+        />
+        <StatCard
+          label="Endüstriyel OT Cihazı"
+          value={otDeviceCount}
+          badge="Modbus / S7 / ENIP"
+          badgeTone="teal"
+          icon={
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+            </svg>
+          }
+        />
+        <StatCard
+          label="Doğrulanmış Varlıklar"
+          value={verifiedCount}
+          badge={`%${total > 0 ? Math.round((verifiedCount / total) * 100) : 0} Tamamlandı`}
+          badgeTone="emerald"
+          icon={
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+              <polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
+          }
+        />
+        <StatCard
+          label="Doğrulama Bekleyen / Kritik"
+          value={`${unverifiedCount} / ${highCritAssets}`}
+          badge={unverifiedCount > 0 ? "İnceleme Gerekli" : "Tamamı Doğrulandı"}
+          badgeTone={unverifiedCount > 0 ? "amber" : "teal"}
+          icon={
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="12" cy="12" r="10" />
-              <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
-          </span>
-          <div>
-            <h1 className="text-2xl font-light tracking-tight text-slate-900">Asset Inventory</h1>
-            <p className="text-xs text-slate-500">
-              {total} assets discovered · {verifiedCount} verified · {unverifiedCount} unverified
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Summary / Detail Toggle (MON5) */}
-          <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-xs">
-            <button
-              type="button"
-              onClick={() => setViewMode("summary")}
-              className={`rounded-md px-3 py-1 font-semibold ${
-                viewMode === "summary" ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              Summary
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("detail")}
-              className={`rounded-md px-3 py-1 font-semibold ${
-                viewMode === "detail" ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              Detail
-            </button>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => void apiDownload("/reports/inventory?format=csv", "factoryguard-inventory.csv")}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            ↓ Export
-          </button>
-        </div>
+          }
+        />
       </div>
 
-      {/* Dragos Sekme Çubuğu: ASSET INVENTORY | ZONES */}
-      <div className="rounded-xl border border-slate-200 bg-white shadow-2xs">
-        <div className="grid grid-cols-2 border-b border-slate-200 text-center text-xs font-bold tracking-wider uppercase">
-          <button
-            type="button"
-            onClick={() => setActiveTab("inventory")}
-            className={`py-3.5 transition ${
-              activeTab === "inventory"
-                ? "border-b-2 border-[#2B7CB3] text-[#2B7CB3] bg-slate-50/40"
-                : "text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            ASSET INVENTORY ({total})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("zones")}
-            className={`py-3.5 transition ${
-              activeTab === "zones"
-                ? "border-b-2 border-[#2B7CB3] text-[#2B7CB3] bg-slate-50/40"
-                : "text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            ZONES & PURDUE LEVELS ({zones.length})
-          </button>
+      {showImport && canEditAssets && (
+        <Card title="CSV ile Envanter İçe Aktar" subtitle="Mevcut fabrika varlık listesini toplu olarak içe aktarın">
+          <form onSubmit={handleImport} className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <Field label="Hedef Fabrika *">
+                <Select value={effectiveSiteId} onChange={(e) => setImportSiteId(e.target.value)}>
+                  {sites.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="CSV Dosyası Seç">
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="w-full text-xs text-[#64748B] file:mr-3 file:rounded-[4px] file:border-0 file:bg-[#F1F5F9] file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-[#1C2434]"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) file.text().then((t) => setCsvContent(t));
+                  }}
+                />
+              </Field>
+            </div>
+            <Field label="CSV İçeriği">
+              <textarea
+                rows={4}
+                className="w-full rounded-[4px] border border-[#E2E8F0] p-2.5 font-mono text-xs focus:border-[#0D9488] focus:outline-none"
+                placeholder={"name,ip_address,mac_address,hostname,asset_type,vendor,model,firmware_version,zone,criticality,is_verified\nPLC-01,192.168.10.20,00:11:22:33:44:20,plc01,plc,Siemens,S7-1500,V2.9,Üretim Hattı,high,true"}
+                value={csvContent}
+                onChange={(e) => setCsvContent(e.target.value)}
+              />
+            </Field>
+            <ErrorBox error={importMut.error} />
+            {importResult && (
+              <div className="rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] p-3 text-xs">
+                <div className="font-semibold text-[#1C2434]">
+                  İşlenen: {importResult.processed_rows} · Yeni: {importResult.created} · Güncellenen:{" "}
+                  {importResult.updated} · Hatalı: {importResult.errors.length}
+                </div>
+              </div>
+            )}
+            <Button type="submit" disabled={importMut.isPending || !csvContent.trim()}>
+              {importMut.isPending ? "İçe Aktarılıyor…" : "CSV'yi İçe Aktar"}
+            </Button>
+          </form>
+        </Card>
+      )}
+
+      {/* TailAdmin Envanter Tablo Kartı */}
+      <Card noPadding>
+        {/* Üst Sekme ve Filtre Araç Çubuğu */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E2E8F0] px-5 py-3.5">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab("inventory")}
+              className={`rounded-[4px] px-3 py-1.5 text-xs font-semibold transition ${
+                activeTab === "inventory"
+                  ? "bg-[#1C2434] text-white"
+                  : "text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#1C2434]"
+              }`}
+            >
+              Cihaz Listesi ({total})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("zones")}
+              className={`rounded-[4px] px-3 py-1.5 text-xs font-semibold transition ${
+                activeTab === "zones"
+                  ? "bg-[#1C2434] text-white"
+                  : "text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#1C2434]"
+              }`}
+            >
+              Bölgeler & Purdue Katmanları ({zones.length})
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="w-60">
+              <Input
+                value={q}
+                onChange={(e) => {
+                  setQ(e.target.value);
+                  setPageIdx(1);
+                }}
+                placeholder="IP, MAC, üretici, model ara..."
+              />
+            </div>
+            <Button
+              variant={showFilters ? "outline" : "secondary"}
+              onClick={() => setShowFilters((v) => !v)}
+            >
+              Filtreler ({activeFilterChips.length}) ▾
+            </Button>
+            {canEditAssets && (
+              <Button
+                variant="secondary"
+                disabled={bulkVerifyMut.isPending}
+                onClick={() => bulkVerifyMut.mutate(selectedIds.length > 0 ? selectedIds : undefined)}
+              >
+                {bulkVerifyMut.isPending
+                  ? "Doğrulanıyor…"
+                  : selectedIds.length > 0
+                    ? `✓ Seçili ${selectedIds.length} Cihazı Doğrula`
+                    : "✓ Yerel Cihazları Toplu Doğrula"}
+              </Button>
+            )}
+          </div>
         </div>
 
-        {/* MON5 Özet Kartları (Summary seçildiğinde görünür) */}
-        {viewMode === "summary" && (
-          <div className="grid grid-cols-1 gap-4 border-b border-slate-200 bg-slate-50/60 p-4 sm:grid-cols-4">
-            <div className="rounded-lg border border-slate-200 bg-white p-3.5">
-              <div className="text-[10px] font-mono font-bold uppercase text-slate-400">TOTAL ASSETS</div>
-              <div className="mt-1 text-2xl font-extrabold text-slate-900">{total}</div>
-              <div className="text-xs text-slate-500">Pasif keşfedilen varlıklar</div>
-            </div>
-            <div className="rounded-lg border-2 border-[#EA580C]/70 bg-orange-50/60 p-3.5">
-              <div className="text-[10px] font-mono font-bold uppercase text-[#EA580C]">TYPE_PLC / OT</div>
-              <div className="mt-1 text-2xl font-extrabold text-slate-900">
-                {assets.filter((a) => (a.observed_protocols ?? []).length > 0 || a.asset_type === "plc").length}
-              </div>
-              <div className="text-xs font-medium text-[#EA580C]">Endüstriyel protokol konuşan</div>
-            </div>
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3.5">
-              <div className="text-[10px] font-mono font-bold uppercase text-emerald-700">VERIFIED</div>
-              <div className="mt-1 text-2xl font-extrabold text-emerald-800">{verifiedCount}</div>
-              <div className="text-xs text-emerald-700">Envanterde doğrulandı</div>
-            </div>
-            <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3.5">
-              <div className="text-[10px] font-mono font-bold uppercase text-amber-800">UNVERIFIED</div>
-              <div className="mt-1 text-2xl font-extrabold text-amber-900">{unverifiedCount}</div>
-              <div className="text-xs text-amber-800">İnceleme / doğrulama bekliyor</div>
-            </div>
+        {/* Açılır Detaylı Filtre Çekmecesi */}
+        {showFilters && (
+          <div className="grid grid-cols-1 gap-3 border-b border-[#E2E8F0] bg-[#F8FAFC] px-5 py-4 sm:grid-cols-3 lg:grid-cols-6">
+            <Field label="IP Adresi">
+              <Input placeholder="192.168.10..." value={ip} onChange={(e) => setIp(e.target.value)} />
+            </Field>
+            <Field label="MAC Adresi">
+              <Input placeholder="00:1b:1b..." value={mac} onChange={(e) => setMac(e.target.value)} />
+            </Field>
+            <Field label="Cihaz Türü">
+              <Select value={assetType} onChange={(e) => setAssetType(e.target.value)}>
+                <option value="">Tümü</option>
+                {(Object.keys(ASSET_TYPE_LABEL) as AssetType[]).map((t) => (
+                  <option key={t} value={t}>
+                    {ASSET_TYPE_LABEL[t]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Üretici">
+              <Input placeholder="Siemens, Omron…" value={vendor} onChange={(e) => setVendor(e.target.value)} />
+            </Field>
+            <Field label="Bölge (Zone)">
+              <Select value={zoneId} onChange={(e) => setZoneId(e.target.value)}>
+                <option value="">Tümü</option>
+                {zones.map((z) => (
+                  <option key={z.id} value={z.id}>
+                    {z.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Doğrulama">
+              <Select value={verified} onChange={(e) => setVerified(e.target.value)}>
+                <option value="">Tümü</option>
+                <option value="true">Doğrulanmış</option>
+                <option value="false">Doğrulanmamış</option>
+              </Select>
+            </Field>
           </div>
         )}
+
+        {activeFilterChips.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-[#E2E8F0] bg-white px-5 py-2.5">
+            {activeFilterChips.map((chip) => (
+              <span
+                key={chip.key}
+                className="inline-flex items-center gap-1.5 rounded-[3px] border border-[#E2E8F0] bg-[#F8FAFC] px-2.5 py-0.5 text-xs font-medium text-[#1C2434]"
+              >
+                <span>{chip.label}</span>
+                <button
+                  type="button"
+                  onClick={chip.clear}
+                  className="text-[#64748B] hover:text-[#1C2434]"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                setQ("");
+                setIp("");
+                setMac("");
+                setAssetType("");
+                setVendor("");
+                setZoneId("");
+                setCriticality("");
+                setVerified("");
+                setSearchParams({});
+              }}
+              className="text-xs font-semibold text-[#0D9488] hover:underline"
+            >
+              Filtreleri Temizle
+            </button>
+          </div>
+        )}
+
+        {bulkVerifyNotice && (
+          <div className="mx-5 mt-3 rounded-[4px] border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+            {bulkVerifyNotice}
+          </div>
+        )}
+
+        <div className="px-5">
+          <ErrorBox error={assetsQuery.error || bulkVerifyMut.error} />
+        </div>
 
         {activeTab === "zones" ? (
-          <div className="p-5">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {zones.map((z) => {
-                const zAssets = assets.filter((a) => a.zone_id === z.id);
-                return (
-                  <div
-                    key={z.id}
-                    className="flex flex-col justify-between rounded-xl border border-slate-200 bg-slate-50/50 p-4"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-slate-900">{z.name}</span>
-                        <CriticalityBadge value={z.criticality} />
-                      </div>
-                      <p className="mt-1 text-xs text-slate-500">
-                        {z.description || "Endüstriyel üretim bölgesi"}
-                      </p>
-                    </div>
-                    <div className="mt-4 flex items-center justify-between border-t border-slate-200 pt-2.5 text-xs">
-                      <span className="font-mono font-bold text-slate-800">{zAssets.length} cihaz</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setZoneId(z.id);
-                          setActiveTab("inventory");
-                        }}
-                        className="font-semibold text-[#2B7CB3] hover:underline"
-                      >
-                        Bölgedeki Cihazları Filtrele →
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ) : (
-          <div className="p-4 space-y-4">
-            {/* Dragos Araç Çubuğu: Actions, Filters, IP/CIDR Search, Settings/Import */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                {canEditAssets && (
-                  <button
-                    type="button"
-                    disabled={bulkVerifyMut.isPending}
-                    onClick={() => bulkVerifyMut.mutate(selectedIds.length > 0 ? selectedIds : undefined)}
-                    className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                  >
-                    <span>
-                      {bulkVerifyMut.isPending
-                        ? "Doğrulanıyor…"
-                        : selectedIds.length > 0
-                          ? `Actions · Seçili ${selectedIds.length} Cihazı Doğrula`
-                          : "Actions · Tüm Yerel Cihazları Doğrula"}
-                    </span>
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => setShowFilters((v) => !v)}
-                  className={`inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-semibold ${
-                    showFilters
-                      ? "border-[#2B7CB3] bg-sky-50 text-[#2B7CB3]"
-                      : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                  }`}
+          <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2 lg:grid-cols-3">
+            {zones.map((z) => {
+              const zAssets = assets.filter((a) => a.zone_id === z.id);
+              return (
+                <div
+                  key={z.id}
+                  className="flex flex-col justify-between rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] p-4"
                 >
-                  <span>Filters ({activeFilterChips.length}) ▾</span>
-                </button>
-
-                <label className="hidden items-center gap-1.5 text-xs text-slate-600 sm:inline-flex">
-                  <input
-                    type="checkbox"
-                    checked={verified === "false"}
-                    onChange={(e) => setVerified(e.target.checked ? "false" : "")}
-                  />
-                  <span>Yalnızca doğrulanmamış cihazlar</span>
-                </label>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="relative w-64">
-                  <input
-                    type="text"
-                    value={q}
-                    onChange={(e) => {
-                      setQ(e.target.value);
-                      setPageIdx(1);
-                    }}
-                    placeholder="e.g. 10.0.0.8, Siemens, PLC, modbus..."
-                    className="w-full rounded border border-slate-300 bg-white py-1.5 pr-3 pl-3 text-xs text-slate-800 placeholder:text-slate-400 focus:border-[#2B7CB3] focus:outline-none"
-                  />
-                </div>
-                {canEditAssets && (
-                  <button
-                    type="button"
-                    onClick={() => setShowImport((v) => !v)}
-                    className="inline-flex items-center gap-1.5 rounded bg-[#2B7CB3] px-3 py-1.5 text-xs font-bold tracking-wide text-white uppercase shadow-2xs hover:bg-[#236593]"
-                  >
-                    <span>⚙ CSV IMPORT</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Aktif Filtre Rozetleri (Dragos `Hardware Firmware = true ×` tarzı) */}
-            {activeFilterChips.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2">
-                {activeFilterChips.map((chip) => (
-                  <span
-                    key={chip.key}
-                    className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700"
-                  >
-                    <span>{chip.label}</span>
-                    <button
-                      type="button"
-                      onClick={chip.clear}
-                      className="ml-1 rounded-full text-slate-500 hover:text-slate-900"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setQ("");
-                    setIp("");
-                    setMac("");
-                    setAssetType("");
-                    setVendor("");
-                    setZoneId("");
-                    setCriticality("");
-                    setVerified("");
-                    setSearchParams({});
-                  }}
-                  className="text-xs font-semibold text-[#2B7CB3] hover:underline"
-                >
-                  Clear all
-                </button>
-              </div>
-            )}
-
-            {/* Açılır Detaylı Filtre Çekmecesi */}
-            {showFilters && (
-              <div className="grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3.5 sm:grid-cols-3 lg:grid-cols-6">
-                <Field label="IP Adresi">
-                  <Input placeholder="192.168.10..." value={ip} onChange={(e) => setIp(e.target.value)} />
-                </Field>
-                <Field label="MAC Adresi">
-                  <Input placeholder="00:1b:1b..." value={mac} onChange={(e) => setMac(e.target.value)} />
-                </Field>
-                <Field label="Cihaz Türü">
-                  <Select value={assetType} onChange={(e) => setAssetType(e.target.value)}>
-                    <option value="">Tümü</option>
-                    {(Object.keys(ASSET_TYPE_LABEL) as AssetType[]).map((t) => (
-                      <option key={t} value={t}>
-                        {ASSET_TYPE_LABEL[t]}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-                <Field label="Üretici (Vendor)">
-                  <Input placeholder="Siemens, Omron…" value={vendor} onChange={(e) => setVendor(e.target.value)} />
-                </Field>
-                <Field label="Bölge (Zone)">
-                  <Select value={zoneId} onChange={(e) => setZoneId(e.target.value)}>
-                    <option value="">Tümü</option>
-                    {zones.map((z) => (
-                      <option key={z.id} value={z.id}>
-                        {z.name}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-                <Field label="Doğrulama Durumu">
-                  <Select value={verified} onChange={(e) => setVerified(e.target.value)}>
-                    <option value="">Tümü</option>
-                    <option value="true">Doğrulanmış</option>
-                    <option value="false">Doğrulanmamış</option>
-                  </Select>
-                </Field>
-              </div>
-            )}
-
-            {bulkVerifyNotice && (
-              <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
-                {bulkVerifyNotice}
-              </div>
-            )}
-
-            {showImport && canEditAssets && (
-              <Card title="CSV ile Envanter İçe Aktar">
-                <form onSubmit={handleImport} className="space-y-3">
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <Field label="Hedef Fabrika *">
-                      <Select value={effectiveSiteId} onChange={(e) => setImportSiteId(e.target.value)}>
-                        {sites.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </Select>
-                    </Field>
-                    <Field label="CSV Dosyası Seç">
-                      <input
-                        type="file"
-                        accept=".csv,text/csv"
-                        className="w-full text-xs text-slate-600 file:mr-3 file:rounded file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-medium"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) file.text().then((t) => setCsvContent(t));
-                        }}
-                      />
-                    </Field>
-                  </div>
-                  <Field label="CSV İçeriği">
-                    <textarea
-                      rows={4}
-                      className="w-full rounded-md border border-slate-300 p-2 font-mono text-xs"
-                      placeholder={"name,ip_address,mac_address,hostname,asset_type,vendor,model,firmware_version,zone,criticality,is_verified\nPLC-01,192.168.10.20,00:11:22:33:44:20,plc01,plc,Siemens,S7-1500,V2.9,Üretim Hattı,high,true"}
-                      value={csvContent}
-                      onChange={(e) => setCsvContent(e.target.value)}
-                    />
-                  </Field>
-                  <ErrorBox error={importMut.error} />
-                  {importResult && (
-                    <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs">
-                      <div className="font-medium text-slate-800">
-                        İşlenen: {importResult.processed_rows} · Yeni: {importResult.created} · Güncellenen:{" "}
-                        {importResult.updated} · Hatalı: {importResult.errors.length}
-                      </div>
-                    </div>
-                  )}
-                  <Button type="submit" disabled={importMut.isPending || !csvContent.trim()}>
-                    {importMut.isPending ? "İçe Aktarılıyor…" : "CSV'yi İçe Aktar"}
-                  </Button>
-                </form>
-              </Card>
-            )}
-
-            <ErrorBox error={assetsQuery.error || bulkVerifyMut.error} />
-
-            {/* Dragos Tarzı Koyu Lacivert Başlıklı (#1E2D3B) Zebra Çizgili Envanter Tablosu */}
-            {assetsQuery.isLoading ? (
-              <Empty>Yükleniyor…</Empty>
-            ) : assets.length === 0 ? (
-              <Empty>Filtrelere uygun cihaz bulunamadı.</Empty>
-            ) : (
-              <div className="overflow-x-auto rounded border border-slate-200">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-[#1E2D3B] text-[11px] font-semibold tracking-wider text-white uppercase">
-                    <tr>
-                      <th className="w-8 px-3 py-3">
-                        <input
-                          type="checkbox"
-                          checked={pagedAssets.length > 0 && pagedAssets.every((a) => selectedIds.includes(a.id))}
-                          onChange={(e) =>
-                            setSelectedIds(e.target.checked ? pagedAssets.map((a) => a.id) : [])
-                          }
-                        />
-                      </th>
-                      <th className="px-3 py-3">Model / Device</th>
-                      <th className="px-3 py-3">IP / MAC</th>
-                      <th className="px-3 py-3">Firmware</th>
-                      <th className="px-3 py-3">Purdue / Series ↓</th>
-                      <th className="px-3 py-3">Type</th>
-                      <th className="px-3 py-3">Class & Protocols</th>
-                      <th className="px-3 py-3">Hardware Vendor</th>
-                      <th className="px-3 py-3">Zone</th>
-                      <th className="px-3 py-3">Last Seen</th>
-                      <th className="px-3 py-3 text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200">
-                    {pagedAssets.map((a, idx) => {
-                      const zone = zones.find((z) => z.id === a.zone_id);
-                      const isChecked = selectedIds.includes(a.id);
-                      return (
-                        <tr
-                          key={a.id}
-                          className={`transition ${
-                            idx % 2 === 1 ? "bg-slate-50/90" : "bg-white"
-                          } hover:bg-sky-50/60`}
-                        >
-                          <td className="px-3 py-2.5">
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => toggleSelect(a.id)}
-                            />
-                          </td>
-                          <td className="px-3 py-2.5">
-                            <Link
-                              to={`/assets/${a.id}`}
-                              className="font-semibold text-[#1E2D3B] hover:text-[#2B7CB3] hover:underline"
-                            >
-                              {a.name || a.model || a.hostname || a.ip_address || "Unknown Device"}
-                            </Link>
-                            {a.hostname && <div className="text-[11px] text-slate-500">{a.hostname}</div>}
-                          </td>
-                          <td className="px-3 py-2.5 font-mono">
-                            <div className="flex items-center gap-1.5 font-semibold text-slate-900">
-                              <span>{a.ip_address ?? "—"}</span>
-                              {a.is_external && (
-                                <span className="rounded bg-red-100 px-1.5 py-0.5 font-sans text-[10px] font-bold text-red-700">
-                                  WAN
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-[11px] text-slate-500">{a.mac_address ?? "—"}</div>
-                          </td>
-                          <td className="px-3 py-2.5 font-mono text-slate-700">
-                            {a.firmware_version || "—"}
-                          </td>
-                          <td className="px-3 py-2.5 text-slate-700">
-                            <span className="font-medium">{a.purdue_level ?? "L1/L2"}</span>
-                          </td>
-                          <td className="px-3 py-2.5">
-                            <span className="inline-flex items-center gap-1.5 font-medium text-slate-800">
-                              <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-slate-700 font-mono text-[9px] font-bold text-white">
-                                {a.asset_type === "plc"
-                                  ? "PLC"
-                                  : a.asset_type === "hmi"
-                                    ? "HMI"
-                                    : a.asset_type === "scada_server"
-                                      ? "SCD"
-                                      : "DEV"}
-                              </span>
-                              <span>{ASSET_TYPE_LABEL[a.asset_type]}</span>
-                            </span>
-                          </td>
-                          <td className="px-3 py-2.5">
-                            <div className="text-slate-800">{a.classification_label}</div>
-                            {a.observed_protocols && a.observed_protocols.length > 0 && (
-                              <div className="mt-1 flex flex-wrap gap-1">
-                                {a.observed_protocols.map((p) => (
-                                  <span
-                                    key={p}
-                                    className="rounded bg-sky-100 px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase text-[#1E2D3B]"
-                                  >
-                                    {p}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-3 py-2.5 text-slate-800">
-                            <div className="font-medium">{a.vendor || a.vendor_status_label}</div>
-                            <div className="mt-0.5 flex items-center gap-1.5">
-                              <CriticalityBadge value={a.criticality} />
-                              <span
-                                className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                                  a.is_verified
-                                    ? "bg-emerald-100 text-emerald-800"
-                                    : "bg-amber-100 text-amber-900"
-                                }`}
-                              >
-                                {a.is_verified ? "Verified" : `%${Math.round(a.confidence * 100)}`}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-3 py-2.5 text-slate-700">{zone?.name ?? "Unassigned"}</td>
-                          <td className="px-3 py-2.5 whitespace-nowrap text-slate-600">
-                            {formatDate(a.last_seen_at)}
-                          </td>
-                          <td className="relative px-3 py-2.5 text-right">
-                            <button
-                              type="button"
-                              onClick={() => setOpenMenuId(openMenuId === a.id ? null : a.id)}
-                              className="rounded px-2 py-1 font-bold text-slate-600 hover:bg-slate-200"
-                              title="Actions"
-                            >
-                              ⋮
-                            </button>
-                            {openMenuId === a.id && (
-                              <div className="absolute right-4 z-30 mt-1 w-48 rounded-md border border-slate-200 bg-white py-1 text-left text-xs shadow-lg">
-                                <Link
-                                  to={`/assets/${a.id}`}
-                                  className="block px-3 py-2 font-medium text-slate-800 hover:bg-slate-100"
-                                >
-                                  Edit Asset Attributes
-                                </Link>
-                                <Link
-                                  to="/network"
-                                  className="block px-3 py-2 text-slate-700 hover:bg-slate-100"
-                                >
-                                  Pivot → Interactive Map
-                                </Link>
-                                <Link
-                                  to="/risks"
-                                  className="block px-3 py-2 text-slate-700 hover:bg-slate-100"
-                                >
-                                  View Risk Notifications
-                                </Link>
-                                {canEditAssets && !a.is_verified && (
-                                  <button
-                                    type="button"
-                                    onClick={() => quickVerifyOneMut.mutate(a.id)}
-                                    className="block w-full border-t border-slate-100 px-3 py-2 text-left font-semibold text-emerald-700 hover:bg-emerald-50"
-                                  >
-                                    ✓ Mark Asset Verified
-                                  </button>
-                                )}
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-
-                {/* Dragos Tarzı Sayfalama Alt Çubuğu */}
-                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-600">
-                  <div className="flex items-center gap-2">
-                    <span>Rows per page:</span>
-                    <select
-                      value={rowsPerPage}
-                      onChange={(e) => {
-                        setRowsPerPage(Number(e.target.value));
-                        setPageIdx(1);
-                      }}
-                      className="rounded border border-slate-300 px-1.5 py-0.5 text-xs"
-                    >
-                      <option value={10}>10</option>
-                      <option value={15}>15</option>
-                      <option value={50}>50</option>
-                    </select>
-                  </div>
-
                   <div>
-                    Displaying {assets.length === 0 ? 0 : startOffset + 1}–
-                    {Math.min(startOffset + rowsPerPage, assets.length)} of {assets.length} rows
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-[#1C2434]">{z.name}</span>
+                      <CriticalityBadge value={z.criticality} />
+                    </div>
+                    <p className="mt-1 text-xs text-[#64748B]">
+                      {z.description || "Endüstriyel üretim bölgesi"}
+                    </p>
                   </div>
-
-                  <div className="flex items-center gap-1">
+                  <div className="mt-4 flex items-center justify-between border-t border-[#E2E8F0] pt-3 text-xs">
+                    <span className="font-mono font-semibold text-[#1C2434]">{zAssets.length} cihaz</span>
                     <button
                       type="button"
-                      disabled={safePage <= 1}
-                      onClick={() => setPageIdx((p) => Math.max(1, p - 1))}
-                      className="rounded border border-slate-300 px-2 py-1 disabled:opacity-40"
+                      onClick={() => {
+                        setZoneId(z.id);
+                        setActiveTab("inventory");
+                      }}
+                      className="font-semibold text-[#0D9488] hover:underline"
                     >
-                      ‹
-                    </button>
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((pNum) => (
-                      <button
-                        key={pNum}
-                        type="button"
-                        onClick={() => setPageIdx(pNum)}
-                        className={`rounded border px-2.5 py-1 font-semibold ${
-                          pNum === safePage
-                            ? "border-[#2B7CB3] bg-sky-50 text-[#2B7CB3]"
-                            : "border-slate-300 bg-white text-slate-700"
-                        }`}
-                      >
-                        {pNum}
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      disabled={safePage >= totalPages}
-                      onClick={() => setPageIdx((p) => Math.min(totalPages, p + 1))}
-                      className="rounded border border-slate-300 px-2 py-1 disabled:opacity-40"
-                    >
-                      ›
+                      Bölgedeki Cihazları Gör →
                     </button>
                   </div>
                 </div>
+              );
+            })}
+          </div>
+        ) : assetsQuery.isLoading ? (
+          <Empty>Yükleniyor…</Empty>
+        ) : assets.length === 0 ? (
+          <Empty>Filtrelere uygun cihaz bulunamadı.</Empty>
+        ) : (
+          <div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold text-[#64748B] uppercase">
+                  <tr>
+                    <th className="w-8 px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={pagedAssets.length > 0 && pagedAssets.every((a) => selectedIds.includes(a.id))}
+                        onChange={(e) =>
+                          setSelectedIds(e.target.checked ? pagedAssets.map((a) => a.id) : [])
+                        }
+                      />
+                    </th>
+                    <th className="px-4 py-3">Cihaz / Hostname</th>
+                    <th className="px-4 py-3">IP & MAC Adresi</th>
+                    <th className="px-4 py-3">Tür & Purdue Katmanı</th>
+                    <th className="px-4 py-3">Kanıta Dayalı Sınıflandırma</th>
+                    <th className="px-4 py-3">Üretici / Model / FW</th>
+                    <th className="px-4 py-3">Bölge & Kritiklik</th>
+                    <th className="px-4 py-3">Güven / Durum</th>
+                    <th className="px-4 py-3">Son Görülme</th>
+                    <th className="px-4 py-3 text-right">İşlem</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E2E8F0]">
+                  {pagedAssets.map((a) => {
+                    const zone = zones.find((z) => z.id === a.zone_id);
+                    const isChecked = selectedIds.includes(a.id);
+                    return (
+                      <tr key={a.id} className="transition-colors hover:bg-[#F8FAFC]">
+                        <td className="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => toggleSelect(a.id)}
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <Link
+                            to={`/assets/${a.id}`}
+                            className="font-semibold text-[#1C2434] hover:text-[#0D9488] hover:underline"
+                          >
+                            {a.name || a.model || a.hostname || a.ip_address || "İsimsiz Cihaz"}
+                          </Link>
+                          {a.hostname && <div className="font-mono text-[11px] text-[#64748B]">{a.hostname}</div>}
+                        </td>
+                        <td className="px-4 py-3 font-mono">
+                          <div className="flex items-center gap-1.5 font-semibold text-[#1C2434]">
+                            <span>{a.ip_address ?? "—"}</span>
+                            {a.is_external && <Badge variant="danger">Dış Ağ</Badge>}
+                          </div>
+                          <div className="text-[11px] text-[#64748B]">{a.mac_address ?? "—"}</div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-[#1C2434]">{ASSET_TYPE_LABEL[a.asset_type]}</div>
+                          <div className="text-[11px] text-[#64748B]">{a.purdue_level ?? "L1/L2"}</div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-[#1C2434]">{a.classification_label}</div>
+                          {a.observed_protocols && a.observed_protocols.length > 0 && (
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {a.observed_protocols.map((p) => (
+                                <ProtocolBadge key={p} protocol={p} />
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-[#1C2434]">{a.vendor || a.vendor_status_label}</div>
+                          {(a.model || a.firmware_version) && (
+                            <div className="font-mono text-[11px] text-[#64748B]">
+                              {a.model ?? "—"} {a.firmware_version ? `(${a.firmware_version})` : ""}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="mb-1 text-[#1C2434]">{zone?.name ?? "Atanmadı"}</div>
+                          <CriticalityBadge value={a.criticality} />
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge variant={a.is_verified ? "success" : "warning"}>
+                            {a.is_verified ? "✓ Doğrulandı" : `Doğrulanmadı (%${Math.round(a.confidence * 100)})`}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-[#64748B]">
+                          {formatDate(a.last_seen_at)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Link to={`/assets/${a.id}`}>
+                            <Button variant="secondary" size="sm">
+                              Detay
+                            </Button>
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* TailAdmin Sayfalama Alt Çubuğu */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#E2E8F0] bg-white px-5 py-3 text-xs text-[#64748B]">
+              <div className="flex items-center gap-2">
+                <span>Sayfa başına satır:</span>
+                <select
+                  value={rowsPerPage}
+                  onChange={(e) => {
+                    setRowsPerPage(Number(e.target.value));
+                    setPageIdx(1);
+                  }}
+                  className="rounded-[4px] border border-[#E2E8F0] px-2 py-1 text-xs text-[#1C2434]"
+                >
+                  <option value={10}>10</option>
+                  <option value={15}>15</option>
+                  <option value={50}>50</option>
+                </select>
               </div>
-            )}
+
+              <div>
+                Toplam <strong className="text-[#1C2434]">{assets.length}</strong> kayıttan{" "}
+                <strong className="text-[#1C2434]">
+                  {assets.length === 0 ? 0 : startOffset + 1}–{Math.min(startOffset + rowsPerPage, assets.length)}
+                </strong>{" "}
+                arası gösteriliyor
+              </div>
+
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={safePage <= 1}
+                  onClick={() => setPageIdx((p) => Math.max(1, p - 1))}
+                >
+                  ‹ Önceki
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={safePage >= totalPages}
+                  onClick={() => setPageIdx((p) => Math.min(totalPages, p + 1))}
+                >
+                  Sonraki ›
+                </Button>
+              </div>
+            </div>
           </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

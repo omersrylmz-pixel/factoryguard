@@ -1,6 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
-import { Card, CriticalityBadge, Empty, ErrorBox, formatDate } from "../components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  CriticalityBadge,
+  Empty,
+  ErrorBox,
+  PageHeader,
+  ProtocolBadge,
+  StatCard,
+  formatDate,
+} from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { api, apiDownload } from "../services/api";
 import type {
@@ -15,7 +26,7 @@ import type {
   Zone,
 } from "../types/api";
 
-const DONUT_COLORS = ["#EA580C", "#0284C7", "#16A34A", "#D97706", "#7C3AED", "#475569"];
+const CHART_PALETTE = ["#0D9488", "#1C2434", "#0284C7", "#D97706", "#64748B", "#E11D48"];
 
 export default function DashboardPage() {
   const { activeOrg, canAdmin } = useAuth();
@@ -63,52 +74,52 @@ export default function DashboardPage() {
   });
 
   const auditQuery = useQuery({
-    queryKey: ["audit-logs", activeOrg?.id, 10],
-    queryFn: () => api<Page<AuditLog>>("/audit-logs?limit=10"),
+    queryKey: ["audit-logs", activeOrg?.id, 8],
+    queryFn: () => api<Page<AuditLog>>("/audit-logs?limit=8"),
     enabled: !!activeOrg && canAdmin,
   });
 
   const assets = assetsQuery.data?.items ?? [];
   const totalAssets = assetsQuery.data?.total ?? assets.length;
   const risks = risksQuery.data?.items ?? [];
+  const totalOpenRisks = risksQuery.data?.total ?? risks.length;
   const edges = graphQuery.data?.edges ?? [];
   const sensors = sensorsQuery.data ?? [];
   const sites = sitesQuery.data ?? [];
   const zones = zonesQuery.data ?? [];
 
-  // MON5 tipi envanter kırılımları
+  const verifiedCount = assets.filter((a) => a.is_verified).length;
+  const unverifiedCount = assets.length - verifiedCount;
+  const highCritRisks = risks.filter((r) => r.severity === "critical" || r.severity === "high").length;
+  const connectedSensors = sensors.filter((s) => s.is_connected).length;
+  const crossZoneCount = edges.filter((e) => e.cross_zone).length;
+  const approvedFlowsCount = edges.filter((e) => e.is_baseline_approved).length;
+
+  // Purdue / Cihaz Sınıfı kırılımları
   const plcCount = assets.filter(
     (a) => a.asset_type === "plc" || (a.asset_type === "unknown_device" && (a.observed_protocols ?? []).includes("modbus")),
   ).length;
   const hmiScadaCount = assets.filter((a) =>
     ["hmi", "scada_server", "industrial_pc", "engineering_workstation"].includes(a.asset_type),
   ).length;
-  const switchSensorCount =
-    assets.filter((a) => a.asset_type === "network_device").length + sensors.length;
-  const itEndpointCount = Math.max(0, totalAssets - plcCount - hmiScadaCount);
+  const infraCount = assets.filter((a) =>
+    ["server", "network_device", "computer"].includes(a.asset_type),
+  ).length;
 
-  const verifiedCount = assets.filter((a) => a.is_verified).length;
-  const unverifiedCount = assets.filter((a) => !a.is_verified).length;
-  const assetsAtRiskIds = new Set(risks.map((r) => r.asset_id));
-  const atRiskDeviceCount = assetsAtRiskIds.size;
-
-  // En yüksek puanlı öncelikli bulgu (Attention required kartı için)
-  const topFinding = [...risks].sort((a, b) => b.score - a.score)[0] ?? null;
-
-  // VENDORS yatay çubuk grafiği (MON5 tarzı)
+  // Üretici dağılımı (gerçek veritabanı verisinden)
   const vendorCounts = new Map<string, number>();
   for (const a of assets) {
     const label = a.vendor
       ? a.vendor
       : a.vendor_status_label !== "Üretici bilgisi doğrulanmadı"
         ? a.vendor_status_label
-        : "Unverified / Unknown Vendor";
+        : "Üretici Doğrulanmadı (Pasif Gözlem)";
     vendorCounts.set(label, (vendorCounts.get(label) ?? 0) + 1);
   }
   const vendorRanking = Array.from(vendorCounts.entries()).sort((a, b) => b[1] - a[1]);
   const maxVendorCount = Math.max(1, vendorRanking[0]?.[1] ?? 1);
 
-  // OT PROTOCOLS halka (donut) grafiği (MON5 tarzı)
+  // Gözlemlenen protokol dağılımı (Donut grafiği için)
   const protoCounts = new Map<string, number>();
   for (const e of edges) {
     const p = (e.protocol || "unknown").toUpperCase();
@@ -117,9 +128,7 @@ export default function DashboardPage() {
   for (const a of assets) {
     for (const p of a.observed_protocols ?? []) {
       const up = p.toUpperCase();
-      if (!protoCounts.has(up)) {
-        protoCounts.set(up, 1);
-      }
+      if (!protoCounts.has(up)) protoCounts.set(up, 1);
     }
   }
   const protoList = Array.from(protoCounts.entries()).sort((a, b) => b[1] - a[1]);
@@ -128,253 +137,202 @@ export default function DashboardPage() {
     protoList.reduce((acc, [, v]) => acc + v, 0),
   );
 
-  // Allegro Packets tarzı Top Communicating IPs
-  const ipFlowStats = new Map<
-    string,
-    { id: string; ip: string; name: string; flows: number; connections: number; protocols: Set<string> }
-  >();
-  for (const e of edges) {
-    for (const [aid, ip, label] of [
-      [e.source_asset_id, e.source_ip ?? "—", e.source_label],
-      [e.target_asset_id, e.target_ip ?? "—", e.target_label],
-    ] as const) {
-      const cur = ipFlowStats.get(aid) ?? {
-        id: aid,
-        ip,
-        name: label,
-        flows: 0,
-        connections: 0,
-        protocols: new Set<string>(),
-      };
-      cur.flows += 1;
-      cur.connections += e.connection_count;
-      cur.protocols.add(e.protocol.toUpperCase());
-      ipFlowStats.set(aid, cur);
-    }
-  }
-  const topCommunicatingAssets = Array.from(ipFlowStats.values())
-    .sort((a, b) => b.connections - a.connections)
-    .slice(0, 6);
-
-  // SVG Donut dilim hesaplama
-  const radius = 54;
+  const radius = 52;
   const circumference = 2 * Math.PI * radius;
   let cumulativeOffset = 0;
 
+  const posture = postureQuery.data;
+  const postureTone =
+    !posture || posture.health_score >= 75
+      ? "teal"
+      : posture.health_score >= 45
+        ? "amber"
+        : "red";
+
   return (
     <div className="space-y-6">
-      {/* MON5 Üst Başlık ve Hızlı Aksiyonlar */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Assets & OT Security Overview</h1>
-          <p className="mt-0.5 text-xs text-slate-500">
-            {totalAssets} assets discovered · {verifiedCount} verified active · {atRiskDeviceCount} at risk ·{" "}
-            {edges.length} observed flows
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-xs">
-            <span className="rounded-md bg-slate-900 px-3 py-1 font-semibold text-white">Summary</span>
-            <Link to="/assets" className="rounded-md px-3 py-1 font-medium text-slate-600 hover:text-slate-900">
-              Detail
+      <PageHeader
+        title="Overview Dashboard"
+        subtitle={`${activeOrg?.name ?? ""} · Gerçek zamanlı OT varlık görünürlüğü, pasif protokol telemetrisi ve açıklanabilir risk özeti`}
+        breadcrumb="Overview"
+        actions={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => void apiDownload("/reports/inventory?format=csv", "factoryguard-envanter.csv")}
+            >
+              ↓ Envanter CSV
+            </Button>
+            <Link to="/sensors">
+              <Button variant="primary">PCAP / Zeek Analiz Et</Button>
             </Link>
-          </div>
-          <button
-            onClick={() => void apiDownload("/reports/inventory?format=csv", "factoryguard-inventory.csv")}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50"
-          >
-            <span>↓ Export CSV</span>
-          </button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {(sitesQuery.error || zonesQuery.error) && <ErrorBox error={sitesQuery.error ?? zonesQuery.error} />}
 
-      {/* MON5 Üst Satır: INVENTORY (2/3) + STATUS · LAST 24H (1/3) */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        {/* INVENTORY KARTI (MON5 Görsel 1) */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs lg:col-span-8">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">INVENTORY</span>
-            <Link to="/assets" className="text-xs font-semibold text-[#EA580C] hover:underline">
-              Tüm Envanter →
-            </Link>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2.5">
-            <span className="text-4xl font-extrabold tracking-tight text-slate-900">
-              {assetsQuery.isLoading ? "…" : totalAssets}
-            </span>
-            <span className="text-xs font-medium text-slate-400">total assets</span>
-          </div>
+      {/* 1. Satır: TailAdmin 4 Sütunlu KPI StatCard Izgarası */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          to="/assets"
+          label="Keşfedilen Toplam Cihaz"
+          value={assetsQuery.isLoading ? "…" : totalAssets}
+          badge={`${verifiedCount} Doğrulandı`}
+          badgeTone={unverifiedCount > 0 ? "amber" : "teal"}
+          subtext={`${unverifiedCount} doğrulanmamış`}
+          icon={
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="2" y="4" width="20" height="6" rx="1.5" />
+              <rect x="2" y="14" width="20" height="6" rx="1.5" />
+              <circle cx="6" cy="7" r="1" fill="currentColor" />
+              <circle cx="6" cy="17" r="1" fill="currentColor" />
+            </svg>
+          }
+        />
 
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {/* TYPE_PC / Endpoint */}
-            <Link
-              to="/assets"
-              className="rounded-xl border border-slate-200 bg-slate-50/50 p-3.5 transition hover:border-slate-300"
-            >
-              <div className="flex items-center gap-2 text-[10px] font-mono font-semibold uppercase text-slate-400">
-                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-white text-slate-600 shadow-2xs">
-                  💻
-                </span>
-                <span>TYPE_ENDPOINT</span>
-              </div>
-              <div className="mt-3 text-2xl font-extrabold text-slate-900">{itEndpointCount}</div>
-              <div className="mt-0.5 text-xs text-slate-500">IT / Genel Uç Nokta</div>
-            </Link>
+        <StatCard
+          to="/risks"
+          label="OT Güvenlik Duruş Endeksi"
+          value={
+            postureQuery.isLoading
+              ? "…"
+              : `Not ${posture?.grade ?? "A"} · ${posture?.health_score ?? 100}/100`
+          }
+          badge={posture?.status_label?.split("·")[0]?.trim() ?? "Duruş Notu"}
+          badgeTone={postureTone}
+          subtext={`Envanter: %${Math.round((posture?.verified_asset_ratio ?? 0) * 100)}`}
+          icon={
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+          }
+        />
 
-            {/* TYPE_PROBE / Sensor */}
-            <Link
-              to="/sensors"
-              className="rounded-xl border border-slate-200 bg-slate-50/50 p-3.5 transition hover:border-slate-300"
-            >
-              <div className="flex items-center gap-2 text-[10px] font-mono font-semibold uppercase text-slate-400">
-                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-white text-slate-600 shadow-2xs">
-                  📡
-                </span>
-                <span>TYPE_PROBE</span>
-              </div>
-              <div className="mt-3 text-2xl font-extrabold text-slate-900">{switchSensorCount}</div>
-              <div className="mt-0.5 text-xs text-slate-500">Sensör & Ağ Cihazı</div>
-            </Link>
+        <StatCard
+          to="/risks"
+          label="Açık Risk Bulguları"
+          value={risksQuery.isLoading ? "…" : totalOpenRisks}
+          badge={highCritRisks > 0 ? `${highCritRisks} Yüksek / Kritik` : "Kritik Bulgu Yok"}
+          badgeTone={highCritRisks > 0 ? "red" : "teal"}
+          subtext="6 açıklanabilir kural aktif"
+          icon={
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+          }
+        />
 
-            {/* TYPE_PLC (MON5 Turuncu Vurgulu Kart!) */}
-            <Link
-              to="/assets"
-              className="rounded-xl border-2 border-[#EA580C]/70 bg-orange-50/50 p-3.5 transition hover:bg-orange-50"
-            >
-              <div className="flex items-center gap-2 text-[10px] font-mono font-bold uppercase text-[#EA580C]">
-                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-orange-100 text-[#EA580C]">
-                  ⚙️
-                </span>
-                <span>TYPE_PLC</span>
-              </div>
-              <div className="mt-3 text-2xl font-extrabold text-slate-900">{plcCount}</div>
-              <div className="mt-0.5 text-xs font-medium text-[#EA580C]">PLC / OT Kontrolcü</div>
-            </Link>
-
-            {/* TYPE_HMI_SCADA */}
-            <Link
-              to="/assets"
-              className="rounded-xl border border-slate-200 bg-slate-50/50 p-3.5 transition hover:border-slate-300"
-            >
-              <div className="flex items-center gap-2 text-[10px] font-mono font-semibold uppercase text-slate-400">
-                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-white text-slate-600 shadow-2xs">
-                  🖥️
-                </span>
-                <span>TYPE_SCADA</span>
-              </div>
-              <div className="mt-3 text-2xl font-extrabold text-slate-900">{hmiScadaCount}</div>
-              <div className="mt-0.5 text-xs text-slate-500">HMI & SCADA</div>
-            </Link>
-          </div>
-        </div>
-
-        {/* STATUS · LAST 24H + ATTENTION REQUIRED KARTI (MON5 Görsel 1) */}
-        <div className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-2xs lg:col-span-4">
-          <div>
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                STATUS · POSTURE ({postureQuery.data?.grade ?? "A"} · {postureQuery.data?.health_score ?? 100}/100)
-              </span>
-            </div>
-
-            <div className="mt-3 grid grid-cols-3 gap-2.5">
-              <div className="rounded-xl bg-emerald-50/90 p-3 text-center">
-                <div className="text-2xl font-extrabold text-emerald-700">{verifiedCount}</div>
-                <div className="mt-0.5 text-[11px] font-medium text-emerald-800">Verified</div>
-              </div>
-              <div className="rounded-xl bg-slate-100 p-3 text-center">
-                <div className="text-2xl font-extrabold text-slate-800">{unverifiedCount}</div>
-                <div className="mt-0.5 text-[11px] font-medium text-slate-600">Unverified</div>
-              </div>
-              <div className="rounded-xl bg-rose-50 p-3 text-center">
-                <div className="text-2xl font-extrabold text-rose-700">{atRiskDeviceCount}</div>
-                <div className="mt-0.5 text-[11px] font-medium text-rose-800">@ Risk</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Attention required kutusu */}
-          {topFinding ? (
-            <div className="mt-4 rounded-xl border border-rose-200/80 bg-rose-50/60 p-3.5">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-rose-700">
-                <span>⚠ Attention required</span>
-              </div>
-              <div className="mt-1 font-mono text-xs font-bold text-slate-900">
-                {topFinding.asset_name ?? topFinding.asset_ip ?? "OT Device"} · {topFinding.asset_ip}
-              </div>
-              <div className="mt-0.5 line-clamp-1 text-[11px] text-slate-600">
-                {topFinding.rule_key} · Skor: {topFinding.score}/100 ({topFinding.severity.toUpperCase()})
-              </div>
-              <div className="mt-2.5 flex items-center gap-2">
-                <Link
-                  to={`/assets/${topFinding.asset_id}`}
-                  className="inline-flex items-center rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-800 shadow-2xs hover:bg-slate-50"
-                >
-                  Inspect Asset
-                </Link>
-                <Link to="/risks" className="text-xs font-semibold text-rose-700 hover:underline">
-                  Tüm Bulgular ({risks.length}) →
-                </Link>
-              </div>
-            </div>
-          ) : (
-            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/50 p-3.5 text-xs text-emerald-800">
-              Açık kritik risk bulgusu yok. Pasif ağ izleme normal devam ediyor.
-            </div>
-          )}
-        </div>
+        <StatCard
+          to="/network"
+          label="Gözlemlenen Ağ İletişim Akışı"
+          value={graphQuery.isLoading ? "…" : edges.length}
+          badge={`${connectedSensors}/${sensors.length} Sensör Aktif`}
+          badgeTone={crossZoneCount > 0 ? "amber" : "teal"}
+          subtext={`${approvedFlowsCount} baseline onaylı`}
+          icon={
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+            </svg>
+          }
+        />
       </div>
 
-      {/* MON5 Orta Satır: VENDORS Yatay Bar Grafiği + OT PROTOCOLS Donut Grafiği */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        {/* VENDORS Kartı */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs lg:col-span-6">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">VENDORS</span>
-            <span className="text-xs text-slate-400">{vendorRanking.length} distinct</span>
-          </div>
-
-          {vendorRanking.length === 0 ? (
-            <Empty>Henüz cihaz kaydı yok.</Empty>
-          ) : (
-            <div className="mt-4 space-y-3">
-              {vendorRanking.slice(0, 7).map(([vendorName, count]) => {
-                const pct = Math.max(8, Math.round((count / maxVendorCount) * 100));
-                return (
-                  <div key={vendorName}>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-medium text-slate-800">{vendorName}</span>
-                      <span className="font-mono font-bold text-slate-700">{count}</span>
-                    </div>
-                    <div className="mt-1 h-1.5 w-full rounded-full bg-slate-100">
-                      <div
-                        className="h-1.5 rounded-full bg-[#EA580C]"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+      {/* 2. Satır: TailAdmin 12 Sütunlu Analitik Grid (8 Sütun Envanter/Üretici + 4 Sütun Protokol Donut) */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        {/* Sol 8 Sütun: Endüstriyel Varlık Katmanları ve Üretici Dağılımı */}
+        <Card
+          className="lg:col-span-8"
+          title="Endüstriyel Varlık Dağılımı ve Donanım Üreticileri"
+          subtitle="ISA-95 / Purdue fonksiyonel katmanlarına ve pasif MAC OUI / doğrulanmış üretici kayıtlarına göre envanter yapısı"
+          actions={
+            <Link to="/assets" className="text-xs font-semibold text-[#0D9488] hover:underline">
+              Envanteri Aç →
+            </Link>
+          }
+        >
+          {/* 4 Purdue / Cihaz Sınıfı Alt Kartı */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-[4px] border border-teal-200/80 bg-teal-50/40 p-3.5">
+              <div className="font-mono text-[10px] font-semibold text-[#0F766E] uppercase">
+                PURDUE L1 · CONTROL
+              </div>
+              <div className="mt-1.5 text-2xl font-bold text-[#1C2434]">{plcCount}</div>
+              <div className="mt-0.5 text-xs text-[#64748B]">PLC & Saha Kontrolcü</div>
             </div>
-          )}
-        </div>
 
-        {/* OT PROTOCOLS Donut Kartı */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs lg:col-span-6">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">OT PROTOCOLS</span>
-            <span className="text-xs text-slate-400">Industrial comms observed</span>
+            <div className="rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] p-3.5">
+              <div className="font-mono text-[10px] font-semibold text-[#64748B] uppercase">
+                PURDUE L2 · SUPERVISORY
+              </div>
+              <div className="mt-1.5 text-2xl font-bold text-[#1C2434]">{hmiScadaCount}</div>
+              <div className="mt-0.5 text-xs text-[#64748B]">HMI, SCADA & Mühendislik</div>
+            </div>
+
+            <div className="rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] p-3.5">
+              <div className="font-mono text-[10px] font-semibold text-[#64748B] uppercase">
+                PURDUE L3 · OPERATIONS
+              </div>
+              <div className="mt-1.5 text-2xl font-bold text-[#1C2434]">{infraCount}</div>
+              <div className="mt-0.5 text-xs text-[#64748B]">Sunucu, Ağ & İstemci</div>
+            </div>
+
+            <div className="rounded-[4px] border border-amber-200/80 bg-amber-50/40 p-3.5">
+              <div className="font-mono text-[10px] font-semibold text-amber-800 uppercase">
+                UNVERIFIED ASSETS
+              </div>
+              <div className="mt-1.5 text-2xl font-bold text-amber-900">{unverifiedCount}</div>
+              <div className="mt-0.5 text-xs text-amber-800">Doğrulama Bekleyen</div>
+            </div>
           </div>
 
+          {/* Üretici (Vendor) Yatay Çubuk Grafiği */}
+          <div className="mt-5 border-t border-[#E2E8F0] pt-4">
+            <div className="mb-3 flex items-center justify-between text-xs">
+              <span className="font-semibold text-[#1C2434]">Donanım Üreticisi Dağılımı (Vendors)</span>
+              <span className="text-[#64748B]">{vendorRanking.length} farklı üretici / durum</span>
+            </div>
+            {vendorRanking.length === 0 ? (
+              <Empty>Henüz cihaz kaydı bulunmuyor.</Empty>
+            ) : (
+              <div className="space-y-2.5">
+                {vendorRanking.slice(0, 6).map(([vendorName, count]) => {
+                  const pct = Math.max(6, Math.round((count / maxVendorCount) * 100));
+                  const isUnverified = vendorName.includes("Doğrulanmadı");
+                  return (
+                    <div key={vendorName}>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-medium text-[#1C2434]">{vendorName}</span>
+                        <span className="font-mono font-semibold text-[#1C2434]">{count} cihaz</span>
+                      </div>
+                      <div className="mt-1 h-2 w-full rounded-full bg-[#F1F5F9]">
+                        <div
+                          className={`h-2 rounded-full ${isUnverified ? "bg-amber-500" : "bg-[#0D9488]"}`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </Card>
+
+        {/* Sağ 4 Sütun: Gözlemlenen Endüstriyel Protokoller (TailAdmin Donut Chart Card) */}
+        <Card
+          className="lg:col-span-4"
+          title="Gözlemlenen Ağ Protokolleri"
+          subtitle="Pasif trafik ve DPI ile doğrulanan protokoller"
+          actions={<Badge variant="teal">{protoList.length} Protokol</Badge>}
+        >
           {protoList.length === 0 ? (
             <Empty>Henüz protokol trafiği gözlenmedi.</Empty>
           ) : (
-            <div className="mt-4 flex flex-col items-center gap-6 sm:flex-row">
-              {/* SVG Multi-Segment Donut Chart */}
-              <div className="relative flex h-40 w-40 shrink-0 items-center justify-center">
+            <div className="flex flex-col items-center">
+              <div className="relative my-2 flex h-40 w-40 items-center justify-center">
                 <svg viewBox="0 0 140 140" className="h-40 w-40 -rotate-90">
                   <circle cx="70" cy="70" r={radius} fill="none" stroke="#F1F5F9" strokeWidth="16" />
                   {protoList.slice(0, 6).map(([proto, count], idx) => {
@@ -389,7 +347,7 @@ export default function DashboardPage() {
                         cy="70"
                         r={radius}
                         fill="none"
-                        stroke={DONUT_COLORS[idx % DONUT_COLORS.length]}
+                        stroke={CHART_PALETTE[idx % CHART_PALETTE.length]}
                         strokeWidth="16"
                         strokeDasharray={`${dash} ${circumference - dash}`}
                         strokeDashoffset={-offset}
@@ -398,107 +356,114 @@ export default function DashboardPage() {
                   })}
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                  <span className="text-2xl font-extrabold text-slate-900">{protoList.length}</span>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">PROTOCOLS</span>
+                  <span className="text-2xl font-bold text-[#1C2434]">{edges.length}</span>
+                  <span className="text-[10px] font-semibold tracking-wider text-[#64748B] uppercase">
+                    AKTİF AKIŞ
+                  </span>
                 </div>
               </div>
 
-              {/* Sağ Yüzde Lejantı */}
-              <div className="flex-1 space-y-2.5 w-full">
+              <div className="mt-3 w-full divide-y divide-[#E2E8F0] text-xs">
                 {protoList.slice(0, 6).map(([proto, count], idx) => {
                   const pct = Math.round((count / totalProtoConns) * 100);
                   return (
-                    <div key={proto} className="flex items-center justify-between text-xs">
-                      <span className="flex items-center gap-2 font-mono font-semibold text-slate-800">
+                    <div key={proto} className="flex items-center justify-between py-2">
+                      <span className="flex items-center gap-2 font-mono font-semibold text-[#1C2434]">
                         <span
                           className="h-2.5 w-2.5 rounded-xs"
-                          style={{ backgroundColor: DONUT_COLORS[idx % DONUT_COLORS.length] }}
+                          style={{ backgroundColor: CHART_PALETTE[idx % CHART_PALETTE.length] }}
                         />
                         {proto}
                       </span>
-                      <span className="font-mono font-bold text-slate-700">{pct}%</span>
+                      <span className="font-mono text-[#64748B]">
+                        {count} bağlantı (<strong className="text-[#1C2434]">{pct}%</strong>)
+                      </span>
                     </div>
                   );
                 })}
               </div>
             </div>
           )}
-        </div>
+        </Card>
       </div>
 
-      {/* Allegro Packets Tarzı: Top Communicating IPs + Fabrikalar & Denetim Kayıtları */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        <div className="lg:col-span-7">
-          <Card
-            title="Top Communicating IPs (En Yoğun Haberleşen OT/IT Cihazlar)"
-            actions={
-              <Link to="/network" className="text-xs font-semibold text-blue-700 hover:underline">
-                Assets Map →
-              </Link>
-            }
-          >
-            {topCommunicatingAssets.length === 0 ? (
-              <Empty>Henüz iletişim akışı gözlenmedi.</Empty>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="border-b border-slate-200 text-[11px] font-bold uppercase text-slate-500">
-                    <tr>
-                      <th className="py-2 pr-3">IP (Device Name)</th>
-                      <th className="py-2 pr-3">Observed Protocols</th>
-                      <th className="py-2 pr-3">Active Flows</th>
-                      <th className="py-2 pr-3">Connections</th>
-                      <th className="py-2 text-right">Inspect</th>
+      {/* 3. Satır: Öncelikli Risk Bulguları (7 Sütun) + Tesisler/Bölgeler ve Denetim Kayıtları (5 Sütun) */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <Card
+          className="lg:col-span-7"
+          noPadding
+          title="Öncelikli Açık Risk Bulguları"
+          subtitle="100 puanlık açıklanabilir kural motoru tarafından en yüksek öncelikle işaretlenen bulgular"
+          actions={
+            <Link to="/risks" className="text-xs font-semibold text-[#0D9488] hover:underline">
+              Tüm Bulgular ({totalOpenRisks}) →
+            </Link>
+          }
+        >
+          {risksQuery.isLoading ? (
+            <Empty>Yükleniyor…</Empty>
+          ) : risks.length === 0 ? (
+            <Empty>Açık risk bulgusu bulunmuyor.</Empty>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold text-[#64748B] uppercase">
+                  <tr>
+                    <th className="px-5 py-3">Bulgular & Kural</th>
+                    <th className="px-4 py-3">Etkilenen Cihaz</th>
+                    <th className="px-4 py-3">Puan / Seviye</th>
+                    <th className="px-5 py-3 text-right">İncele</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E2E8F0]">
+                  {risks.slice(0, 6).map((r) => (
+                    <tr key={r.id} className="hover:bg-[#F8FAFC]">
+                      <td className="px-5 py-3">
+                        <div className="font-semibold text-[#1C2434]">{r.title}</div>
+                        <div className="mt-0.5 flex items-center gap-2 font-mono text-[11px] text-[#64748B]">
+                          <span>{r.evidence.rule_id ?? r.rule_key}</span>
+                          <span>·</span>
+                          <span>Güven: %{Math.round(r.confidence * 100)}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 font-mono">
+                        <Link
+                          to={`/assets/${r.asset_id}`}
+                          className="font-semibold text-[#0D9488] hover:underline"
+                        >
+                          {r.asset_ip ?? r.asset_name ?? "—"}
+                        </Link>
+                        {r.asset_name && <div className="font-sans text-[11px] text-[#64748B]">{r.asset_name}</div>}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="rounded bg-[#1C2434] px-2 py-0.5 font-mono text-[11px] font-bold text-white">
+                            {r.score}/100
+                          </span>
+                          <CriticalityBadge value={r.severity} />
+                        </div>
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <Link to="/risks">
+                          <Button variant="secondary" size="sm">
+                            Detay
+                          </Button>
+                        </Link>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {topCommunicatingAssets.map((item) => (
-                      <tr key={item.id} className="hover:bg-slate-50">
-                        <td className="py-2.5 pr-3">
-                          <Link
-                            to={`/assets/${item.id}`}
-                            className="font-mono font-semibold text-blue-700 hover:underline"
-                          >
-                            {item.ip}
-                          </Link>
-                          <div className="text-[11px] text-slate-500">({item.name})</div>
-                        </td>
-                        <td className="py-2.5 pr-3">
-                          <div className="flex flex-wrap gap-1">
-                            {Array.from(item.protocols).map((p) => (
-                              <span
-                                key={p}
-                                className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-700"
-                              >
-                                {p}
-                              </span>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="py-2.5 pr-3 font-mono text-slate-700">{item.flows} flows</td>
-                        <td className="py-2.5 pr-3 font-mono font-bold text-slate-900">{item.connections}</td>
-                        <td className="py-2.5 text-right">
-                          <Link
-                            to={`/assets/${item.id}`}
-                            className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
-                          >
-                            Detail
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Card>
-        </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
 
-        <div className="space-y-5 lg:col-span-5">
+        <div className="space-y-6 lg:col-span-5">
           <Card
-            title="Fabrikalar ve Üretim Bölgeleri (Zones)"
+            title="Fabrikalar ve Ağ Bölgeleri (Sites & Zones)"
+            subtitle="Kayıtlı üretim tesisleri ve segmentasyon bölgeleri"
             actions={
-              <Link to="/settings" className="text-xs font-medium text-blue-700 hover:underline">
+              <Link to="/settings" className="text-xs font-semibold text-[#0D9488] hover:underline">
                 Yönet →
               </Link>
             }
@@ -508,30 +473,28 @@ export default function DashboardPage() {
             ) : sites.length === 0 ? (
               <Empty>Henüz fabrika kaydı yok.</Empty>
             ) : (
-              <div className="divide-y divide-slate-200">
+              <div className="divide-y divide-[#E2E8F0]">
                 {sites.map((site) => {
                   const siteZones = zones.filter((z) => z.site_id === site.id);
                   return (
-                    <div key={site.id} className="py-2.5 first:pt-0 last:pb-0">
+                    <div key={site.id} className="py-3 first:pt-0 last:pb-0">
                       <div className="flex items-center justify-between">
                         <div>
-                          <div className="text-xs font-semibold text-slate-900">{site.name}</div>
-                          <div className="text-[11px] text-slate-500">
-                            {site.industry || "Endüstriyel Tesis"} · {site.timezone}
+                          <div className="text-xs font-semibold text-[#1C2434]">{site.name}</div>
+                          <div className="text-[11px] text-[#64748B]">
+                            {site.industry || "Endüstriyel Üretim"} · {site.timezone}
                           </div>
                         </div>
-                        <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
-                          {siteZones.length} bölge
-                        </span>
+                        <Badge variant="mono">{siteZones.length} Bölge</Badge>
                       </div>
                       {siteZones.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {siteZones.map((z) => (
                             <span
                               key={z.id}
-                              className="inline-flex items-center gap-1.5 rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-700"
+                              className="inline-flex items-center gap-1.5 rounded-[3px] border border-[#E2E8F0] bg-[#F8FAFC] px-2 py-0.5 text-[11px] text-[#1C2434]"
                             >
-                              {z.name}
+                              <span>{z.name}</span>
                               <CriticalityBadge value={z.criticality} />
                             </span>
                           ))}
@@ -544,19 +507,27 @@ export default function DashboardPage() {
             )}
           </Card>
 
-          <Card title="Son Denetim Kayıtları (Audit Log)">
+          <Card
+            title="Son Denetim Kayıtları (Audit Trail)"
+            subtitle="Sistemde gerçekleştirilen kritik yapılandırma ve analiz işlemleri"
+          >
             {!canAdmin ? (
-              <Empty>Yönetici yetkisi gerekir.</Empty>
+              <Empty>Denetim kayıtlarını görüntülemek için yönetici yetkisi gerekir.</Empty>
             ) : auditQuery.isLoading ? (
               <Empty>Yükleniyor…</Empty>
             ) : (auditQuery.data?.items.length ?? 0) === 0 ? (
-              <Empty>Henüz kayıt yok.</Empty>
+              <Empty>Henüz denetim kaydı yok.</Empty>
             ) : (
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-[#E2E8F0]">
                 {auditQuery.data!.items.slice(0, 5).map((log) => (
-                  <div key={log.id} className="flex items-center justify-between py-1.5 text-xs">
-                    <span className="font-mono font-medium text-slate-800">{log.action}</span>
-                    <span className="text-[11px] text-slate-500">{formatDate(log.created_at)}</span>
+                  <div key={log.id} className="flex items-center justify-between py-2 text-xs first:pt-0 last:pb-0">
+                    <div className="flex items-center gap-2">
+                      <ProtocolBadge protocol={log.action} />
+                      {log.target_type && (
+                        <span className="text-[11px] text-[#64748B]">({log.target_type})</span>
+                      )}
+                    </div>
+                    <span className="font-mono text-[11px] text-[#64748B]">{formatDate(log.created_at)}</span>
                   </div>
                 ))}
               </div>

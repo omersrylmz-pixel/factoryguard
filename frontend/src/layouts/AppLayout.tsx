@@ -1,76 +1,84 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
-import { Link, NavLink, Outlet, useNavigate } from "react-router";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { ROLE_LABEL } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { api } from "../services/api";
-import type { Page, RiskFinding, Site } from "../types/api";
+import type { Page, RiskFinding, Sensor, Site } from "../types/api";
 
-interface TopNavItem {
+interface SidebarItem {
   to: string;
   label: string;
-  icon: "overview" | "sensors" | "alerts" | "assets" | "map" | "vulns" | "settings";
+  icon: "dashboard" | "inventory" | "topology" | "events" | "sensors" | "pcap" | "reports" | "settings";
   badge?: number;
+  badgeTone?: "teal" | "amber" | "red";
 }
 
-function TopIcon({ name }: { name: TopNavItem["icon"] }) {
+function SidebarIcon({ name }: { name: SidebarItem["icon"] }) {
   switch (name) {
+    case "dashboard":
+      return (
+        <svg className="h-[18px] w-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <rect x="3" y="3" width="7" height="7" rx="1.5" />
+          <rect x="14" y="3" width="7" height="7" rx="1.5" />
+          <rect x="14" y="14" width="7" height="7" rx="1.5" />
+          <rect x="3" y="14" width="7" height="7" rx="1.5" />
+        </svg>
+      );
+    case "inventory":
+      return (
+        <svg className="h-[18px] w-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <rect x="2" y="4" width="20" height="6" rx="1.5" />
+          <rect x="2" y="14" width="20" height="6" rx="1.5" />
+          <circle cx="6" cy="7" r="1" fill="currentColor" />
+          <circle cx="6" cy="17" r="1" fill="currentColor" />
+        </svg>
+      );
+    case "topology":
+      return (
+        <svg className="h-[18px] w-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <circle cx="6" cy="6" r="3" />
+          <circle cx="18" cy="6" r="3" />
+          <circle cx="12" cy="18" r="3" />
+          <path d="M8.5 7.5L10.5 15.5M15.5 7.5L13.5 15.5M9 6h6" />
+        </svg>
+      );
+    case "events":
+      return (
+        <svg className="h-[18px] w-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+          <line x1="12" y1="9" x2="12" y2="13" />
+          <line x1="12" y1="17" x2="12.01" y2="17" />
+        </svg>
+      );
     case "sensors":
       return (
-        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <rect x="3" y="6" width="18" height="12" rx="2" />
-          <circle cx="7" cy="12" r="1.2" fill="currentColor" />
-          <circle cx="11" cy="12" r="1.2" fill="currentColor" />
-          <line x1="15" y1="12" x2="18" y2="12" />
+        <svg className="h-[18px] w-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
         </svg>
       );
-    case "alerts":
+    case "pcap":
       return (
-        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <circle cx="12" cy="12" r="9" />
-          <line x1="12" y1="8" x2="12" y2="12.5" />
-          <circle cx="12" cy="16" r="0.8" fill="currentColor" />
+        <svg className="h-[18px] w-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="17 8 12 3 7 8" />
+          <line x1="12" y1="3" x2="12" y2="15" />
         </svg>
       );
-    case "assets":
+    case "reports":
       return (
-        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <rect x="3" y="4" width="18" height="12" rx="1.5" />
-          <line x1="8" y1="20" x2="16" y2="20" />
-          <line x1="12" y1="16" x2="12" y2="20" />
-        </svg>
-      );
-    case "map":
-      return (
-        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M5 12.55a11 11 0 0 1 14.08 0" />
-          <path d="M1.42 9a16 16 0 0 1 21.16 0" />
-          <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
-          <circle cx="12" cy="20" r="1" fill="currentColor" />
-        </svg>
-      );
-    case "overview":
-      return (
-        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <rect x="3" y="3" width="7" height="7" rx="1" />
-          <rect x="14" y="3" width="7" height="7" rx="1" />
-          <rect x="14" y="14" width="7" height="7" rx="1" />
-          <rect x="3" y="14" width="7" height="7" rx="1" />
-        </svg>
-      );
-    case "vulns":
-      return (
-        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <svg className="h-[18px] w-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
           <polyline points="14 2 14 8 20 8" />
+          <line x1="16" y1="13" x2="8" y2="13" />
+          <line x1="16" y1="17" x2="8" y2="17" />
         </svg>
       );
     case "settings":
       return (
-        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <polygon points="12 2 2 7 12 12 22 7 12 2" />
-          <polyline points="2 17 12 22 22 17" />
-          <polyline points="2 12 12 17 22 12" />
+        <svg className="h-[18px] w-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
         </svg>
       );
   }
@@ -79,12 +87,19 @@ function TopIcon({ name }: { name: TopNavItem["icon"] }) {
 export default function AppLayout() {
   const { user, organizations, activeOrg, setActiveOrg, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [globalSearch, setGlobalSearch] = useState("");
-  const [showSidebar, setShowSidebar] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const sitesQuery = useQuery({
     queryKey: ["sites", activeOrg?.id],
     queryFn: () => api<Site[]>("/sites"),
+    enabled: !!activeOrg,
+  });
+
+  const sensorsQuery = useQuery({
+    queryKey: ["sensors", activeOrg?.id],
+    queryFn: () => api<Sensor[]>("/sensors"),
     enabled: !!activeOrg,
   });
 
@@ -95,16 +110,45 @@ export default function AppLayout() {
   });
 
   const openRiskCount = openRisksQuery.data?.total ?? 0;
+  const activeSensorCount = (sensorsQuery.data ?? []).filter((s) => s.is_connected).length;
+  const totalSensorCount = (sensorsQuery.data ?? []).length;
   const primarySite = sitesQuery.data?.[0];
 
-  const TOP_NAV: TopNavItem[] = [
-    { to: "/sensors", label: "Sensors", icon: "sensors" },
-    { to: "/risks", label: "Alerts", icon: "alerts", badge: openRiskCount },
-    { to: "/assets", label: "Assets", icon: "assets" },
-    { to: "/network", label: "Wireless", icon: "map" },
-    { to: "/", label: "Queries", icon: "overview" },
-    { to: "/reports", label: "Vulnerabilities", icon: "vulns" },
-    { to: "/settings", label: "IQ", icon: "settings" },
+  const MENU_GROUPS: { title: string; items: SidebarItem[] }[] = [
+    {
+      title: "VISIBILITY & INVENTORY",
+      items: [
+        { to: "/", label: "Overview Dashboard", icon: "dashboard" },
+        { to: "/assets", label: "Device Inventory", icon: "inventory" },
+        { to: "/network", label: "Network Topology", icon: "topology" },
+      ],
+    },
+    {
+      title: "DETECTION & MONITORING",
+      items: [
+        {
+          to: "/risks",
+          label: "Events & Risk Findings",
+          icon: "events",
+          badge: openRiskCount,
+          badgeTone: openRiskCount > 0 ? "amber" : "teal",
+        },
+        {
+          to: "/sensors",
+          label: "Sensors & PCAP Analysis",
+          icon: "sensors",
+          badge: totalSensorCount,
+          badgeTone: "teal",
+        },
+      ],
+    },
+    {
+      title: "REPORTING & GOVERNANCE",
+      items: [
+        { to: "/reports", label: "Reports & SIEM Export", icon: "reports" },
+        { to: "/settings", label: "Settings & Zones", icon: "settings" },
+      ],
+    },
   ];
 
   function handleSearchSubmit(e: FormEvent) {
@@ -114,191 +158,240 @@ export default function AppLayout() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#F1F4F8] text-slate-900">
-      {/* 1. Nozomi Vantage Üst İnce Lisans ve Bölge Şeridi (#1A2128 + Trapezoid VANTAGE sekmesi) */}
-      <div className="flex h-6 items-center justify-between bg-[#1A2128] pr-5 text-[10px] text-slate-300">
-        <div
-          className="flex h-full items-center bg-[#12516E] pr-8 pl-5 font-bold tracking-wider text-white uppercase"
-          style={{ clipPath: "polygon(0 0, 86% 0, 100% 100%, 0 100%)" }}
-        >
-          VANTAGE
-        </div>
-        <div className="flex items-center gap-6">
-          <span>
-            <span className="font-semibold text-slate-400">LICENSEE</span>{" "}
-            <strong className="font-semibold text-white">
-              Nozomi Networks SecRes · {activeOrg?.name ?? "FactoryGuard"}
-            </strong>
-          </span>
-          <span>
-            <span className="font-semibold text-slate-400">DATA LOCATION</span>{" "}
-            <strong className="font-semibold text-white">Europe</strong>
-          </span>
-        </div>
-        <div className="hidden w-24 text-right font-mono text-[9px] text-slate-400 sm:block">PASSIVE OT</div>
-      </div>
-
-      {/* 2. Nozomi Networks Vantage Ana Koyu Petrol-Teal Üst Navigasyon Çubuğu (#0B4F6C) */}
-      <header className="sticky top-0 z-30 flex items-center justify-between gap-2 bg-[#0B4F6C] px-3 py-1.5 text-white shadow-xs">
-        {/* Sol: Logo + Hamburger + Yatay Sekmeler */}
-        <div className="flex items-center gap-2">
-          <Link to="/" className="flex items-center gap-1.5 pr-1">
-            <svg className="h-6 w-6 text-white" viewBox="0 0 32 32" fill="none">
-              <polygon
-                points="16,3 28,10 28,22 16,29 4,22 4,10"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                fill="none"
-              />
-              <polyline points="8,14 16,9 24,14" stroke="currentColor" strokeWidth="2" />
-              <polyline points="8,19 16,14 24,19" stroke="currentColor" strokeWidth="2" />
-            </svg>
-            <div className="leading-none">
-              <div className="text-xs font-extrabold tracking-widest text-white">NOZOMI</div>
-              <div className="text-[7.5px] font-medium tracking-[0.22em] text-cyan-100 uppercase">NETWORKS</div>
+    <div className="flex h-screen overflow-hidden bg-[#F1F5F9] text-[#1C2434]">
+      {/* TailAdmin Koyu Lacivert Sol Kenar Çubuğu (#1C2434) */}
+      <aside
+        className={`${
+          mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+        } fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col bg-[#1C2434] text-[#DEE4EE] transition-transform duration-200 lg:static lg:translate-x-0`}
+      >
+        {/* Marka Başlığı */}
+        <div className="flex items-center justify-between border-b border-[#2E3A47] px-6 py-4">
+          <Link to="/" className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-[4px] bg-[#0D9488] text-white shadow-sm">
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+            </div>
+            <div>
+              <div className="text-base font-bold tracking-tight text-white">FactoryGuard</div>
+              <div className="text-[11px] font-medium text-[#8A99AF]">OT Asset & Risk Console</div>
             </div>
           </Link>
-
           <button
             type="button"
-            onClick={() => setShowSidebar((v) => !v)}
-            className="rounded p-1 text-cyan-100 hover:bg-white/10"
-            title="Menü"
+            onClick={() => setMobileMenuOpen(false)}
+            className="text-[#8A99AF] hover:text-white lg:hidden"
           >
-            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <line x1="3" y1="12" x2="21" y2="12" />
-              <line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
+            ✕
           </button>
+        </div>
 
-          {/* Yatay Navigasyon Öğeleri (Nozomi Image: Aktif sekme açık gri/buz mavisi kutu #DCE6EA) */}
-          <nav className="flex items-center gap-0.5">
-            {TOP_NAV.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === "/"}
-                className={({ isActive }) =>
-                  `inline-flex items-center gap-1.5 rounded-[4px] px-2 py-1 text-[11px] whitespace-nowrap transition ${
-                    isActive
-                      ? "bg-[#DCE6EA] font-semibold text-[#0B4F6C] shadow-2xs"
-                      : "font-normal text-cyan-50/90 hover:bg-white/10 hover:text-white"
-                  }`
-                }
-              >
-                <TopIcon name={item.icon} />
-                <span>{item.label}</span>
-              </NavLink>
+        {/* Menü Grupları */}
+        <div className="flex-1 overflow-y-auto px-4 py-5">
+          <nav className="space-y-6">
+            {MENU_GROUPS.map((group) => (
+              <div key={group.title}>
+                <h3 className="mb-2.5 px-3 text-[11px] font-semibold tracking-wider text-[#8A99AF] uppercase">
+                  {group.title}
+                </h3>
+                <ul className="space-y-1">
+                  {group.items.map((item) => {
+                    const isAssetDetail =
+                      item.to === "/assets" && location.pathname.startsWith("/assets/");
+                    return (
+                      <li key={item.to}>
+                        <NavLink
+                          to={item.to}
+                          end={item.to === "/"}
+                          onClick={() => setMobileMenuOpen(false)}
+                          className={({ isActive }) => {
+                            const active = isActive || isAssetDetail;
+                            return `group relative flex items-center justify-between rounded-[4px] px-3.5 py-2.5 text-xs font-medium transition-colors ${
+                              active
+                                ? "bg-[#333A48] text-white"
+                                : "text-[#DEE4EE] hover:bg-[#333A48]/70 hover:text-white"
+                            }`;
+                          }}
+                        >
+                          {({ isActive }) => {
+                            const active = isActive || isAssetDetail;
+                            return (
+                              <>
+                                {active && (
+                                  <span className="absolute top-1.5 bottom-1.5 left-0 w-1 rounded-r bg-[#0D9488]" />
+                                )}
+                                <span className="flex items-center gap-3">
+                                  <span className={active ? "text-[#14B8A6]" : "text-[#8A99AF] group-hover:text-white"}>
+                                    <SidebarIcon name={item.icon} />
+                                  </span>
+                                  <span>{item.label}</span>
+                                </span>
+                                {item.badge !== undefined && item.badge > 0 && (
+                                  <span
+                                    className={`rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold ${
+                                      item.badgeTone === "amber"
+                                        ? "bg-amber-500/20 text-amber-300"
+                                        : "bg-teal-500/20 text-teal-300"
+                                    }`}
+                                  >
+                                    {item.badge}
+                                  </span>
+                                )}
+                              </>
+                            );
+                          }}
+                        </NavLink>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
             ))}
           </nav>
         </div>
 
-        {/* Sağ: Arama, Bildirim Zili, Ayarlar, Kullanıcı Avatarı (PP) ve Tesis Seçici (Nozomiville) */}
-        <div className="flex items-center gap-3 text-xs">
-          <form onSubmit={handleSearchSubmit} className="hidden lg:block">
-            <input
-              type="text"
-              value={globalSearch}
-              onChange={(e) => setGlobalSearch(e.target.value)}
-              placeholder="Search IP, PLC, CVE..."
-              className="w-44 rounded border border-cyan-300/30 bg-[#06283D]/70 px-2.5 py-1 text-xs text-white placeholder:text-cyan-200/60 focus:border-cyan-300 focus:outline-none"
-            />
-          </form>
-
-          <Link
-            to="/risks"
-            className="relative rounded p-1.5 text-cyan-100 hover:bg-white/10"
-            title={`${openRiskCount} Açık Risk Bulgusu`}
-          >
-            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-            </svg>
-            {openRiskCount > 0 && (
-              <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-amber-400" />
-            )}
-          </Link>
-
-          <Link to="/settings" className="rounded p-1.5 text-cyan-100 hover:bg-white/10" title="Ayarlar">
-            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-          </Link>
-
-          {/* Yuvarlak Kullanıcı Avatarı (Nozomi PP tarzı) */}
-          <button
-            type="button"
-            onClick={() => void logout()}
-            title={`${user?.full_name ?? "Admin"} (${activeOrg ? ROLE_LABEL[activeOrg.role] : ""}) — Çıkış için tıklayın`}
-            className="flex h-7 w-7 items-center justify-center rounded-full border border-cyan-200/80 bg-[#0D5C84] font-mono text-[11px] font-bold text-white hover:bg-cyan-700"
-          >
-            {(user?.full_name ?? "PP")
-              .split(" ")
-              .map((w) => w[0])
-              .join("")
-              .slice(0, 2)
-              .toUpperCase()}
-          </button>
-
-          <span className="h-5 w-px bg-cyan-300/30" />
-
-          {/* Tesis / Organizasyon Seçici (Nozomiville ▾ tarzı) */}
-          {organizations.length > 1 ? (
-            <select
-              aria-label="Organizasyon"
-              className="bg-transparent text-xs font-semibold text-white focus:outline-none"
-              value={activeOrg?.id ?? ""}
-              onChange={(e) => setActiveOrg(e.target.value)}
-            >
-              {organizations.map((o) => (
-                <option key={o.id} value={o.id} className="text-slate-900">
-                  {o.name}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <span className="font-semibold text-white">
-              {primarySite?.name ?? activeOrg?.name ?? "Gebze Tesis"} ▾
-            </span>
-          )}
+        {/* Alt Pasif Gözlem Güvenlik Garantisi Kartı */}
+        <div className="border-t border-[#2E3A47] p-4">
+          <div className="rounded-[4px] border border-[#333A48] bg-[#24303F] p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-white">Passive Observation Only</span>
+              <span className="inline-flex items-center gap-1 rounded bg-teal-500/20 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-teal-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-teal-400" />
+                SAFE
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] leading-relaxed text-[#8A99AF]">
+              Sıfır aktif tarama · PLC ve saha ekipmanlarına paket gönderilmez.
+            </p>
+            <div className="mt-2 flex items-center justify-between border-t border-[#333A48] pt-2 font-mono text-[10px] text-[#DEE4EE]">
+              <span>Sensörler: {activeSensorCount}/{totalSensorCount}</span>
+              <span>{primarySite?.name ?? "Ana Tesis"}</span>
+            </div>
+          </div>
         </div>
-      </header>
+      </aside>
 
-      <div className="flex min-h-0 flex-1">
-        {/* İsteğe Bağlı Açılır Sol Menü (Hamburger ☰ ile açılır) */}
-        {showSidebar && (
-          <aside className="flex w-56 shrink-0 flex-col bg-[#0B1528] p-3 text-slate-300">
-            <div className="mb-2 px-2 text-[10px] font-bold tracking-widest text-slate-400 uppercase">
-              NAVIGATION
-            </div>
-            <div className="space-y-1">
-              {TOP_NAV.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.to === "/"}
-                  className={({ isActive }) =>
-                    `flex items-center gap-2.5 rounded-md px-3 py-2 text-xs font-medium ${
-                      isActive ? "bg-[#162440] text-white" : "text-slate-400 hover:bg-[#132038] hover:text-white"
-                    }`
-                  }
+      {/* Sağ İçerik Sütunu: TailAdmin Üst Beyaz Header + Ana İçerik Tuvali */}
+      <div className="relative flex flex-1 flex-col overflow-x-hidden overflow-y-auto">
+        {/* TailAdmin Üst Beyaz Başlık Çubuğu */}
+        <header className="sticky top-0 z-30 flex w-full items-center justify-between border-b border-[#E2E8F0] bg-white px-6 py-3 shadow-[0px_2px_4px_rgba(0,0,0,0.03)]">
+          {/* Sol: Mobil Menü + Küresel Arama Çubuğu */}
+          <div className="flex flex-1 items-center gap-4">
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              className="rounded-[4px] border border-[#E2E8F0] p-1.5 text-[#1C2434] lg:hidden"
+              title="Menüyü Aç"
+            >
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
+
+            <form onSubmit={handleSearchSubmit} className="w-full max-w-md">
+              <div className="relative flex items-center">
+                <svg
+                  className="pointer-events-none absolute left-3 h-4 w-4 text-[#64748B]"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
                 >
-                  <TopIcon name={item.icon} />
-                  <span>{item.label}</span>
-                </NavLink>
-              ))}
-            </div>
-          </aside>
-        )}
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input
+                  type="text"
+                  value={globalSearch}
+                  onChange={(e) => setGlobalSearch(e.target.value)}
+                  placeholder="Cihaz adı, IP, MAC, üretici veya protokol ara..."
+                  className="h-9 w-full rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] pr-3 pl-9 text-xs text-[#1C2434] placeholder:text-[#64748B] focus:border-[#0D9488] focus:bg-white focus:outline-none"
+                />
+              </div>
+            </form>
+          </div>
 
-        {/* Ana İçerik Tuvali */}
-        <main className="min-w-0 flex-1 px-6 py-4">
+          {/* Sağ: Tesis Seçici, Açık Risk Bildirimi ve Kullanıcı Profili */}
+          <div className="flex items-center gap-3">
+            {/* Tesis / Organizasyon Rozeti */}
+            <div className="hidden items-center gap-2 rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-1.5 text-xs sm:flex">
+              <span className="h-2 w-2 rounded-full bg-[#0D9488]" />
+              {organizations.length > 1 ? (
+                <select
+                  aria-label="Organizasyon"
+                  className="bg-transparent text-xs font-semibold text-[#1C2434] focus:outline-none"
+                  value={activeOrg?.id ?? ""}
+                  onChange={(e) => setActiveOrg(e.target.value)}
+                >
+                  {organizations.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="font-semibold text-[#1C2434]">
+                  {activeOrg?.name ?? "Organizasyon Yok"}
+                </span>
+              )}
+              {primarySite && (
+                <span className="border-l border-[#E2E8F0] pl-2 text-[#64748B]">{primarySite.name}</span>
+              )}
+            </div>
+
+            {/* Bildirim Zili (TailAdmin tarzı dairesel ikon) */}
+            <Link
+              to="/risks"
+              title={`${openRiskCount} Açık Risk Bulgusu`}
+              className="relative flex h-9 w-9 items-center justify-center rounded-full border border-[#E2E8F0] bg-[#F8FAFC] text-[#64748B] transition hover:border-[#0D9488] hover:text-[#0D9488]"
+            >
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+              {openRiskCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 font-mono text-[9px] font-bold text-white">
+                  {openRiskCount}
+                </span>
+              )}
+            </Link>
+
+            {/* Kullanıcı Profili + Çıkış */}
+            <div className="flex items-center gap-3 border-l border-[#E2E8F0] pl-3">
+              <div className="hidden text-right sm:block">
+                <div className="text-xs font-semibold text-[#1C2434]">{user?.full_name ?? "OT Kullanıcı"}</div>
+                <div className="text-[11px] text-[#64748B]">
+                  {activeOrg ? ROLE_LABEL[activeOrg.role] : "Analist"}
+                </div>
+              </div>
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#1C2434] font-mono text-xs font-bold text-white">
+                {(user?.full_name ?? "FG")
+                  .split(" ")
+                  .map((w) => w[0])
+                  .join("")
+                  .slice(0, 2)
+                  .toUpperCase()}
+              </div>
+              <button
+                type="button"
+                onClick={() => void logout()}
+                className="rounded-[4px] border border-[#E2E8F0] bg-white px-2.5 py-1.5 text-xs font-medium text-[#64748B] hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+              >
+                Çıkış
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {/* Ana İçerik Alanı */}
+        <main className="mx-auto w-full max-w-screen-2xl flex-1 p-5 md:p-6">
           {activeOrg ? (
             <Outlet />
           ) : (
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <div className="rounded-[4px] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
               Herhangi bir organizasyona üye değilsiniz. Yöneticinizden davet isteyin.
             </div>
           )}

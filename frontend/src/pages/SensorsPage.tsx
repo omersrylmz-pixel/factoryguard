@@ -1,7 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ChangeEvent, type FormEvent } from "react";
-import { Link } from "react-router";
-import { Button, Card, Empty, ErrorBox, Field, Input, PageHeader, Select, formatDate } from "../components/ui";
+import { Link, useSearchParams } from "react-router";
+import {
+  Badge,
+  Button,
+  Card,
+  Empty,
+  ErrorBox,
+  Field,
+  Input,
+  PageHeader,
+  ProtocolBadge,
+  Select,
+  StatCard,
+  formatDate,
+} from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { api } from "../services/api";
 import type {
@@ -26,9 +39,21 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+const SUPPORTED_PROTOCOLS = [
+  "MODBUS",
+  "S7COMM",
+  "ENIP",
+  "OPCUA",
+  "BACNET",
+  "DNP3",
+  "PROFINET",
+];
+
 export default function SensorsPage() {
   const { activeOrg, canAdmin, canEditAssets } = useAuth();
   const qc = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeView = searchParams.get("tab") === "pcap" ? "pcap" : "all";
 
   const sitesQuery = useQuery({
     queryKey: ["sites", activeOrg?.id],
@@ -93,8 +118,7 @@ export default function SensorsPage() {
         qc.invalidateQueries({ queryKey: ["sensors", activeOrg?.id] }),
         qc.invalidateQueries({ queryKey: ["sensor", activeOrg?.id] }),
         qc.invalidateQueries({ queryKey: ["assets", activeOrg?.id] }),
-        qc.invalidateQueries({ queryKey: ["communications", activeOrg?.id] }),
-        qc.invalidateQueries({ queryKey: ["comm-graph", activeOrg?.id] }),
+        qc.invalidateQueries({ queryKey: ["communications-graph", activeOrg?.id] }),
         qc.invalidateQueries({ queryKey: ["risks", activeOrg?.id] }),
         qc.invalidateQueries({ queryKey: ["report-summary", activeOrg?.id] }),
       ]);
@@ -106,8 +130,10 @@ export default function SensorsPage() {
   const edges = graphQuery.data?.edges ?? [];
   const effectiveSiteId = siteId || sites[0]?.id || "";
   const effectiveUploadSensorId = uploadSensorId || sensors[0]?.id || "";
+  const connectedCount = sensors.filter((s) => s.is_connected).length;
+  const totalPacketsOrConns = edges.reduce((acc, e) => acc + e.connection_count, 0);
 
-  // Allegro Packets tarzı Top IPs ve Top Protocols özet tabloları
+  // En Çok İletişim Kuran IP'ler ve Protokoller
   const ipStats = new Map<string, { id: string; ip: string; name: string; flows: number; conns: number }>();
   const protoStats = new Map<string, { proto: string; flows: number; conns: number }>();
   for (const e of edges) {
@@ -126,13 +152,17 @@ export default function SensorsPage() {
     pCur.conns += e.connection_count;
     protoStats.set(pUp, pCur);
   }
-  const topIps = Array.from(ipStats.values()).sort((a, b) => b.conns - a.conns).slice(0, 5);
-  const topProtos = Array.from(protoStats.values()).sort((a, b) => b.conns - a.conns).slice(0, 5);
+  const topIps = Array.from(ipStats.values()).sort((a, b) => b.conns - a.conns).slice(0, 6);
+  const topProtos = Array.from(protoStats.values()).sort((a, b) => b.conns - a.conns).slice(0, 6);
 
   function handleEnroll(e: FormEvent) {
     e.preventDefault();
     if (!effectiveSiteId) return;
-    enrollMut.mutate({ site_id: effectiveSiteId, name: name.trim(), version: version.trim() || "0.1.0" });
+    enrollMut.mutate({
+      site_id: effectiveSiteId,
+      name: name.trim(),
+      version: version.trim() || "0.1.0",
+    });
   }
 
   function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
@@ -162,189 +192,96 @@ export default function SensorsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <PageHeader
-          title="Network Multimeter & Sensor Management"
-          subtitle="Pasif trafik analiz sensörlerinin arayüz telemetrisi, tek tıkla PCAP / Zeek log analizi ve protokol istatistikleri"
-        />
-        <span className="inline-flex items-center gap-1.5 rounded bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white shadow-2xs">
-          <span className="h-2 w-2 rounded-full bg-white" />
-          LIVE view
-        </span>
-      </div>
-
-      {/* Allegro Packets Görsel 4: Interface overview + Total throughput graph + Top IPs / Top Protocols */}
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs space-y-5">
-        <div>
-          <h2 className="text-lg font-normal text-[#2B7CB3]">Interface & Sensor Overview</h2>
-          <div className="mt-2 overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <tbody className="divide-y divide-slate-200">
-                <tr>
-                  <td className="py-2 font-bold text-slate-800">Sensor / SPAN Port:</td>
-                  {sensors.length === 0 ? (
-                    <td className="py-2 text-slate-500">Kayıtlı sensör yok</td>
-                  ) : (
-                    sensors.map((s, idx) => (
-                      <td key={s.id} className="py-2 text-right font-mono font-semibold text-slate-800">
-                        Port {idx + 1} ({s.name})
-                      </td>
-                    ))
-                  )}
-                </tr>
-                <tr>
-                  <td className="py-2 font-bold text-slate-800">Link status:</td>
-                  {sensors.map((s) => (
-                    <td key={s.id} className="py-2 text-right font-mono">
-                      <span className={s.is_connected ? "font-bold text-emerald-700" : "text-slate-500"}>
-                        1G · {s.is_connected ? "ACTIVE" : "STANDBY"}
-                      </span>
-                    </td>
-                  ))}
-                </tr>
-                <tr>
-                  <td className="py-2 font-bold text-slate-800">PCAP / Sample Capture:</td>
-                  {sensors.map((s) => (
-                    <td key={s.id} className="py-2 text-right">
-                      <button
-                        type="button"
-                        disabled={analyzeUploadMut.isPending}
-                        onClick={() => {
-                          setUploadSensorId(s.id);
-                          handleSampleAnalyze("real-modbus-pcap");
-                        }}
-                        className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
-                      >
-                        ⬇ Analyze PCAP
-                      </button>
-                    </td>
-                  ))}
-                </tr>
-                <tr>
-                  <td className="py-2 font-bold text-slate-800">Observed active flows:</td>
-                  {sensors.map((s) => (
-                    <td key={s.id} className="py-2 text-right font-mono text-slate-700">
-                      {edges.length} flows ({edges.reduce((acc, e) => acc + e.connection_count, 0)} conns)
-                    </td>
-                  ))}
-                </tr>
-              </tbody>
-            </table>
+      <PageHeader
+        breadcrumb={activeView === "pcap" ? "PCAP Analysis" : "Sensor Management"}
+        title="Pasif Sensör Yönetimi & Derin PCAP Analizi"
+        subtitle="SPAN / TAP sensör kayıtları, 7 endüstriyel protokol için derin paket analizi (DPI) ve tek tıkla PCAP / Zeek log işleme"
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              variant={activeView === "all" ? "primary" : "secondary"}
+              onClick={() => setSearchParams({})}
+            >
+              Sensörler & Telemetri
+            </Button>
+            <Button
+              variant={activeView === "pcap" ? "primary" : "secondary"}
+              onClick={() => setSearchParams({ tab: "pcap" })}
+            >
+              PCAP / Zeek Log Analizi
+            </Button>
           </div>
-        </div>
+        }
+      />
 
-        {/* Golden-Amber Total Throughput / Flow Activity Graph (Allegro Packets Image 4) */}
-        <div>
-          <div className="mb-1 flex items-center justify-between text-xs">
-            <span className="font-bold text-slate-800">Total flow & packet activity graph:</span>
-            <span className="inline-flex items-center gap-1.5 font-mono text-[11px] text-slate-500">
-              <span className="h-2.5 w-2.5 rounded-xs bg-amber-400" />
-              processed industrial flows / interval
-            </span>
-          </div>
-          <div className="rounded border border-slate-200 bg-slate-50/40 p-2">
-            <svg viewBox="0 0 760 110" className="h-28 w-full">
-              <line x1="35" y1="15" x2="750" y2="15" stroke="#E2E8F0" strokeWidth="1" />
-              <line x1="35" y1="45" x2="750" y2="45" stroke="#E2E8F0" strokeWidth="1" />
-              <line x1="35" y1="75" x2="750" y2="75" stroke="#E2E8F0" strokeWidth="1" />
-              <line x1="35" y1="95" x2="750" y2="95" stroke="#CBD5E1" strokeWidth="1" />
-              <text x="4" y="18" className="fill-slate-400 font-mono text-[9px]">80f</text>
-              <text x="4" y="48" className="fill-slate-400 font-mono text-[9px]">40f</text>
-              <text x="4" y="78" className="fill-slate-400 font-mono text-[9px]">20f</text>
-              <text x="10" y="95" className="fill-slate-400 font-mono text-[9px]">0</text>
-              <polygon
-                points="35,95 35,78 95,62 155,70 215,54 275,74 335,48 395,22 455,66 515,58 575,64 635,52 695,68 750,56 750,95"
-                fill="#F59E0B"
-                fillOpacity="0.18"
-              />
-              <polyline
-                fill="none"
-                stroke="#D97706"
-                strokeWidth="2"
-                points="35,78 95,62 155,70 215,54 275,74 335,48 395,22 455,66 515,58 575,64 635,52 695,68 750,56"
-              />
+      {/* 4 TailAdmin StatCard */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Kayıtlı Pasif Sensör"
+          value={sensors.length}
+          hint={`${sites.length} fabrika lokasyonunda`}
+          tone="teal"
+          badge={{
+            text: `${connectedCount} Çevrimiçi`,
+            tone: connectedCount > 0 ? "emerald" : "amber",
+          }}
+          icon={
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <circle cx="12" cy="12" r="2" />
+              <path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14" />
             </svg>
-          </div>
-        </div>
+          }
+        />
 
-        {/* 2-Column Analytics Tables: Top IPs & Top Protocols (Allegro Packets Image 4) */}
-        <div className="grid grid-cols-1 gap-6 pt-2 lg:grid-cols-2">
-          <div>
-            <h3 className="text-base font-normal text-[#2B7CB3]">Top IPs during passive capture</h3>
-            <table className="mt-2 w-full text-left text-xs">
-              <thead className="border-b border-slate-200 font-bold text-slate-700">
-                <tr>
-                  <th className="py-1.5 pr-2">IP (name)</th>
-                  <th className="py-1.5 pr-2 text-right">Active Flows</th>
-                  <th className="py-1.5 pr-2 text-right">Connections</th>
-                  <th className="py-1.5 text-right">Inspect</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {topIps.map((item) => (
-                  <tr key={item.id}>
-                    <td className="py-2 pr-2">
-                      <Link to={`/assets/${item.id}`} className="font-mono text-[#2B7CB3] hover:underline">
-                        {item.ip}
-                      </Link>
-                      <div className="text-[11px] text-slate-500">({item.name})</div>
-                    </td>
-                    <td className="py-2 pr-2 text-right font-mono">{item.flows} flows</td>
-                    <td className="py-2 pr-2 text-right font-mono font-semibold">{item.conns} conns</td>
-                    <td className="py-2 text-right">
-                      <Link
-                        to={`/assets/${item.id}`}
-                        className="inline-block rounded border border-slate-300 px-2 py-0.5 text-[11px] text-slate-700 hover:bg-slate-50"
-                      >
-                        Detail
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <StatCard
+          label="Yakalanan İletişim Akışı"
+          value={edges.length}
+          hint={`Toplam ${totalPacketsOrConns} oturum / bağlantı`}
+          tone="navy"
+          icon={
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+            </svg>
+          }
+        />
 
-          <div>
-            <h3 className="text-base font-normal text-[#2B7CB3]">Top protocols during passive capture</h3>
-            <table className="mt-2 w-full text-left text-xs">
-              <thead className="border-b border-slate-200 font-bold text-slate-700">
-                <tr>
-                  <th className="py-1.5 pr-2">Protocol</th>
-                  <th className="py-1.5 pr-2 text-right">Flows</th>
-                  <th className="py-1.5 pr-2 text-right">Connections</th>
-                  <th className="py-1.5 text-right">Map</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {topProtos.map((p) => (
-                  <tr key={p.proto}>
-                    <td className="py-2 pr-2 font-mono font-semibold text-[#2B7CB3]">{p.proto}</td>
-                    <td className="py-2 pr-2 text-right font-mono">{p.flows} flows</td>
-                    <td className="py-2 pr-2 text-right font-mono font-semibold">{p.conns} conns</td>
-                    <td className="py-2 text-right">
-                      <Link
-                        to="/network"
-                        className="inline-block rounded border border-slate-300 px-2 py-0.5 text-[11px] text-slate-700 hover:bg-slate-50"
-                      >
-                        View
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <StatCard
+          label="Derin Paket Analizi (DPI)"
+          value={SUPPORTED_PROTOCOLS.length}
+          hint="Modbus, S7comm, ENIP, OPC UA, BACnet, DNP3, Profinet"
+          tone="teal"
+          badge={{ text: "L7 Payload DPI", tone: "teal" }}
+          icon={
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+            </svg>
+          }
+        />
+
+        <StatCard
+          label="Çalışma Modu"
+          value="%100 Pasif"
+          hint="Üretim ağına sıfır paket enjeksiyonu"
+          tone="emerald"
+          badge={{ text: "Zero Active Probe", tone: "emerald" }}
+          icon={
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+          }
+        />
       </div>
 
+      {/* Yeni Sensör Token Uyarısı */}
       {enrolledToken && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+        <div className="rounded-[4px] border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
           <div className="flex items-center justify-between">
             <span className="font-semibold">
               "{enrolledToken.name}" sensörü kaydedildi — API Anahtarını Şimdi Kopyalayın
             </span>
             <button
+              type="button"
               className="text-xs font-medium text-amber-800 hover:underline"
               onClick={() => setEnrolledToken(null)}
             >
@@ -352,34 +289,37 @@ export default function SensorsPage() {
             </button>
           </div>
           <p className="mt-1 text-xs text-amber-800">
-            Güvenlik nedeniyle bu anahtar veritabanında saklanmaz (yalnızca SHA-256 parmak izi tutulur) ve bir daha
-            gösterilmez. Sensörünüzde <code className="font-mono">FG_SENSOR_TOKEN</code> olarak yapılandırın:
+            Güvenlik nedeniyle bu anahtar veritabanında açık metin olarak saklanmaz (yalnızca SHA-256 parmak izi
+            tutulur). Sensörünüzde <code className="font-mono">FG_SENSOR_TOKEN</code> olarak yapılandırın:
           </p>
-          <pre className="mt-2 overflow-x-auto rounded border border-amber-200 bg-white px-3 py-2 font-mono text-xs text-slate-900 select-all">
+          <pre className="mt-2 overflow-x-auto rounded-[4px] border border-amber-200 bg-white px-3 py-2 font-mono text-xs text-[#1C2434] select-all">
             {enrolledToken.token}
           </pre>
         </div>
       )}
 
+      {/* Tek Tıkla PCAP / Zeek Log Yükleme ve Analiz Kartı (Screen 7) */}
       {canEditAssets && sensors.length > 0 && (
         <Card
-          title="Web Arayüzünden Tek Tıkla PCAP / Zeek Log Yükle ve Analiz Et"
+          title="PCAP / Zeek Log Derin Paket Analizi (DPI)"
+          subtitle="Bilgisayarınızdan .pcap, .pcapng veya Zeek .log dosyası yükleyin ya da hazır fabrika kayıtlarını tek tıkla çalıştırın"
           actions={
-            <span className="rounded bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
-              %100 Pasif Analiz (.pcap, .pcapng, Zeek .log)
-            </span>
+            <div className="flex flex-wrap items-center gap-1">
+              {SUPPORTED_PROTOCOLS.map((p) => (
+                <ProtocolBadge key={p} protocol={p} />
+              ))}
+            </div>
           }
         >
-          <p className="mb-4 text-xs text-slate-600">
-            Bilgisayarınızdan bir <code className="font-mono">.pcap</code>,{" "}
-            <code className="font-mono">.pcapng</code> veya Zeek log dosyası seçip yükleyin ya da hazır gerçek
-            fabrika PCAP senaryolarını tek tıkla çalıştırın. Keşfedilen cihazlar, ağ topolojisi ve açıklanabilir
-            risk bulguları anında oluşturulur.
-          </p>
-
-          <form onSubmit={(e) => void handleFileUpload(e)} className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <form
+            onSubmit={(e) => void handleFileUpload(e)}
+            className="grid grid-cols-1 gap-4 sm:grid-cols-3"
+          >
             <Field label="Hedef Sensör *">
-              <Select value={effectiveUploadSensorId} onChange={(e) => setUploadSensorId(e.target.value)}>
+              <Select
+                value={effectiveUploadSensorId}
+                onChange={(e) => setUploadSensorId(e.target.value)}
+              >
                 {sensors.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
@@ -392,10 +332,10 @@ export default function SensorsPage() {
                 type="file"
                 accept=".pcap,.pcapng,.cap,.log,.json,.tsv"
                 onChange={handleFileChange}
-                className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-700 file:mr-3 file:rounded file:border-0 file:bg-slate-100 file:px-2.5 file:py-1 file:text-xs file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+                className="h-9 w-full rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] px-2.5 py-1 text-xs text-[#1C2434] file:mr-3 file:rounded-[3px] file:border-0 file:bg-[#1C2434] file:px-2.5 file:py-1 file:text-xs file:font-medium file:text-white hover:file:bg-[#333A48]"
               />
             </Field>
-            <div className="flex items-end gap-2">
+            <div className="flex items-end">
               <Button
                 type="submit"
                 className="w-full"
@@ -406,14 +346,14 @@ export default function SensorsPage() {
             </div>
           </form>
 
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[#E2E8F0] pt-3.5">
             <div className="text-xs text-slate-500">
-              Dosyanız yoksa laboratuvarımızdaki gerçek endüstriyel paket kayıtlarını tek tıkla çalıştırın:
+              Laboratuvar endüstriyel paket kayıtlarını tek tıkla sensör hattından geçirin:
             </div>
             <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
-                variant="secondary"
+                variant="outline"
                 disabled={analyzeUploadMut.isPending}
                 onClick={() => handleSampleAnalyze("real-modbus-pcap")}
               >
@@ -437,42 +377,300 @@ export default function SensorsPage() {
           )}
 
           {uploadResult && (
-            <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-950">
+            <div className="mt-4 rounded-[4px] border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-950">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-semibold">
-                  Analiz Tamamlandı: {uploadResult.filename}
+                <span className="font-bold">
+                  ✓ Analiz Tamamlandı: {uploadResult.filename}
                 </span>
-                <div className="flex gap-3 font-medium">
-                  <Link to="/assets" className="text-blue-700 hover:underline">
+                <div className="flex flex-wrap gap-3 font-semibold">
+                  <Link to="/assets" className="text-[#0D9488] hover:underline">
                     Cihaz Envanterine Git →
                   </Link>
-                  <Link to="/network" className="text-blue-700 hover:underline">
+                  <Link to="/network" className="text-[#0D9488] hover:underline">
                     Topoloji Haritası →
                   </Link>
-                  <Link to="/risks" className="text-blue-700 hover:underline">
+                  <Link to="/risks" className="text-[#0D9488] hover:underline">
                     Risk Bulguları ({uploadResult.open_risks_total}) →
                   </Link>
                 </div>
               </div>
-              <div className="mt-1.5 text-emerald-800">
-                Keşfedilen Cihaz: <strong>{uploadResult.devices_discovered}</strong> (Yeni:{" "}
-                <strong>{uploadResult.assets_created}</strong>, Güncellenen:{" "}
-                <strong>{uploadResult.assets_updated}</strong>) · İletişim Akışı (Yeni:{" "}
-                <strong>{uploadResult.communications_created}</strong>, Güncellenen:{" "}
-                <strong>{uploadResult.communications_updated}</strong>) · Toplam Açık Risk:{" "}
-                <strong>{uploadResult.open_risks_total}</strong>
+              <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <div className="rounded-[4px] bg-white/80 p-2">
+                  <div className="text-[10px] uppercase text-slate-500">Keşfedilen Cihaz</div>
+                  <div className="font-mono text-sm font-bold text-[#1C2434]">
+                    {uploadResult.devices_discovered}
+                  </div>
+                </div>
+                <div className="rounded-[4px] bg-white/80 p-2">
+                  <div className="text-[10px] uppercase text-slate-500">Yeni / Güncellenen Varlık</div>
+                  <div className="font-mono text-sm font-bold text-[#1C2434]">
+                    +{uploadResult.assets_created} / {uploadResult.assets_updated}
+                  </div>
+                </div>
+                <div className="rounded-[4px] bg-white/80 p-2">
+                  <div className="text-[10px] uppercase text-slate-500">İletişim Akışı</div>
+                  <div className="font-mono text-sm font-bold text-[#1C2434]">
+                    +{uploadResult.communications_created} / {uploadResult.communications_updated}
+                  </div>
+                </div>
+                <div className="rounded-[4px] bg-white/80 p-2">
+                  <div className="text-[10px] uppercase text-slate-500">Açık Risk Bulgusu</div>
+                  <div className="font-mono text-sm font-bold text-rose-700">
+                    {uploadResult.open_risks_total}
+                  </div>
+                </div>
               </div>
             </div>
           )}
         </Card>
       )}
 
-      {canAdmin && (
-        <Card title="Yeni Sensör Kaydet (Enroll)">
-          {sites.length === 0 ? (
-            <Empty>Sensör kaydetmek için önce Ayarlar sayfasından bir fabrika (site) oluşturun.</Empty>
+      {/* Kayıtlı Sensörler Tablosu + Yeni Sensör Kaydı (Screen 6) */}
+      <Card
+        title={`Kayıtlı Pasif Sensörler (${sensors.length})`}
+        subtitle="SPAN / Port Mirroring noktalarında çalışan sensörlerin bağlantı durumu ve SHA-256 kimlik doğrulaması"
+        noPadding
+      >
+        {sensorsQuery.isLoading ? (
+          <div className="p-6">
+            <Empty>Yükleniyor…</Empty>
+          </div>
+        ) : sensors.length === 0 ? (
+          <div className="p-6">
+            <Empty>Henüz kayıtlı sensör bulunmuyor.</Empty>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                <tr>
+                  <th className="px-5 py-3">Sensör Adı</th>
+                  <th className="px-4 py-3">Fabrika (Site)</th>
+                  <th className="px-4 py-3">Durum</th>
+                  <th className="px-4 py-3">Versiyon</th>
+                  <th className="px-4 py-3">Son Telemetri</th>
+                  <th className="px-4 py-3">SHA-256 Parmak İzi</th>
+                  <th className="px-5 py-3 text-right">İşlemler</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E2E8F0]">
+                {sensors.map((s) => {
+                  const site = sites.find((st) => st.id === s.site_id);
+                  return (
+                    <tr key={s.id} className="hover:bg-[#F8FAFC]">
+                      <td className="px-5 py-3 font-semibold text-[#1C2434]">{s.name}</td>
+                      <td className="px-4 py-3 text-slate-600">{site?.name ?? "—"}</td>
+                      <td className="px-4 py-3">
+                        <Badge tone={s.is_connected ? "emerald" : "slate"} dot>
+                          {s.is_connected ? "1G · Çevrimiçi" : "Beklemede"}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-slate-600">v{s.version}</td>
+                      <td className="px-4 py-3 font-mono text-slate-500">
+                        {s.last_seen_at ? formatDate(s.last_seen_at) : "Henüz veri yok"}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-slate-500">
+                        {s.credential_fingerprint.slice(0, 14)}…
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <div className="inline-flex items-center gap-1.5">
+                          {canEditAssets && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={analyzeUploadMut.isPending}
+                              onClick={() => {
+                                setUploadSensorId(s.id);
+                                handleSampleAnalyze("real-modbus-pcap");
+                              }}
+                            >
+                              Örnek PCAP Çalıştır
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() =>
+                              setSelectedSensorId(selectedSensorId === s.id ? null : s.id)
+                            }
+                          >
+                            {selectedSensorId === s.id ? "Gizle" : "Keşif Geçmişi"}
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {selectedSensorId && detailQuery.data && (
+        <Card
+          title={`Son Keşif Çalışmaları — ${detailQuery.data.name}`}
+          subtitle="Sensör tarafından gönderilen pasif gözlem paketlerinin işlenme geçmişi"
+          noPadding
+        >
+          {detailQuery.data.recent_runs.length === 0 ? (
+            <div className="p-6">
+              <Empty>Bu sensör henüz keşif verisi göndermedi.</Empty>
+            </div>
           ) : (
-            <form onSubmit={handleEnroll} className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                  <tr>
+                    <th className="px-5 py-3">Başlangıç Zamanı</th>
+                    <th className="px-4 py-3">Tamamlanma Zamanı</th>
+                    <th className="px-4 py-3">Durum</th>
+                    <th className="px-5 py-3 text-right">Görülen Cihaz Sayısı</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E2E8F0]">
+                  {detailQuery.data.recent_runs.map((r) => (
+                    <tr key={r.id} className="hover:bg-[#F8FAFC]">
+                      <td className="px-5 py-2.5 font-mono text-slate-600">
+                        {formatDate(r.started_at)}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-slate-600">
+                        {r.ended_at ? formatDate(r.ended_at) : "Devam ediyor"}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Badge tone="emerald" dot>
+                          {r.status}
+                        </Badge>
+                      </td>
+                      <td className="px-5 py-2.5 text-right font-mono font-bold text-[#1C2434]">
+                        {r.devices_seen}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* 2 Sütunlu Trafik Özeti: En Aktif IP'ler & Protokol Dağılımı */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card
+          title="Pasif Yakalamada En Aktif IP Adresleri"
+          subtitle="Gözlemlenen akış ve oturum sayısına göre en yoğun endüstriyel düğümler"
+          noPadding
+        >
+          {topIps.length === 0 ? (
+            <div className="p-6">
+              <Empty>Henüz trafik verisi yok.</Empty>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                  <tr>
+                    <th className="px-5 py-3">IP & Cihaz Adı</th>
+                    <th className="px-4 py-3 text-right">Aktif Akış</th>
+                    <th className="px-4 py-3 text-right">Toplam Oturum</th>
+                    <th className="px-5 py-3 text-right">İncele</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E2E8F0]">
+                  {topIps.map((item) => (
+                    <tr key={item.id} className="hover:bg-[#F8FAFC]">
+                      <td className="px-5 py-2.5">
+                        <Link
+                          to={`/assets/${item.id}`}
+                          className="font-mono font-bold text-[#0D9488] hover:underline"
+                        >
+                          {item.ip}
+                        </Link>
+                        <div className="text-[11px] text-slate-500">{item.name}</div>
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono text-slate-700">
+                        {item.flows}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono font-bold text-[#1C2434]">
+                        {item.conns}
+                      </td>
+                      <td className="px-5 py-2.5 text-right">
+                        <Link
+                          to={`/assets/${item.id}`}
+                          className="text-xs font-semibold text-[#1C2434] hover:text-[#0D9488]"
+                        >
+                          Detay →
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+
+        <Card
+          title="Pasif Yakalamada Gözlemlenen Protokoller"
+          subtitle="DPI ve port analizi ile sınıflandırılan endüstriyel protokoller"
+          noPadding
+        >
+          {topProtos.length === 0 ? (
+            <div className="p-6">
+              <Empty>Henüz protokol verisi yok.</Empty>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                  <tr>
+                    <th className="px-5 py-3">Protokol</th>
+                    <th className="px-4 py-3 text-right">Akış Sayısı</th>
+                    <th className="px-4 py-3 text-right">Toplam Oturum</th>
+                    <th className="px-5 py-3 text-right">Harita</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E2E8F0]">
+                  {topProtos.map((p) => (
+                    <tr key={p.proto} className="hover:bg-[#F8FAFC]">
+                      <td className="px-5 py-2.5">
+                        <ProtocolBadge protocol={p.proto} />
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono text-slate-700">
+                        {p.flows}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono font-bold text-[#1C2434]">
+                        {p.conns}
+                      </td>
+                      <td className="px-5 py-2.5 text-right">
+                        <Link
+                          to="/network"
+                          className="text-xs font-semibold text-[#0D9488] hover:underline"
+                        >
+                          Topolojide Gör →
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* Yeni Sensör Kaydet (Enroll) */}
+      {canAdmin && (
+        <Card
+          title="Yeni Pasif Sensör Kaydet (Sensor Enrollment)"
+          subtitle="Saha SPAN portuna bağlanacak yeni bir Zeek / PCAP sensörü için tek kullanımlık API anahtarı üretin"
+        >
+          {sites.length === 0 ? (
+            <Empty>
+              Sensör kaydetmek için önce Ayarlar sayfasından bir fabrika (site) oluşturun.
+            </Empty>
+          ) : (
+            <form onSubmit={handleEnroll} className="grid grid-cols-1 gap-4 sm:grid-cols-4">
               <Field label="Fabrika *">
                 <Select value={effectiveSiteId} onChange={(e) => setSiteId(e.target.value)}>
                   {sites.map((s) => (
@@ -495,7 +693,7 @@ export default function SensorsPage() {
               </Field>
               <div className="flex items-end">
                 <Button type="submit" className="w-full" disabled={enrollMut.isPending}>
-                  Sensör Kaydet
+                  Sensör Kaydet & Anahtar Üret
                 </Button>
               </div>
             </form>
@@ -503,105 +701,6 @@ export default function SensorsPage() {
           <div className="mt-2">
             <ErrorBox error={enrollMut.error} />
           </div>
-        </Card>
-      )}
-
-      <Card title={`Kayıtlı Sensörler (${sensors.length})`}>
-        {sensorsQuery.isLoading ? (
-          <Empty>Yükleniyor…</Empty>
-        ) : sensors.length === 0 ? (
-          <Empty>Henüz kayıtlı sensör bulunmuyor.</Empty>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
-                <tr>
-                  <th className="py-2 pr-4">Sensör</th>
-                  <th className="py-2 pr-4">Fabrika</th>
-                  <th className="py-2 pr-4">Bağlantı Durumu</th>
-                  <th className="py-2 pr-4">Versiyon</th>
-                  <th className="py-2 pr-4">Son Görülme</th>
-                  <th className="py-2 pr-4">Parmak İzi (SHA-256)</th>
-                  <th className="py-2 text-right">Detay</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {sensors.map((s) => {
-                  const site = sites.find((st) => st.id === s.site_id);
-                  return (
-                    <tr key={s.id}>
-                      <td className="py-2.5 pr-4 font-medium text-slate-900">{s.name}</td>
-                      <td className="py-2.5 pr-4 text-slate-600">{site?.name ?? "—"}</td>
-                      <td className="py-2.5 pr-4">
-                        <span
-                          className={`inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-xs font-medium ${
-                            s.is_connected
-                              ? "bg-emerald-50 text-emerald-700"
-                              : "bg-slate-100 text-slate-600"
-                          }`}
-                        >
-                          <span
-                            className={`h-1.5 w-1.5 rounded-full ${
-                              s.is_connected ? "bg-emerald-600" : "bg-slate-400"
-                            }`}
-                          />
-                          {s.is_connected ? "Çevrimiçi" : "Çevrimdışı"}
-                        </span>
-                      </td>
-                      <td className="py-2.5 pr-4 font-mono text-xs text-slate-600">{s.version}</td>
-                      <td className="py-2.5 pr-4 text-xs text-slate-500">
-                        {s.last_seen_at ? formatDate(s.last_seen_at) : "Henüz veri yok"}
-                      </td>
-                      <td className="py-2.5 pr-4 font-mono text-xs text-slate-500">
-                        {s.credential_fingerprint.slice(0, 12)}…
-                      </td>
-                      <td className="py-2.5 text-right">
-                        <Button
-                          variant="secondary"
-                          onClick={() => setSelectedSensorId(selectedSensorId === s.id ? null : s.id)}
-                        >
-                          {selectedSensorId === s.id ? "Gizle" : "Çalışmalar"}
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
-
-      {selectedSensorId && detailQuery.data && (
-        <Card title={`Son Keşif Çalışmaları — ${detailQuery.data.name}`}>
-          {detailQuery.data.recent_runs.length === 0 ? (
-            <Empty>Bu sensör henüz keşif verisi göndermedi.</Empty>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="border-b border-slate-200 uppercase text-slate-500">
-                  <tr>
-                    <th className="py-2 pr-4">Başlangıç</th>
-                    <th className="py-2 pr-4">Bitiş</th>
-                    <th className="py-2 pr-4">Durum</th>
-                    <th className="py-2">Görülen Cihaz Sayısı</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {detailQuery.data.recent_runs.map((r) => (
-                    <tr key={r.id}>
-                      <td className="py-2 pr-4 text-slate-600">{formatDate(r.started_at)}</td>
-                      <td className="py-2 pr-4 text-slate-600">
-                        {r.ended_at ? formatDate(r.ended_at) : "Devam ediyor"}
-                      </td>
-                      <td className="py-2 pr-4 font-medium text-emerald-700">{r.status}</td>
-                      <td className="py-2 font-mono font-medium text-slate-900">{r.devices_seen}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
         </Card>
       )}
     </div>
