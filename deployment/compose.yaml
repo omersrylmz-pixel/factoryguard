@@ -12,7 +12,7 @@ services:
       POSTGRES_USER: factoryguard
       POSTGRES_PASSWORD: ${FG_DB_PASSWORD:-dev-only-change-me}
     ports:
-      - "127.0.0.1:5432:5432"   # yalnızca localhost
+      - "127.0.0.1:${FG_POSTGRES_PORT:-5432}:5432"   # yalnızca localhost
     volumes:
       - fg_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -34,7 +34,7 @@ services:
       FG_JWT_SECRET: ${FG_JWT_SECRET:-dev-only-insecure-secret-change-me-0123456789}
       FG_COOKIE_SECURE: ${FG_COOKIE_SECURE:-false}
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:${FG_BACKEND_PORT:-8000}:8000"
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health')\""]
       interval: 10s
@@ -47,7 +47,7 @@ services:
       backend:
         condition: service_healthy
     ports:
-      - "127.0.0.1:3000:8080"
+      - "127.0.0.1:${FG_FRONTEND_PORT:-3000}:8080"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ >/dev/null"]
       interval: 10s
