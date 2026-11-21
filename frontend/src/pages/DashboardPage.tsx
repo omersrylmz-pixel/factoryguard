@@ -121,7 +121,7 @@ export default function DashboardPage() {
   const vendorRanking = Array.from(vendorCounts.entries()).sort((a, b) => b[1].count - a[1].count);
   const maxVendorCount = Math.max(1, vendorRanking[0]?.[1].count ?? 1);
 
-  // Gözlemlenen protokol dağılımı (Donut grafiği için: akış sayısı ve bağlantı sayısı tutarlı)
+  // Gözlemlenen protokol dağılımı (Donut grafiği için: doğrudan iletişim akışlarından hesaplanır)
   const protoStats = new Map<string, { flows: number; conns: number; isHint: boolean }>();
   for (const e of edges) {
     const raw = (e.protocol || "unknown").toUpperCase();
@@ -132,16 +132,6 @@ export default function DashboardPage() {
     cur.conns += e.connection_count;
     cur.isHint = cur.isHint && isHint;
     protoStats.set(clean, cur);
-  }
-  for (const a of assets) {
-    for (const p of a.observed_protocols ?? []) {
-      const raw = p.toUpperCase();
-      const isHint = raw.endsWith("?");
-      const clean = raw.replace(/\?+$/, "");
-      if (!protoStats.has(clean)) {
-        protoStats.set(clean, { flows: 1, conns: 1, isHint });
-      }
-    }
   }
   const protoList = Array.from(protoStats.entries()).sort((a, b) => b[1].flows - a[1].flows);
   const totalProtoFlows = Math.max(
@@ -166,7 +156,7 @@ export default function DashboardPage() {
           `${activeOrg?.name ?? ""} · Gerçek zamanlı OT varlık görünürlüğü ve açıklanabilir risk özeti`,
           `${activeOrg?.name ?? ""} · Real-time OT asset visibility and explainable risk overview`,
         )}
-        breadcrumb={t("Genel Bakış", "Overview")}
+        breadcrumb={t("Kontrol Paneli", "Dashboard")}
         actions={
           <>
             <Button
@@ -412,8 +402,11 @@ export default function DashboardPage() {
                         )}
                       </span>
                       <span className="font-mono text-[#64748B]">
-                        {t(`${stat.flows} akış`, `${stat.flows} flows`)} (
-                        <strong className="text-[#1C2434]">{pct}%</strong>)
+                        {t(
+                          `${stat.flows} akış`,
+                          `${stat.flows} ${stat.flows === 1 ? "flow" : "flows"}`,
+                        )}{" "}
+                        (<strong className="text-[#1C2434]">{pct}%</strong>)
                       </span>
                     </div>
                   );

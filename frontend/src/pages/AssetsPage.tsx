@@ -206,7 +206,7 @@ export default function AssetsPage() {
   function shortPurdue(raw?: string): string {
     if (!raw) return "L1/L2";
     const m = raw.match(/L\d(?:\s*\/\s*L\d)?/i);
-    return m ? m[0].toUpperCase() : raw.split("-")[0]?.trim() ?? "L1/L2";
+    return m ? m[0].replace(/\s+/g, "").toUpperCase() : "L1/L2";
   }
 
   return (
@@ -562,7 +562,7 @@ export default function AssetsPage() {
               <table className="w-full text-left text-xs">
                 <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold text-[#64748B] uppercase">
                   <tr>
-                    <th className="w-8 px-4 py-3">
+                    <th className="w-8 px-3 py-3">
                       <input
                         type="checkbox"
                         checked={pagedAssets.length > 0 && pagedAssets.every((a) => selectedIds.includes(a.id))}
@@ -571,13 +571,13 @@ export default function AssetsPage() {
                         }
                       />
                     </th>
-                    <th className="px-4 py-3">{t("Cihaz / Hostname", "Device / Hostname")}</th>
-                    <th className="px-4 py-3">{t("IP & MAC Adresi", "IP & MAC Address")}</th>
-                    <th className="px-4 py-3">{t("Tür & Sınıflandırma", "Type & Classification")}</th>
-                    <th className="px-4 py-3">{t("Üretici & Model", "Vendor & Model")}</th>
-                    <th className="px-4 py-3">{t("Bölge & Kritiklik", "Zone & Criticality")}</th>
-                    <th className="px-4 py-3">{t("Durum & Son Görülme", "Status & Last Seen")}</th>
-                    <th className="px-4 py-3 text-right">{t("İşlem", "Action")}</th>
+                    <th className="px-3 py-3">{t("Cihaz / Hostname", "Device / Hostname")}</th>
+                    <th className="px-3 py-3">{t("IP & MAC Adresi", "IP & MAC Address")}</th>
+                    <th className="px-3 py-3">{t("Tür & Sınıflandırma", "Type & Classification")}</th>
+                    <th className="px-3 py-3">{t("Üretici & Model", "Vendor & Model")}</th>
+                    <th className="px-3 py-3">{t("Bölge & Kritiklik", "Zone & Criticality")}</th>
+                    <th className="px-3 py-3">{t("Durum & Son Görülme", "Status & Last Seen")}</th>
+                    <th className="px-3 py-3 text-right">{t("İşlem", "Action")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E2E8F0]">
@@ -596,7 +596,7 @@ export default function AssetsPage() {
 
                     return (
                       <tr key={a.id} className="transition-colors hover:bg-[#F8FAFC]">
-                        <td className="px-4 py-2.5">
+                        <td className="px-3 py-2.5">
                           <input
                             type="checkbox"
                             checked={isChecked}
@@ -605,7 +605,7 @@ export default function AssetsPage() {
                         </td>
 
                         {/* 1. Cihaz / Hostname (tekrarsız) */}
-                        <td className="max-w-[190px] px-4 py-2.5">
+                        <td className="max-w-[175px] px-3 py-2.5">
                           <Link
                             to={`/assets/${a.id}`}
                             title={primaryName}
@@ -621,7 +621,7 @@ export default function AssetsPage() {
                         </td>
 
                         {/* 2. IP & MAC Adresi */}
-                        <td className="px-4 py-2.5 font-mono whitespace-nowrap">
+                        <td className="px-3 py-2.5 font-mono whitespace-nowrap">
                           <div className="flex items-center gap-1.5 font-semibold text-[#1C2434]">
                             <span>{a.ip_address ?? "—"}</span>
                             {a.is_external && <Badge variant="danger">{t("Dış Ağ", "External")}</Badge>}
@@ -630,7 +630,7 @@ export default function AssetsPage() {
                         </td>
 
                         {/* 3. Tür & Sınıflandırma (Purdue + Protokoller tek hücrede) */}
-                        <td className="px-4 py-2.5" title={a.classification_label}>
+                        <td className="px-3 py-2.5" title={a.classification_label}>
                           <div className="flex items-center gap-1.5 whitespace-nowrap">
                             <span className="font-medium text-[#1C2434]">{ASSET_TYPE_LABEL[a.asset_type]}</span>
                             <Badge variant="mono">{shortPurdue(a.purdue_level)}</Badge>
@@ -645,7 +645,7 @@ export default function AssetsPage() {
                         </td>
 
                         {/* 4. Üretici & Model */}
-                        <td className="max-w-[170px] px-4 py-2.5">
+                        <td className="max-w-[155px] px-3 py-2.5">
                           <div
                             className={`truncate font-medium ${a.vendor ? "text-[#1C2434]" : "text-[#64748B]"}`}
                             title={a.vendor || a.vendor_status_label}
@@ -660,7 +660,7 @@ export default function AssetsPage() {
                         </td>
 
                         {/* 5. Bölge & Kritiklik */}
-                        <td className="max-w-[175px] px-4 py-2.5">
+                        <td className="max-w-[155px] px-3 py-2.5">
                           <div className="truncate text-[#1C2434]" title={zone?.name ?? t("Atanmadı", "Unassigned")}>
                             {zone?.name ?? t("Atanmadı", "Unassigned")}
                           </div>
@@ -670,7 +670,7 @@ export default function AssetsPage() {
                         </td>
 
                         {/* 6. Durum & Son Görülme */}
-                        <td className="px-4 py-2.5 whitespace-nowrap">
+                        <td className="px-3 py-2.5 whitespace-nowrap">
                           <div>
                             <Badge variant={a.is_verified ? "success" : "warning"}>
                               {a.is_verified
@@ -687,7 +687,7 @@ export default function AssetsPage() {
                         </td>
 
                         {/* 7. İşlem */}
-                        <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                        <td className="px-3 py-2.5 text-right whitespace-nowrap">
                           <Link to={`/assets/${a.id}`}>
                             <Button variant="secondary" size="sm">
                               {t("Detay", "Detail")}
