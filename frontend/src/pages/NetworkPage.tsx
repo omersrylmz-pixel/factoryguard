@@ -17,6 +17,7 @@ import {
   formatDate,
 } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
+import { useLang } from "../i18n";
 import { api } from "../services/api";
 import type { BaselineApproveResult, CommunicationGraph, GraphNode, Site } from "../types/api";
 
@@ -34,6 +35,7 @@ const INNER_HEX = hexPoints(20);
 
 export default function NetworkPage() {
   const { activeOrg, canEditAssets } = useAuth();
+  const { t } = useLang();
   const qc = useQueryClient();
   const navigate = useNavigate();
 
@@ -62,7 +64,12 @@ export default function NetworkPage() {
     mutationFn: (commId: string) =>
       api<BaselineApproveResult>(`/communications/${commId}/approve-baseline`, { method: "POST" }),
     onSuccess: async () => {
-      setBaselineNotice("İletişim akışı onaylı fabrika baseline listesine eklendi.");
+      setBaselineNotice(
+        t(
+          "İletişim akışı onaylı fabrika baseline listesine eklendi.",
+          "Communication flow added to the approved plant baseline.",
+        ),
+      );
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["communications-graph", activeOrg?.id] }),
         qc.invalidateQueries({ queryKey: ["risks", activeOrg?.id] }),
@@ -78,7 +85,10 @@ export default function NetworkPage() {
       ),
     onSuccess: async (res) => {
       setBaselineNotice(
-        `${res.approved_flows} iletişim akışı onaylı fabrika baseline'ı (network baseline) olarak kaydedildi.`,
+        t(
+          `${res.approved_flows} iletişim akışı onaylı fabrika baseline'ı olarak kaydedildi.`,
+          `${res.approved_flows} communication flows saved as approved plant baseline.`,
+        ),
       );
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["communications-graph", activeOrg?.id] }),
@@ -116,11 +126,11 @@ export default function NetworkPage() {
   const approvedCount = edges.filter((e) => e.is_baseline_approved).length;
   const crossZoneCount = edges.filter((e) => e.cross_zone).length;
 
-  // Merkez Hub + Çevre Halkalar Yerleşimi
+  // Merkez Hub + Çevre Halkalar Yerleşimi (alt düğümlerin kesilmemesi için 940x520)
   const width = 940;
-  const height = 470;
+  const height = 520;
   const cx = width / 2;
-  const cy = height / 2;
+  const cy = height / 2 - 8;
 
   const degreeMap = new Map<string, number>();
   for (const e of edges) {
@@ -142,7 +152,7 @@ export default function NetworkPage() {
     innerRing.forEach((n, idx) => {
       const angle = (2 * Math.PI * idx) / Math.max(innerRing.length, 1) - Math.PI / 3;
       const rx = outerRing.length > 0 ? 160 : 225;
-      const ry = outerRing.length > 0 ? 120 : 165;
+      const ry = outerRing.length > 0 ? 115 : 160;
       coords.set(n.id, {
         x: cx + rx * Math.cos(angle),
         y: cy + ry * Math.sin(angle),
@@ -153,7 +163,7 @@ export default function NetworkPage() {
       const angle = (2 * Math.PI * idx) / Math.max(outerRing.length, 1) - Math.PI / 6;
       coords.set(n.id, {
         x: cx + 335 * Math.cos(angle),
-        y: cy + 185 * Math.sin(angle),
+        y: cy + 178 * Math.sin(angle),
       });
     });
   } else {
@@ -167,17 +177,20 @@ export default function NetworkPage() {
   }
 
   function nodeHexStroke(n: GraphNode): string {
-    if (n.criticality === "critical" || n.criticality === "high") return "#E11D48"; // Kırmızı
-    if (n.is_verified) return "#0D9488"; // TailAdmin Teal
-    return "#D97706"; // Kehribar (Doğrulanmamış)
+    if (n.criticality === "critical" || n.criticality === "high") return "#E11D48";
+    if (n.is_verified) return "#0D9488";
+    return "#D97706";
   }
 
   return (
     <div className="space-y-6">
       <PageHeader
-        breadcrumb="Network Topology"
-        title="Ağ Topolojisi & İletişim Haritası"
-        subtitle="Pasif SPAN/PCAP trafiğinden çıkarılan endüstriyel iletişim grafiği ve fabrika baseline onay yönetimi"
+        breadcrumb={t("Ağ Topolojisi", "Network Topology")}
+        title={t("Ağ Topolojisi & İletişim Haritası", "Network Topology & Communication Map")}
+        subtitle={t(
+          "Pasif SPAN/PCAP trafiğinden çıkarılan endüstriyel iletişim grafiği ve baseline yönetimi",
+          "Industrial communication graph extracted from passive SPAN/PCAP traffic and baseline management",
+        )}
         actions={
           <>
             {canEditAssets && edges.length > 0 && (
@@ -186,11 +199,13 @@ export default function NetworkPage() {
                 disabled={approveAllMut.isPending}
                 onClick={() => approveAllMut.mutate()}
               >
-                {approveAllMut.isPending ? "Kaydediliyor…" : "Tümünü Baseline Olarak Onayla"}
+                {approveAllMut.isPending
+                  ? t("Kaydediliyor…", "Saving…")
+                  : t("Tümünü Baseline Onayla", "Approve All as Baseline")}
               </Button>
             )}
             <Button variant="primary" onClick={() => void graphQuery.refetch()}>
-              Topolojiyi Yenile
+              {t("Topolojiyi Yenile", "Refresh Topology")}
             </Button>
           </>
         }
@@ -199,9 +214,9 @@ export default function NetworkPage() {
       {/* 4 TailAdmin StatCard */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="Aktif Topoloji Düğümü"
+          label={t("Aktif Topoloji Düğümü", "Active Topology Nodes")}
           value={nodes.length}
-          hint={`Toplam ${allNodes.length} kayıtlı varlık içinde`}
+          hint={t(`Toplam ${allNodes.length} kayıtlı varlık`, `Out of ${allNodes.length} registered assets`)}
           tone="teal"
           icon={
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -213,9 +228,9 @@ export default function NetworkPage() {
           }
         />
         <StatCard
-          label="Gözlemlenen İletişim Akışı"
+          label={t("Gözlemlenen İletişim Akışı", "Observed Network Flows")}
           value={edges.length}
-          hint={`${protocols.length} farklı endüstriyel/IT protokolü`}
+          hint={t(`${protocols.length} farklı protokol`, `${protocols.length} distinct protocols`)}
           tone="navy"
           icon={
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -224,18 +239,24 @@ export default function NetworkPage() {
           }
         />
         <StatCard
-          label="Onaylı Baseline Akışları"
+          label={t("Onaylı Baseline Akışları", "Approved Baseline Flows")}
           value={approvedCount}
           hint={
             edges.length > 0
-              ? `%${Math.round((approvedCount / edges.length) * 100)} baseline uyumluluğu`
-              : "Henüz akış yok"
+              ? t(
+                  `%${Math.round((approvedCount / edges.length) * 100)} baseline uyumu`,
+                  `${Math.round((approvedCount / edges.length) * 100)}% baseline compliance`,
+                )
+              : t("Henüz akış yok", "No flows yet")
           }
           tone="emerald"
           badge={
             edges.length - approvedCount > 0
-              ? { text: `${edges.length - approvedCount} İncelemede`, tone: "amber" }
-              : { text: "Tam Onaylı", tone: "emerald" }
+              ? {
+                  text: t(`${edges.length - approvedCount} İncelemede`, `${edges.length - approvedCount} Pending`),
+                  tone: "amber",
+                }
+              : { text: t("Tam Onaylı", "All Approved"), tone: "emerald" }
           }
           icon={
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -245,14 +266,14 @@ export default function NetworkPage() {
           }
         />
         <StatCard
-          label="Bölgeler Arası (Cross-Zone)"
+          label={t("Bölgeler Arası Geçiş", "Cross-Zone Flows")}
           value={crossZoneCount}
-          hint="Farklı güvenlik bölgeleri arası geçiş"
+          hint={t("Farklı güvenlik bölgeleri arası", "Across different security zones")}
           tone={crossZoneCount > 0 ? "amber" : "teal"}
           badge={
             crossZoneCount > 0
-              ? { text: "Segregasyon İncele", tone: "amber" }
-              : { text: "İzole", tone: "teal" }
+              ? { text: t("Segmentasyon İncele", "Review Segmentation"), tone: "amber" }
+              : { text: t("İzole", "Isolated"), tone: "teal" }
           }
           icon={
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -272,7 +293,7 @@ export default function NetworkPage() {
             onClick={() => setBaselineNotice(null)}
             className="text-emerald-700 hover:underline"
           >
-            Kapat
+            {t("Kapat", "Dismiss")}
           </button>
         </div>
       )}
@@ -281,8 +302,11 @@ export default function NetworkPage() {
 
       {/* Topoloji Kartı + Filtre Araç Çubuğu */}
       <Card
-        title="Etkileşimli OT Ağ Topolojisi"
-        subtitle="Düğümlere tıklayarak cihaz detay konsoluna gidebilir, sağ alt kontrol kulesinden yerleşim ve yakınlaştırmayı değiştirebilirsiniz"
+        title={t("Etkileşimli OT Ağ Topolojisi", "Interactive OT Network Topology")}
+        subtitle={t(
+          "Cihaz detayına gitmek için düğümlere tıklayın; sağ alttan yerleşim ve yakınlaştırmayı yönetin",
+          "Click any node to open device details; use bottom-right controls for layout and zoom",
+        )}
         noPadding
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -290,12 +314,12 @@ export default function NetworkPage() {
               <Input
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="IP, cihaz veya protokol ara..."
+                placeholder={t("IP, cihaz veya protokol ara...", "Search IP, device or protocol...")}
               />
             </div>
             <div className="w-44">
               <Select value={siteId} onChange={(e) => setSiteId(e.target.value)}>
-                <option value="">Tüm Fabrikalar</option>
+                <option value="">{t("Tüm Fabrikalar", "All Sites")}</option>
                 {sites.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
@@ -305,10 +329,10 @@ export default function NetworkPage() {
             </div>
             <div className="w-40">
               <Select value={protocolFilter} onChange={(e) => setProtocolFilter(e.target.value)}>
-                <option value="">Tüm Protokoller</option>
+                <option value="">{t("Tüm Protokoller", "All Protocols")}</option>
                 {protocols.map((p) => (
                   <option key={p} value={p}>
-                    {p.toUpperCase()}
+                    {p.replace(/\?+$/, "").toUpperCase()}
                   </option>
                 ))}
               </Select>
@@ -319,17 +343,22 @@ export default function NetworkPage() {
         <div className="relative bg-[#F8FAFC]">
           {graphQuery.isLoading ? (
             <div className="p-6">
-              <Empty>Topoloji haritası yükleniyor…</Empty>
+              <Empty>{t("Topoloji haritası yükleniyor…", "Loading topology map…")}</Empty>
             </div>
           ) : edges.length === 0 ? (
             <div className="p-6">
-              <Empty>Seçili filtrelere uygun gözlemlenen iletişim ilişkisi bulunmuyor.</Empty>
+              <Empty>
+                {t(
+                  "Seçili filtrelere uygun gözlemlenen iletişim ilişkisi bulunmuyor.",
+                  "No observed communication flows match the selected filters.",
+                )}
+              </Empty>
             </div>
           ) : (
             <div className="relative overflow-x-auto">
               <svg
                 viewBox={`0 0 ${width} ${height}`}
-                className="mx-auto h-[470px] w-full select-none"
+                className="mx-auto h-[500px] w-full select-none"
               >
                 <defs>
                   <pattern id="tailadmin-grid" width="22" height="22" patternUnits="userSpaceOnUse">
@@ -357,24 +386,27 @@ export default function NetworkPage() {
 
                 <g transform={`translate(${cx},${cy}) scale(${zoom}) translate(${-cx},${-cy})`}>
                   {/* İletişim Kenarları */}
-                  {edges.map((e) => {
+                  {edges.map((e, edgeIdx) => {
                     const s = coords.get(e.source_asset_id);
-                    const t = coords.get(e.target_asset_id);
-                    if (!s || !t) return null;
-                    const mx = (s.x + t.x) / 2;
-                    const my = (s.y + t.y) / 2;
+                    const tCoord = coords.get(e.target_asset_id);
+                    if (!s || !tCoord) return null;
+                    // Etiketlerin merkezde üst üste binmesini azaltmak için kenar üzerinde kademeli konum (0.38 / 0.5 / 0.62)
+                    const ratio = [0.42, 0.56, 0.34, 0.64][edgeIdx % 4];
+                    const mx = s.x + (tCoord.x - s.x) * ratio;
+                    const my = s.y + (tCoord.y - s.y) * ratio;
                     const strokeColor = e.is_baseline_approved
                       ? "#0D9488"
                       : e.cross_zone
                         ? "#E11D48"
                         : "#1C2434";
+                    const cleanProto = e.protocol.replace(/\?+$/, "").toUpperCase();
                     return (
                       <g key={e.id}>
                         <line
                           x1={s.x}
                           y1={s.y}
-                          x2={t.x}
-                          y2={t.y}
+                          x2={tCoord.x}
+                          y2={tCoord.y}
                           stroke={strokeColor}
                           strokeDasharray={
                             e.protocol_confidence === "port_hint" || (e.cross_zone && !e.is_baseline_approved)
@@ -402,7 +434,7 @@ export default function NetworkPage() {
                               textAnchor="middle"
                               className="fill-[#1C2434] font-mono text-[9px] font-semibold"
                             >
-                              {e.protocol.toUpperCase()}
+                              {cleanProto}
                               {e.target_port ? `:${e.target_port}` : ""}
                             </text>
                           </g>
@@ -482,28 +514,28 @@ export default function NetworkPage() {
                 <div className="flex flex-col overflow-hidden rounded-[4px] border border-[#E2E8F0] bg-white shadow-xs">
                   <button
                     type="button"
-                    title="Protokol Etiketlerini Göster/Gizle"
+                    title={t("Protokol Etiketlerini Göster/Gizle", "Toggle Protocol Labels")}
                     onClick={() => setShowEdgeLabels((v) => !v)}
                     className={`border-b border-[#E2E8F0] px-2.5 py-1.5 text-xs font-medium ${
                       showEdgeLabels ? "bg-teal-50 text-[#0D9488]" : "text-slate-600 hover:bg-slate-50"
                     }`}
                   >
-                    Etiket
+                    {t("Etiket", "Labels")}
                   </button>
                   <button
                     type="button"
-                    title="Yerleşim Değiştir (Merkez Hub / Halka)"
+                    title={t("Yerleşim Değiştir (Merkez Hub / Halka)", "Switch Layout (Center Hub / Ring)")}
                     onClick={() => setLayoutMode((m) => (m === "hub" ? "ring" : "hub"))}
                     className="px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
                   >
-                    {layoutMode === "hub" ? "Halka" : "Hub"}
+                    {layoutMode === "hub" ? t("Halka", "Ring") : "Hub"}
                   </button>
                 </div>
 
                 <div className="flex flex-col overflow-hidden rounded-[4px] border border-[#E2E8F0] bg-white shadow-xs">
                   <button
                     type="button"
-                    title="Yakınlaştır (+)"
+                    title={t("Yakınlaştır (+)", "Zoom In (+)")}
                     onClick={() => setZoom((z) => Math.min(1.6, +(z + 0.15).toFixed(2)))}
                     className="border-b border-[#E2E8F0] p-1.5 text-xs font-bold text-[#1C2434] hover:bg-slate-50"
                   >
@@ -511,7 +543,7 @@ export default function NetworkPage() {
                   </button>
                   <button
                     type="button"
-                    title="Uzaklaştır (-)"
+                    title={t("Uzaklaştır (-)", "Zoom Out (-)")}
                     onClick={() => setZoom((z) => Math.max(0.65, +(z - 0.15).toFixed(2)))}
                     className="border-b border-[#E2E8F0] p-1.5 text-xs font-bold text-[#1C2434] hover:bg-slate-50"
                   >
@@ -519,7 +551,7 @@ export default function NetworkPage() {
                   </button>
                   <button
                     type="button"
-                    title="Sıfırla"
+                    title={t("Sıfırla", "Reset Zoom")}
                     onClick={() => setZoom(1)}
                     className="p-1.5 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
                   >
@@ -534,51 +566,63 @@ export default function NetworkPage() {
           <div className="flex flex-wrap items-center justify-between gap-4 border-t border-[#E2E8F0] bg-white px-6 py-3 text-xs text-slate-600">
             <div className="flex flex-wrap items-center gap-5">
               <span className="inline-flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded-xs border-2 border-[#0D9488] bg-white" /> Doğrulanmış Düğüm
+                <span className="h-3 w-3 rounded-xs border-2 border-[#0D9488] bg-white" />{" "}
+                {t("Doğrulanmış Düğüm", "Verified Node")}
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded-xs border-2 border-amber-500 bg-white" /> Doğrulanmamış Düğüm
+                <span className="h-3 w-3 rounded-xs border-2 border-amber-500 bg-white" />{" "}
+                {t("Doğrulanmamış Düğüm", "Unverified Node")}
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded-xs border-2 border-rose-600 bg-white" /> Yüksek/Kritik Düğüm
+                <span className="h-3 w-3 rounded-xs border-2 border-rose-600 bg-white" />{" "}
+                {t("Yüksek/Kritik Düğüm", "High/Critical Node")}
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <span className="h-0.5 w-4 bg-[#0D9488]" /> Onaylı Baseline Akışı
+                <span className="h-0.5 w-4 bg-[#0D9488]" />{" "}
+                {t("Onaylı Baseline Akışı", "Approved Baseline Flow")}
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <span className="h-0.5 w-4 border-b border-dashed border-rose-600" /> Cross-Zone / Port İpucu
+                <span className="h-0.5 w-4 border-b border-dashed border-rose-600" />{" "}
+                {t("Bölgeler Arası / Port Tahmini", "Cross-Zone / Port Hint")}
               </span>
             </div>
             <span className="text-[11px] text-slate-500">
-              Yakınlaştırma: %{Math.round(zoom * 100)} · Yerleşim: {layoutMode === "hub" ? "Merkez Hub" : "Çevre Halka"}
+              {t("Yakınlaştırma", "Zoom")}: %{Math.round(zoom * 100)} · {t("Yerleşim", "Layout")}:{" "}
+              {layoutMode === "hub" ? t("Merkez Hub", "Center Hub") : t("Çevre Halka", "Outer Ring")}
             </span>
           </div>
         </div>
       </Card>
 
-      {/* İletişim Akışları Tablosu (Conversations) */}
+      {/* İletişim Akışları Tablosu */}
       <Card
-        title={`Gözlemlenen İletişim Akışları (${edges.length})`}
-        subtitle="Kaynak ve hedef OT/IT cihazları arasındaki protokol, port, güven düzeyi ve baseline onay durumu"
+        title={t(
+          `Gözlemlenen İletişim Akışları (${edges.length})`,
+          `Observed Communication Flows (${edges.length})`,
+        )}
+        subtitle={t(
+          "Kaynak ve hedef cihazlar arasındaki protokol, port, güven düzeyi ve baseline onay durumu",
+          "Protocol, port, confidence level and baseline approval status between source and target devices",
+        )}
         noPadding
       >
         {edges.length === 0 ? (
           <div className="p-6">
-            <Empty>Kayıt yok.</Empty>
+            <Empty>{t("Kayıt yok.", "No records.")}</Empty>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+              <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
                 <tr>
-                  <th className="px-5 py-3">Kaynak Varlık</th>
-                  <th className="px-4 py-3">Hedef Varlık</th>
-                  <th className="px-4 py-3">Protokol / Port</th>
-                  <th className="px-4 py-3">Güven & Bölge</th>
-                  <th className="px-4 py-3">Baseline Durumu</th>
-                  <th className="px-4 py-3">Paket/Akış</th>
-                  <th className="px-4 py-3">Son Görülme</th>
-                  {canEditAssets && <th className="px-5 py-3 text-right">İşlem</th>}
+                  <th className="px-5 py-3">{t("Kaynak Varlık", "Source Asset")}</th>
+                  <th className="px-4 py-3">{t("Hedef Varlık", "Target Asset")}</th>
+                  <th className="px-4 py-3">{t("Protokol / Port", "Protocol / Port")}</th>
+                  <th className="px-4 py-3">{t("Güven & Bölge", "Confidence & Zone")}</th>
+                  <th className="px-4 py-3">{t("Baseline Durumu", "Baseline Status")}</th>
+                  <th className="px-4 py-3">{t("Bağlantı", "Connections")}</th>
+                  <th className="px-4 py-3">{t("Son Görülme", "Last Seen")}</th>
+                  {canEditAssets && <th className="px-5 py-3 text-right">{t("İşlem", "Action")}</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E2E8F0]">
@@ -598,7 +642,7 @@ export default function NetworkPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <Link
                             to={`/assets/${e.target_asset_id}`}
                             className="font-semibold text-[#1C2434] hover:text-[#0D9488]"
@@ -609,9 +653,9 @@ export default function NetworkPage() {
                         </div>
                         <div className="font-mono text-[11px] text-slate-500">{e.target_ip ?? "—"}</div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 whitespace-nowrap">
                         <div className="flex items-center gap-1.5">
-                          <ProtocolBadge protocol={e.protocol} />
+                          <ProtocolBadge protocol={e.protocol} confidence={e.protocol_confidence} />
                           {e.target_port !== null && (
                             <span className="font-mono text-xs text-slate-600">:{e.target_port}</span>
                           )}
@@ -621,29 +665,31 @@ export default function NetworkPage() {
                         <div className="flex flex-wrap items-center gap-1.5">
                           <Badge tone={e.protocol_confidence === "observed" ? "teal" : "slate"}>
                             {e.protocol_confidence === "observed"
-                              ? "DPI Doğrulandı"
+                              ? t("DPI Doğrulandı", "DPI Verified")
                               : e.protocol_confidence === "port_hint"
-                                ? "Port İpucu"
-                                : "Taşıma"}
+                                ? t("Port Tahmini", "Port Hint")
+                                : t("Taşıma", "Transport")}
                           </Badge>
-                          {e.cross_zone && <Badge tone="red">Cross-Zone</Badge>}
+                          {e.cross_zone && <Badge tone="red">{t("Bölgeler Arası", "Cross-Zone")}</Badge>}
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 whitespace-nowrap">
                         {e.is_baseline_approved ? (
                           <Badge tone="emerald" dot>
-                            Baseline Onaylı
+                            {t("Baseline Onaylı", "Baseline Approved")}
                           </Badge>
                         ) : (
                           <Badge tone="amber" dot>
-                            İnceleme Bekliyor
+                            {t("İnceleme Bekliyor", "Pending Review")}
                           </Badge>
                         )}
                       </td>
                       <td className="px-4 py-3 font-mono font-bold text-[#1C2434]">{e.connection_count}</td>
-                      <td className="px-4 py-3 font-mono text-slate-500">{formatDate(e.last_seen_at)}</td>
+                      <td className="px-4 py-3 font-mono whitespace-nowrap text-slate-500">
+                        {formatDate(e.last_seen_at)}
+                      </td>
                       {canEditAssets && (
-                        <td className="px-5 py-3 text-right">
+                        <td className="px-5 py-3 text-right whitespace-nowrap">
                           {!e.is_baseline_approved ? (
                             <Button
                               size="sm"
@@ -651,10 +697,10 @@ export default function NetworkPage() {
                               disabled={approveSingleMut.isPending}
                               onClick={() => approveSingleMut.mutate(e.id)}
                             >
-                              Onayla
+                              {t("Onayla", "Approve")}
                             </Button>
                           ) : (
-                            <span className="text-[11px] text-slate-400">Onaylandı</span>
+                            <span className="text-[11px] text-slate-400">{t("Onaylandı", "Approved")}</span>
                           )}
                         </td>
                       )}

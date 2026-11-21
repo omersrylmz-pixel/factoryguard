@@ -17,6 +17,7 @@ import {
   formatDate,
 } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
+import { bi, useLang } from "../i18n";
 import { api } from "../services/api";
 import type {
   Criticality,
@@ -29,30 +30,22 @@ import type {
   RiskStatus,
 } from "../types/api";
 
-export const RISK_STATUS_LABEL: Record<RiskStatus, string> = {
-  open: "Açık (Open)",
-  investigating: "İnceleniyor",
-  accepted: "Kabul Edildi",
-  resolved: "Çözüldü",
-  false_positive: "Yanlış Alarm",
-};
+export const RISK_STATUS_LABEL: Record<RiskStatus, string> = bi({
+  open: ["Açık", "Open"],
+  investigating: ["İnceleniyor", "Investigating"],
+  accepted: ["Kabul Edildi", "Accepted"],
+  resolved: ["Çözüldü", "Resolved"],
+  false_positive: ["Yanlış Alarm", "False Positive"],
+});
 
-export const RISK_RULE_LABEL: Record<RiskRuleKey, string> = {
-  NEW_ASSET: "NEW_ASSET · Yeni Keşfedilen Cihaz",
-  UNKNOWN_OT_ASSET: "UNKNOWN_OT_ASSET · Doğrulanmamış Endüstriyel Cihaz",
-  UNEXPECTED_COMMUNICATION: "UNEXPECTED_COMMUNICATION · Beklenmeyen İletişim",
-  UNAPPROVED_REMOTE_PATH: "UNAPPROVED_REMOTE_PATH · Onaylanmamış Uzaktan Erişim",
-  KNOWN_VULNERABILITY: "KNOWN_VULNERABILITY · Bilinen Güvenlik Açığı",
-  ASSET_NOT_SEEN: "ASSET_NOT_SEEN · Uzun Süredir Gözlemlenmeyen Cihaz",
-};
-
-const BREAKDOWN_LABELS: Record<string, { label: string; max: number }> = {
-  production_criticality: { label: "Üretim Kritiklik Seviyesi", max: 30 },
-  network_exposure: { label: "Ağ Erişilebilirliği ve Maruziyet", max: 25 },
-  verified_vulnerability: { label: "Doğrulanmış Güvenlik Açığı", max: 25 },
-  unexpected_behavior: { label: "Beklenmeyen Davranış / İletişim", max: 10 },
-  inventory_gap: { label: "Envanter Doğrulama Eksikliği", max: 10 },
-};
+export const RISK_RULE_LABEL: Record<RiskRuleKey, string> = bi({
+  NEW_ASSET: ["NEW_ASSET · Yeni Keşfedilen Cihaz", "NEW_ASSET · Newly Discovered Device"],
+  UNKNOWN_OT_ASSET: ["UNKNOWN_OT_ASSET · Doğrulanmamış Endüstriyel Cihaz", "UNKNOWN_OT_ASSET · Unverified Industrial Device"],
+  UNEXPECTED_COMMUNICATION: ["UNEXPECTED_COMMUNICATION · Beklenmeyen İletişim", "UNEXPECTED_COMMUNICATION · Unexpected Communication"],
+  UNAPPROVED_REMOTE_PATH: ["UNAPPROVED_REMOTE_PATH · Onaylanmamış Uzaktan Erişim", "UNAPPROVED_REMOTE_PATH · Unapproved Remote Access"],
+  KNOWN_VULNERABILITY: ["KNOWN_VULNERABILITY · Bilinen Güvenlik Açığı", "KNOWN_VULNERABILITY · Known Vulnerability"],
+  ASSET_NOT_SEEN: ["ASSET_NOT_SEEN · Uzun Süredir Gözlemlenmeyen Cihaz", "ASSET_NOT_SEEN · Device Not Seen Recently"],
+});
 
 function statusTone(st: RiskStatus): "red" | "amber" | "teal" | "emerald" | "slate" {
   switch (st) {
@@ -71,6 +64,7 @@ function statusTone(st: RiskStatus): "red" | "amber" | "teal" | "emerald" | "sla
 
 export default function RisksPage() {
   const { activeOrg, canEditAssets } = useAuth();
+  const { t } = useLang();
   const qc = useQueryClient();
 
   const [statusFilter, setStatusFilter] = useState<string>("open");
@@ -142,6 +136,29 @@ export default function RisksPage() {
   const posture = postureQuery.data;
   const rulesList = rulesCatalogQuery.data?.rules ?? [];
 
+  const breakdownLabels: Record<string, { label: string; max: number }> = {
+    production_criticality: {
+      label: t("Üretim Kritiklik Seviyesi", "Production Criticality"),
+      max: 30,
+    },
+    network_exposure: {
+      label: t("Ağ Erişilebilirliği ve Maruziyet", "Network Exposure"),
+      max: 25,
+    },
+    verified_vulnerability: {
+      label: t("Doğrulanmış Güvenlik Açığı", "Verified Vulnerability"),
+      max: 25,
+    },
+    unexpected_behavior: {
+      label: t("Beklenmeyen Davranış / İletişim", "Unexpected Behavior / Flow"),
+      max: 10,
+    },
+    inventory_gap: {
+      label: t("Envanter Doğrulama Eksikliği", "Inventory Verification Gap"),
+      max: 10,
+    },
+  };
+
   function toggleChecked(id: string) {
     setCheckedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
@@ -149,16 +166,21 @@ export default function RisksPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        breadcrumb="Events & Risk Findings"
-        title="Olaylar, Gözlemler & Açıklanabilir Risk Merkezi"
-        subtitle="Kara kutu skorlar yerine her bulgunun teknik kanıtı, tetiklenen deterministik kuralı ve sahada uygulanabilir çözüm adımı"
+        breadcrumb={t("Olaylar & Risk Bulguları", "Events & Risk Findings")}
+        title={t("Olaylar, Gözlemler & Açıklanabilir Risk Merkezi", "Events, Observations & Explainable Risk Center")}
+        subtitle={t(
+          "Her bulgunun teknik kanıtı, tetiklenen deterministik kuralı ve önerilen müdahale adımı",
+          "Technical evidence, triggered deterministic rule and recommended remediation for every finding",
+        )}
         actions={
           <>
             <Button
               variant="secondary"
               onClick={() => setShowRulesCatalog((v) => !v)}
             >
-              {showRulesCatalog ? "Kural Kataloğunu Gizle" : "Deterministik Kural Kataloğu (6 Kural)"}
+              {showRulesCatalog
+                ? t("Kural Kataloğunu Gizle", "Hide Rule Catalog")
+                : t("Deterministik Kural Kataloğu (6)", "Deterministic Rule Catalog (6)")}
             </Button>
             {canEditAssets && (
               <Button
@@ -166,7 +188,9 @@ export default function RisksPage() {
                 disabled={evalMut.isPending}
                 onClick={() => evalMut.mutate()}
               >
-                {evalMut.isPending ? "Hesaplanıyor…" : "Risk Motorunu Çalıştır"}
+                {evalMut.isPending
+                  ? t("Hesaplanıyor…", "Evaluating…")
+                  : t("Risk Motorunu Çalıştır", "Run Risk Engine")}
               </Button>
             )}
           </>
@@ -176,12 +200,15 @@ export default function RisksPage() {
       {/* 4 TailAdmin StatCard — Fabrika Güvenlik Duruşu & Risk Özeti */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="Fabrika Güvenlik Duruşu"
+          label={t("Güvenlik Duruş Skoru", "Security Posture Score")}
           value={posture ? `${posture.health_score}/100` : "—"}
           hint={
             posture
-              ? `${posture.status_label} · %${Math.round(posture.verified_asset_ratio * 100)} doğrulanmış varlık`
-              : "Hesaplanıyor…"
+              ? t(
+                  `%${Math.round(posture.verified_asset_ratio * 100)} doğrulanmış varlık`,
+                  `${Math.round(posture.verified_asset_ratio * 100)}% verified assets`,
+                )
+              : t("Hesaplanıyor…", "Calculating…")
           }
           tone={
             !posture
@@ -195,7 +222,7 @@ export default function RisksPage() {
           badge={
             posture
               ? {
-                  text: `Derece ${posture.grade}`,
+                  text: t(`Derece ${posture.grade}`, `Grade ${posture.grade}`),
                   tone:
                     posture.health_score >= 85
                       ? "emerald"
@@ -213,18 +240,21 @@ export default function RisksPage() {
         />
 
         <StatCard
-          label="Kritik & Yüksek Bulgular"
+          label={t("Kritik & Yüksek Bulgular", "Critical & High Findings")}
           value={posture ? posture.open_critical + posture.open_high : "—"}
           hint={
             posture
-              ? `${posture.open_critical} Kritik · ${posture.open_high} Yüksek`
-              : "Açık bulgular"
+              ? t(
+                  `${posture.open_critical} Kritik · ${posture.open_high} Yüksek`,
+                  `${posture.open_critical} Critical · ${posture.open_high} High`,
+                )
+              : t("Açık bulgular", "Open findings")
           }
           tone={
             posture && posture.open_critical + posture.open_high > 0 ? "red" : "emerald"
           }
           badge={{
-            text: "Öncelikli Müdahale",
+            text: t("Öncelikli Müdahale", "Priority Action"),
             tone: posture && posture.open_critical + posture.open_high > 0 ? "red" : "emerald",
           }}
           icon={
@@ -237,12 +267,15 @@ export default function RisksPage() {
         />
 
         <StatCard
-          label="Orta & Düşük Bulgular"
+          label={t("Orta & Düşük Bulgular", "Medium & Low Findings")}
           value={posture ? posture.open_medium + posture.open_low : "—"}
           hint={
             posture
-              ? `${posture.open_medium} Orta · ${posture.open_low} Düşük`
-              : "İzlenen bulgular"
+              ? t(
+                  `${posture.open_medium} Orta · ${posture.open_low} Düşük`,
+                  `${posture.open_medium} Medium · ${posture.open_low} Low`,
+                )
+              : t("İzlenen bulgular", "Monitored findings")
           }
           tone="amber"
           icon={
@@ -255,11 +288,11 @@ export default function RisksPage() {
         />
 
         <StatCard
-          label="Aktif Deterministik Kural"
+          label={t("Aktif Deterministik Kural", "Active Deterministic Rules")}
           value={rulesList.length || 6}
           hint="FG-RULE-001 .. FG-RULE-006"
           tone="teal"
-          badge={{ text: "%100 Açıklanabilir", tone: "teal" }}
+          badge={{ text: t("Kanıta Dayalı", "Evidence-Based"), tone: "teal" }}
           icon={
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
               <polyline points="9 11 12 14 22 4" />
@@ -272,8 +305,14 @@ export default function RisksPage() {
       {/* Deterministik 6 Kural Kataloğu */}
       {showRulesCatalog && rulesList.length > 0 && (
         <Card
-          title={`FactoryGuard Deterministik OT Risk Kural Kataloğu (${rulesList.length} Aktif Kural)`}
-          subtitle="Yapay zeka tahmini değil; kanıta dayalı deterministik endüstriyel güvenlik kuralları"
+          title={t(
+            `Deterministik OT Risk Kural Kataloğu (${rulesList.length} Aktif Kural)`,
+            `Deterministic OT Risk Rule Catalog (${rulesList.length} Active Rules)`,
+          )}
+          subtitle={t(
+            "Kara kutu tahmin değil; kanıta dayalı deterministik endüstriyel güvenlik kuralları",
+            "Evidence-based deterministic industrial security rules without black-box guessing",
+          )}
         >
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
             {rulesList.map((r) => (
@@ -300,9 +339,9 @@ export default function RisksPage() {
       {/* Filtre & Toplu İşlem Çubuğu */}
       <Card>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-          <Field label="Durum">
+          <Field label={t("Durum", "Status")}>
             <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="">Tümü</option>
+              <option value="">{t("Tümü", "All")}</option>
               {(Object.keys(RISK_STATUS_LABEL) as RiskStatus[]).map((s) => (
                 <option key={s} value={s}>
                   {RISK_STATUS_LABEL[s]}
@@ -310,9 +349,9 @@ export default function RisksPage() {
               ))}
             </Select>
           </Field>
-          <Field label="Önem Derecesi">
+          <Field label={t("Önem Derecesi", "Severity")}>
             <Select value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)}>
-              <option value="">Tümü</option>
+              <option value="">{t("Tümü", "All")}</option>
               {(["critical", "high", "medium", "low"] as Criticality[]).map((c) => (
                 <option key={c} value={c}>
                   {CRITICALITY_LABEL[c]}
@@ -320,9 +359,9 @@ export default function RisksPage() {
               ))}
             </Select>
           </Field>
-          <Field label="Tetiklenen Kural">
+          <Field label={t("Tetiklenen Kural", "Triggered Rule")}>
             <Select value={ruleFilter} onChange={(e) => setRuleFilter(e.target.value)}>
-              <option value="">Tümü</option>
+              <option value="">{t("Tümü", "All")}</option>
               {(Object.keys(RISK_RULE_LABEL) as RiskRuleKey[]).map((r) => (
                 <option key={r} value={r}>
                   {RISK_RULE_LABEL[r]}
@@ -340,7 +379,7 @@ export default function RisksPage() {
                 setRuleFilter("");
               }}
             >
-              Filtreleri Sıfırla
+              {t("Filtreleri Sıfırla", "Reset Filters")}
             </Button>
           </div>
         </div>
@@ -348,7 +387,7 @@ export default function RisksPage() {
         {canEditAssets && checkedIds.length > 0 && (
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-[4px] border border-teal-200 bg-teal-50/70 px-4 py-2.5 text-xs">
             <span className="font-semibold text-[#0F766E]">
-              {checkedIds.length} risk bulgusu seçildi
+              {t(`${checkedIds.length} risk bulgusu seçildi`, `${checkedIds.length} risk findings selected`)}
             </span>
             <div className="flex flex-wrap gap-1.5">
               {(["investigating", "accepted", "resolved", "false_positive"] as RiskStatus[]).map(
@@ -362,16 +401,16 @@ export default function RisksPage() {
                       bulkStatusMut.mutate({
                         finding_ids: checkedIds,
                         status: st,
-                        resolution_note: "Toplu durum güncellemesi",
+                        resolution_note: t("Toplu durum güncellemesi", "Bulk status update"),
                       })
                     }
                   >
-                    Toplu → {RISK_STATUS_LABEL[st]}
+                    → {RISK_STATUS_LABEL[st]}
                   </Button>
                 ),
               )}
               <Button size="sm" variant="ghost" onClick={() => setCheckedIds([])}>
-                Seçimi Temizle
+                {t("Seçimi Temizle", "Clear Selection")}
               </Button>
             </div>
           </div>
@@ -380,32 +419,38 @@ export default function RisksPage() {
 
       <ErrorBox error={risksQuery.error || evalMut.error || statusMut.error || bulkStatusMut.error} />
 
-      {/* 12 Sütunlu Bulgular Tablosu + Açıklanabilir Risk İnceleme Paneli */}
+      {/* 12 Sütunlu Bulgular Tablosu + Sabit (Sticky) Açıklanabilir Risk İnceleme Paneli */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         <div className="lg:col-span-7">
           <Card
-            title={`Bulgular Listesi (${risksQuery.data?.total ?? 0})`}
-            subtitle="Detaylı kanıt ve çözüm adımlarını incelemek için bir bulguya tıklayın"
+            title={t(
+              `Bulgular Listesi (${risksQuery.data?.total ?? 0})`,
+              `Findings List (${risksQuery.data?.total ?? 0})`,
+            )}
+            subtitle={t(
+              "Detaylı kanıt ve çözüm adımlarını incelemek için bir bulguya tıklayın",
+              "Click any finding to inspect detailed evidence and remediation steps",
+            )}
             noPadding
           >
             {risksQuery.isLoading ? (
               <div className="p-6">
-                <Empty>Yükleniyor…</Empty>
+                <Empty>{t("Yükleniyor…", "Loading…")}</Empty>
               </div>
             ) : findings.length === 0 ? (
               <div className="p-6">
-                <Empty>Seçilen kriterlere uygun risk bulgusu yok.</Empty>
+                <Empty>{t("Seçilen kriterlere uygun risk bulgusu yok.", "No risk findings match the selected filters.")}</Empty>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                  <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
                     <tr>
                       {canEditAssets && <th className="w-8 px-4 py-3" />}
-                      <th className="px-4 py-3">Önem & Puan</th>
-                      <th className="px-4 py-3">Bulgu Başlığı & Kural</th>
-                      <th className="px-4 py-3">Durum</th>
-                      <th className="px-4 py-3 text-right">Son Görülme</th>
+                      <th className="px-4 py-3">{t("Önem & Puan", "Severity & Score")}</th>
+                      <th className="px-4 py-3">{t("Bulgu Başlığı & Kural", "Finding Title & Rule")}</th>
+                      <th className="px-4 py-3">{t("Durum", "Status")}</th>
+                      <th className="px-4 py-3 text-right">{t("Son Görülme", "Last Seen")}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#E2E8F0]">
@@ -465,20 +510,22 @@ export default function RisksPage() {
           </Card>
         </div>
 
-        {/* Sağ: Açıklanabilir Risk İnceleme Paneli (5 Soru Modeli) */}
-        <div className="lg:col-span-5">
+        {/* Sağ: Sabit (Sticky) Açıklanabilir Risk İnceleme Paneli */}
+        <div className="self-start lg:sticky lg:top-20 lg:col-span-5">
           <Card
-            title="Açıklanabilir Risk İnceleme Paneli"
-            subtitle="5 adımlı kanıt ve aksiyon doğrulaması"
+            title={t("Açıklanabilir Risk İnceleme Paneli", "Explainable Risk Inspection Panel")}
+            subtitle={t("5 adımlı kanıt ve aksiyon doğrulaması", "5-step evidence and action verification")}
           >
             {!selected ? (
-              <Empty>İncelemek için soldaki tablodan bir bulgu seçin.</Empty>
+              <Empty>{t("İncelemek için soldaki tablodan bir bulgu seçin.", "Select a finding from the table on the left to inspect.")}</Empty>
             ) : (
               <div className="space-y-4 text-sm">
                 <div className="border-b border-[#E2E8F0] pb-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <CriticalityBadge value={selected.severity} />
-                    <Badge tone="navy">Puan: {selected.score}/100</Badge>
+                    <Badge tone="navy">
+                      {t("Puan", "Score")}: {selected.score}/100
+                    </Badge>
                     <Badge tone={statusTone(selected.status)}>
                       {RISK_STATUS_LABEL[selected.status]}
                     </Badge>
@@ -491,7 +538,8 @@ export default function RisksPage() {
                         to={`/assets/${selected.asset_id}`}
                         className="font-semibold text-[#0D9488] hover:underline"
                       >
-                        İlgili Cihaz Konsoluna Git ({selected.asset_ip ?? selected.asset_name ?? "Cihaz"}) →
+                        {t("Cihaz Konsoluna Git", "Open Device Console")} (
+                        {selected.asset_ip ?? selected.asset_name ?? t("Cihaz", "Device")}) →
                       </Link>
                     )}
                   </div>
@@ -499,8 +547,8 @@ export default function RisksPage() {
 
                 {/* 1. Ne tespit edildi? */}
                 <div>
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                    1. Ne Tespit Edildi?
+                  <div className="text-[11px] font-bold tracking-wider text-slate-400 uppercase">
+                    {t("1. Ne Tespit Edildi?", "1. What Was Detected?")}
                   </div>
                   <p className="mt-1 text-xs leading-relaxed text-[#1C2434]">
                     {selected.evidence.what_observed ?? selected.description}
@@ -509,8 +557,8 @@ export default function RisksPage() {
 
                 {/* 2. Neden önemli? */}
                 <div>
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                    2. Üretim Güvenliği İçin Neden Önemli?
+                  <div className="text-[11px] font-bold tracking-wider text-slate-400 uppercase">
+                    {t("2. Üretim Güvenliği İçin Neden Önemli?", "2. Why Does It Matter for OT Safety?")}
                   </div>
                   <p className="mt-1 text-xs leading-relaxed text-slate-700">
                     {selected.evidence.why_important ?? selected.description}
@@ -519,8 +567,8 @@ export default function RisksPage() {
 
                 {/* 3. Ne yapılmalı? */}
                 <div className="rounded-[4px] border border-teal-200 bg-teal-50/70 p-3.5">
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-[#0F766E]">
-                    3. Önerilen Müdahale (Ne Yapılmalı?)
+                  <div className="text-[11px] font-bold tracking-wider text-[#0F766E] uppercase">
+                    {t("3. Önerilen Müdahale", "3. Recommended Action")}
                   </div>
                   <p className="mt-1 text-xs leading-relaxed text-slate-800">
                     {selected.recommendation}
@@ -529,22 +577,24 @@ export default function RisksPage() {
 
                 {/* 4. Puan Kırılımı ve Güven */}
                 <div>
-                  <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                    <span>4. Puan Kırılımı ({selected.score}/100)</span>
+                  <div className="flex items-center justify-between text-[11px] font-bold tracking-wider text-slate-400 uppercase">
+                    <span>
+                      {t(`4. Puan Kırılımı (${selected.score}/100)`, `4. Score Breakdown (${selected.score}/100)`)}
+                    </span>
                     <span className="text-[#0D9488]">
-                      Bulgu Güveni: %{Math.round(selected.confidence * 100)}
+                      {t("Güven", "Confidence")}: %{Math.round(selected.confidence * 100)}
                     </span>
                   </div>
                   {selected.evidence.score_breakdown && (
                     <div className="mt-2 space-y-2 rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] p-3 text-xs">
-                      {Object.entries(BREAKDOWN_LABELS).map(([k, meta]) => {
+                      {Object.entries(breakdownLabels).map(([k, meta]) => {
                         const val = selected.evidence.score_breakdown?.[k] ?? 0;
                         const pct = Math.min(100, Math.round((val / meta.max) * 100));
                         return (
                           <div key={k}>
                             <div className="flex justify-between text-[11px]">
                               <span className="text-slate-600">
-                                {meta.label} (Maks {meta.max})
+                                {meta.label} ({t("Maks", "Max")} {meta.max})
                               </span>
                               <span className="font-mono font-bold text-[#1C2434]">+{val}</span>
                             </div>
@@ -561,50 +611,56 @@ export default function RisksPage() {
                   )}
                 </div>
 
-                {/* 5. Teknik Kanıt */}
-                <div>
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                    5. Ham Teknik Kanıt (Evidence JSON)
-                  </div>
-                  <pre className="mt-1.5 max-h-40 overflow-auto rounded-[4px] border border-[#E2E8F0] bg-[#1C2434] p-3 font-mono text-[11px] text-slate-100">
+                {/* 5. Teknik Kanıt (Varsayılan kapalı <details>) */}
+                <details className="rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] p-3">
+                  <summary className="cursor-pointer text-xs font-semibold text-[#1C2434] hover:text-[#0D9488]">
+                    {t("5. Teknik Kanıtı Göster", "5. Show Technical Evidence")}
+                  </summary>
+                  <pre className="mt-2 max-h-40 overflow-auto rounded-[4px] bg-[#1C2434] p-3 font-mono text-[11px] text-slate-100">
                     {JSON.stringify(
                       selected.evidence.supporting_data ?? selected.evidence,
                       null,
                       2,
                     )}
                   </pre>
-                </div>
+                </details>
 
                 {/* Durum Güncelleme */}
                 {canEditAssets && (
                   <div className="border-t border-[#E2E8F0] pt-3">
-                    <Field label="Çözüm / İnceleme Notu">
+                    <Field label={t("Çözüm / İnceleme Notu", "Resolution / Review Note")}>
                       <Input
-                        placeholder="Örn: Bakım ekibi PLC erişimini doğruladı..."
+                        placeholder={t(
+                          "Örn: Bakım ekibi PLC erişimini doğruladı...",
+                          "e.g. Maintenance team verified PLC access...",
+                        )}
                         value={note}
                         onChange={(e) => setNote(e.target.value)}
                       />
                     </Field>
-                    <div className="mt-2.5 flex flex-wrap gap-1.5">
+                    <div className="mt-2.5 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                       {(
                         ["open", "investigating", "accepted", "resolved", "false_positive"] as RiskStatus[]
-                      ).map((st) => (
-                        <Button
-                          key={st}
-                          size="sm"
-                          variant={selected.status === st ? "primary" : "secondary"}
-                          disabled={statusMut.isPending || selected.status === st}
-                          onClick={() =>
-                            statusMut.mutate({
-                              id: selected.id,
-                              status: st,
-                              resolution_note: note,
-                            })
-                          }
-                        >
-                          {RISK_STATUS_LABEL[st]}
-                        </Button>
-                      ))}
+                      ).map((st) => {
+                        const isCurrent = selected.status === st;
+                        return (
+                          <Button
+                            key={st}
+                            size="sm"
+                            variant={isCurrent ? "dark" : "secondary"}
+                            disabled={statusMut.isPending || isCurrent}
+                            onClick={() =>
+                              statusMut.mutate({
+                                id: selected.id,
+                                status: st,
+                                resolution_note: note,
+                              })
+                            }
+                          >
+                            {isCurrent ? `✓ ${RISK_STATUS_LABEL[st]}` : RISK_STATUS_LABEL[st]}
+                          </Button>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

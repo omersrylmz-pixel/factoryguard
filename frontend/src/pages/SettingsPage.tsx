@@ -14,9 +14,12 @@ import {
   ROLE_LABEL,
   Select,
   StatCard,
+  formatAuditAction,
+  formatAuditTarget,
   formatDate,
 } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
+import { useLang } from "../i18n";
 import { api } from "../services/api";
 import type {
   AuditLog,
@@ -30,6 +33,7 @@ import type {
 
 export default function SettingsPage() {
   const { activeOrg, canAdmin, reloadMe } = useAuth();
+  const { t } = useLang();
   const qc = useQueryClient();
 
   const orgQuery = useQuery({
@@ -79,15 +83,17 @@ export default function SettingsPage() {
     },
   });
 
-  // Yeni Fabrika (Site)
+  // Yeni Fabrika (Site) — placeholder ile gösterilir, önceden doldurulmuş koyu değer kullanılmaz
   const [siteName, setSiteName] = useState("");
-  const [siteIndustry, setSiteIndustry] = useState("Otomotiv & Yan Sanayi");
-  const [siteTimezone, setSiteTimezone] = useState("Europe/Istanbul");
+  const [siteIndustry, setSiteIndustry] = useState("");
+  const [siteTimezone, setSiteTimezone] = useState("");
   const createSiteMut = useMutation({
     mutationFn: (body: { name: string; industry: string | null; timezone: string }) =>
       api<Site>("/sites", { method: "POST", body }),
     onSuccess: async () => {
       setSiteName("");
+      setSiteIndustry("");
+      setSiteTimezone("");
       await qc.invalidateQueries({ queryKey: ["sites", activeOrg?.id] });
     },
   });
@@ -131,6 +137,7 @@ export default function SettingsPage() {
   const sites = sitesQuery.data ?? [];
   const zones = zonesQuery.data ?? [];
   const effectiveSiteId = zoneSiteId || sites[0]?.id || "";
+  const planUpper = (orgQuery.data?.plan ?? "starter").toUpperCase();
 
   function handleUpdateOrg(e: FormEvent) {
     e.preventDefault();
@@ -158,20 +165,38 @@ export default function SettingsPage() {
     });
   }
 
+  function formatMetadataEntries(meta: Record<string, unknown>): { k: string; v: string; full: string }[] {
+    return Object.entries(meta)
+      .filter(([, val]) => val !== null && val !== undefined && val !== "")
+      .slice(0, 4)
+      .map(([k, val]) => {
+        const str = typeof val === "object" ? JSON.stringify(val) : String(val);
+        const short = str.length > 24 ? `${str.slice(0, 12)}…` : str;
+        return { k, v: short, full: str };
+      });
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
-        breadcrumb="Settings & Governance"
-        title="Organizasyon, Fabrika, Bölge & RBAC Ayarları"
-        subtitle="Çok kiracılı (multi-tenant) fabrika hiyerarşisi, üretim hattı güvenlik bölgeleri, kullanıcı yetkileri ve denetim izleri"
+        breadcrumb={t("Ayarlar & Bölgeler", "Settings & Zones")}
+        title={t("Organizasyon, Fabrika, Bölge & RBAC Ayarları", "Organization, Site, Zone & RBAC Settings")}
+        subtitle={t(
+          "Çok kiracılı fabrika hiyerarşisi, üretim hattı güvenlik bölgeleri, kullanıcı yetkileri ve denetim izleri",
+          "Multi-tenant plant hierarchy, production line security zones, user roles and audit logs",
+        )}
       />
 
-      {/* 4 TailAdmin StatCard */}
+      {/* 4 TailAdmin StatCard (Sayısal veya kısa metrik değerler, tek satır) */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="Aktif Organizasyon"
-          value={orgQuery.data?.name ?? activeOrg?.name ?? "—"}
-          hint={`Plan: ${orgQuery.data?.plan ?? "enterprise"} · Rol: ${ROLE_LABEL[activeOrg?.role ?? "owner"]}`}
+          label={t("Aktif Lisans Planı", "Active License Plan")}
+          value={planUpper}
+          hint={orgQuery.data?.name ?? activeOrg?.name ?? "—"}
+          badge={{
+            text: ROLE_LABEL[activeOrg?.role ?? "owner"],
+            tone: "teal",
+          }}
           tone="teal"
           icon={
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -180,9 +205,9 @@ export default function SettingsPage() {
           }
         />
         <StatCard
-          label="Fabrikalar (Sites)"
+          label={t("Kayıtlı Fabrikalar", "Registered Sites")}
           value={sites.length}
-          hint="Fiziksel üretim tesisleri"
+          hint={t("Fiziksel üretim tesisleri", "Physical manufacturing plants")}
           tone="navy"
           icon={
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -191,9 +216,9 @@ export default function SettingsPage() {
           }
         />
         <StatCard
-          label="Üretim Bölgeleri (Zones)"
+          label={t("Üretim Bölgeleri", "Production Zones")}
           value={zones.length}
-          hint="ISA/IEC 62443 güvenlik segmentleri"
+          hint={t("ISA/IEC 62443 güvenlik segmentleri", "ISA/IEC 62443 security segments")}
           tone="teal"
           icon={
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -205,11 +230,14 @@ export default function SettingsPage() {
           }
         />
         <StatCard
-          label="Yetkili Kullanıcı & Denetim"
+          label={t("Yetkili Kullanıcılar", "Authorized Members")}
           value={membersQuery.data?.length ?? 1}
-          hint={`${auditQuery.data?.total ?? 0} kayıtlı denetim izi`}
+          hint={t(
+            `${auditQuery.data?.total ?? 0} kayıtlı denetim izi`,
+            `${auditQuery.data?.total ?? 0} recorded audit events`,
+          )}
           tone="emerald"
-          badge={{ text: "RBAC Aktif", tone: "emerald" }}
+          badge={{ text: t("RBAC Aktif", "RBAC Active"), tone: "emerald" }}
           icon={
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -221,24 +249,33 @@ export default function SettingsPage() {
 
       {/* Organizasyon Bilgisi */}
       <Card
-        title="Organizasyon Kimliği"
-        subtitle="Kurumsal kiracı (tenant) adı ve sistem tanımlayıcıları"
+        title={t("Organizasyon Kimliği", "Organization Identity")}
+        subtitle={t(
+          "Kurumsal kiracı adı ve sistem tanımlayıcıları",
+          "Enterprise tenant name and system identifiers",
+        )}
       >
         {orgQuery.data && (
           <div className="space-y-4">
             <div className="grid grid-cols-1 gap-4 text-xs sm:grid-cols-3">
               <div className="rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] p-3">
-                <div className="text-[11px] font-medium uppercase text-slate-400">Organizasyon Adı</div>
+                <div className="text-[11px] font-medium text-slate-400 uppercase">
+                  {t("Organizasyon Adı", "Organization Name")}
+                </div>
                 <div className="mt-1 text-sm font-bold text-[#1C2434]">{orgQuery.data.name}</div>
               </div>
               <div className="rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] p-3">
-                <div className="text-[11px] font-medium uppercase text-slate-400">Lisans Planı & Rol</div>
+                <div className="text-[11px] font-medium text-slate-400 uppercase">
+                  {t("Lisans Planı & Rol", "License Plan & Role")}
+                </div>
                 <div className="mt-1 font-mono text-sm font-semibold text-[#0D9488]">
-                  {orgQuery.data.plan.toUpperCase()} · {ROLE_LABEL[orgQuery.data.role]}
+                  {planUpper} · {ROLE_LABEL[orgQuery.data.role]}
                 </div>
               </div>
               <div className="rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] p-3">
-                <div className="text-[11px] font-medium uppercase text-slate-400">Oluşturulma Tarihi</div>
+                <div className="text-[11px] font-medium text-slate-400 uppercase">
+                  {t("Oluşturulma Tarihi", "Created At")}
+                </div>
                 <div className="mt-1 font-mono text-xs text-slate-700">
                   {formatDate(orgQuery.data.created_at)}
                 </div>
@@ -248,7 +285,7 @@ export default function SettingsPage() {
             {canAdmin && (
               <form onSubmit={handleUpdateOrg} className="flex max-w-md items-end gap-2 pt-1">
                 <div className="flex-1">
-                  <Field label="Organizasyon Adını Güncelle">
+                  <Field label={t("Organizasyon Adını Güncelle", "Update Organization Name")}>
                     <Input
                       placeholder={orgQuery.data.name}
                       value={orgName}
@@ -257,7 +294,7 @@ export default function SettingsPage() {
                   </Field>
                 </div>
                 <Button type="submit" disabled={updateOrgMut.isPending || !orgName.trim()}>
-                  Kaydet
+                  {t("Kaydet", "Save")}
                 </Button>
               </form>
             )}
@@ -268,8 +305,11 @@ export default function SettingsPage() {
 
       {/* Fabrikalar (Sites) */}
       <Card
-        title={`Fabrikalar / Tesisler (${sites.length})`}
-        subtitle="Pasif sensörlerin ve üretim bölgelerinin bağlı olduğu fiziksel lokasyonlar"
+        title={t(`Fabrikalar / Tesisler (${sites.length})`, `Sites / Plants (${sites.length})`)}
+        subtitle={t(
+          "Pasif sensörlerin ve üretim bölgelerinin bağlı olduğu fiziksel lokasyonlar",
+          "Physical locations hosting passive sensors and production zones",
+        )}
       >
         <div className="space-y-4">
           {canAdmin && (
@@ -277,22 +317,22 @@ export default function SettingsPage() {
               onSubmit={handleCreateSite}
               className="grid grid-cols-1 gap-3 rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] p-4 sm:grid-cols-4"
             >
-              <Field label="Fabrika Adı *">
+              <Field label={t("Fabrika Adı *", "Site Name *")}>
                 <Input
                   required
-                  placeholder="Örn: Gebze Ana Üretim Tesisi"
+                  placeholder={t("Örn: Gebze Ana Üretim Tesisi", "e.g. Gebze Main Plant")}
                   value={siteName}
                   onChange={(e) => setSiteName(e.target.value)}
                 />
               </Field>
-              <Field label="Endüstri / Sektör">
+              <Field label={t("Endüstri / Sektör", "Industry / Sector")}>
                 <Input
-                  placeholder="Örn: Otomotiv & Yan Sanayi"
+                  placeholder={t("Örn: Otomotiv & Yan Sanayi", "e.g. Automotive Manufacturing")}
                   value={siteIndustry}
                   onChange={(e) => setSiteIndustry(e.target.value)}
                 />
               </Field>
-              <Field label="Zaman Dilimi">
+              <Field label={t("Zaman Dilimi", "Timezone")}>
                 <Input
                   placeholder="Europe/Istanbul"
                   value={siteTimezone}
@@ -301,7 +341,7 @@ export default function SettingsPage() {
               </Field>
               <div className="flex items-end">
                 <Button type="submit" className="w-full" disabled={createSiteMut.isPending}>
-                  + Fabrika Ekle
+                  {t("+ Fabrika Ekle", "+ Add Site")}
                 </Button>
               </div>
             </form>
@@ -310,19 +350,19 @@ export default function SettingsPage() {
           <ErrorBox error={createSiteMut.error || deleteSiteMut.error} />
 
           {sitesQuery.isLoading ? (
-            <Empty>Yükleniyor…</Empty>
+            <Empty>{t("Yükleniyor…", "Loading…")}</Empty>
           ) : sites.length === 0 ? (
-            <Empty>Henüz fabrika tanımlanmadı.</Empty>
+            <Empty>{t("Henüz fabrika tanımlanmadı.", "No sites defined yet.")}</Empty>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
                   <tr>
-                    <th className="px-4 py-3">Fabrika Adı</th>
-                    <th className="px-4 py-3">Sektör (Industry)</th>
-                    <th className="px-4 py-3">Zaman Dilimi</th>
-                    <th className="px-4 py-3">Oluşturulma</th>
-                    {canAdmin && <th className="px-4 py-3 text-right">İşlem</th>}
+                    <th className="px-4 py-3">{t("Fabrika Adı", "Site Name")}</th>
+                    <th className="px-4 py-3">{t("Sektör", "Industry")}</th>
+                    <th className="px-4 py-3">{t("Zaman Dilimi", "Timezone")}</th>
+                    <th className="px-4 py-3">{t("Oluşturulma", "Created At")}</th>
+                    {canAdmin && <th className="px-4 py-3 text-right">{t("İşlem", "Action")}</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E2E8F0]">
@@ -342,7 +382,7 @@ export default function SettingsPage() {
                             disabled={deleteSiteMut.isPending}
                             onClick={() => deleteSiteMut.mutate(s.id)}
                           >
-                            Sil
+                            {t("Sil", "Delete")}
                           </Button>
                         </td>
                       )}
@@ -357,8 +397,14 @@ export default function SettingsPage() {
 
       {/* Bölgeler (Zones) */}
       <Card
-        title={`Üretim Güvenlik Bölgeleri / Hücreler (${zones.length})`}
-        subtitle="Purdue ve ISA/IEC 62443 segmentasyonuna göre üretim hatları ve kritiklik seviyeleri"
+        title={t(
+          `Üretim Güvenlik Bölgeleri / Hücreler (${zones.length})`,
+          `Production Security Zones / Cells (${zones.length})`,
+        )}
+        subtitle={t(
+          "Purdue ve ISA/IEC 62443 segmentasyonuna göre üretim hatları ve kritiklik seviyeleri",
+          "Production lines and criticality levels segmented according to Purdue and ISA/IEC 62443",
+        )}
       >
         <div className="space-y-4">
           {canAdmin && sites.length > 0 && (
@@ -366,7 +412,7 @@ export default function SettingsPage() {
               onSubmit={handleCreateZone}
               className="grid grid-cols-1 gap-3 rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] p-4 sm:grid-cols-5"
             >
-              <Field label="Fabrika *">
+              <Field label={t("Fabrika *", "Site *")}>
                 <Select value={effectiveSiteId} onChange={(e) => setZoneSiteId(e.target.value)}>
                   {sites.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -375,15 +421,15 @@ export default function SettingsPage() {
                   ))}
                 </Select>
               </Field>
-              <Field label="Bölge / Hat Adı *">
+              <Field label={t("Bölge / Hat Adı *", "Zone / Line Name *")}>
                 <Input
                   required
-                  placeholder="Örn: Gövde Kaynak Hattı"
+                  placeholder={t("Örn: Gövde Kaynak Hattı", "e.g. Body Welding Line")}
                   value={zoneName}
                   onChange={(e) => setZoneName(e.target.value)}
                 />
               </Field>
-              <Field label="Üretim Kritikliği">
+              <Field label={t("Üretim Kritikliği", "Production Criticality")}>
                 <Select
                   value={zoneCrit}
                   onChange={(e) => setZoneCrit(e.target.value as Criticality)}
@@ -395,16 +441,16 @@ export default function SettingsPage() {
                   ))}
                 </Select>
               </Field>
-              <Field label="Açıklama">
+              <Field label={t("Açıklama", "Description")}>
                 <Input
-                  placeholder="VLAN / Hücre bilgisi"
+                  placeholder={t("VLAN / Hücre bilgisi", "VLAN / Cell details")}
                   value={zoneDesc}
                   onChange={(e) => setZoneDesc(e.target.value)}
                 />
               </Field>
               <div className="flex items-end">
                 <Button type="submit" className="w-full" disabled={createZoneMut.isPending}>
-                  + Bölge Ekle
+                  {t("+ Bölge Ekle", "+ Add Zone")}
                 </Button>
               </div>
             </form>
@@ -413,19 +459,19 @@ export default function SettingsPage() {
           <ErrorBox error={createZoneMut.error || deleteZoneMut.error} />
 
           {zonesQuery.isLoading ? (
-            <Empty>Yükleniyor…</Empty>
+            <Empty>{t("Yükleniyor…", "Loading…")}</Empty>
           ) : zones.length === 0 ? (
-            <Empty>Henüz üretim bölgesi tanımlanmadı.</Empty>
+            <Empty>{t("Henüz üretim bölgesi tanımlanmadı.", "No production zones defined yet.")}</Empty>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
                   <tr>
-                    <th className="px-4 py-3">Bölge Adı</th>
-                    <th className="px-4 py-3">Fabrika</th>
-                    <th className="px-4 py-3">Kritiklik</th>
-                    <th className="px-4 py-3">Açıklama</th>
-                    {canAdmin && <th className="px-4 py-3 text-right">İşlem</th>}
+                    <th className="px-4 py-3">{t("Bölge Adı", "Zone Name")}</th>
+                    <th className="px-4 py-3">{t("Fabrika", "Site")}</th>
+                    <th className="px-4 py-3">{t("Kritiklik", "Criticality")}</th>
+                    <th className="px-4 py-3">{t("Açıklama", "Description")}</th>
+                    {canAdmin && <th className="px-4 py-3 text-right">{t("İşlem", "Action")}</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E2E8F0]">
@@ -447,7 +493,7 @@ export default function SettingsPage() {
                               disabled={deleteZoneMut.isPending}
                               onClick={() => deleteZoneMut.mutate(z.id)}
                             >
-                              Sil
+                              {t("Sil", "Delete")}
                             </Button>
                           </td>
                         )}
@@ -464,23 +510,26 @@ export default function SettingsPage() {
       {/* Organizasyon Üyeleri (RBAC) */}
       {canAdmin && (
         <Card
-          title="Organizasyon Üyeleri & Rol Tabanlı Erişim (RBAC)"
-          subtitle="Platforma erişim yetkisi olan kullanıcılar ve görev rolleri"
+          title={t("Organizasyon Üyeleri & Rol Tabanlı Erişim (RBAC)", "Organization Members & Role-Based Access (RBAC)")}
+          subtitle={t(
+            "Platforma erişim yetkisi olan kullanıcılar ve görev rolleri",
+            "Users authorized to access the platform and their assigned roles",
+          )}
           noPadding
         >
           {membersQuery.isLoading ? (
             <div className="p-6">
-              <Empty>Yükleniyor…</Empty>
+              <Empty>{t("Yükleniyor…", "Loading…")}</Empty>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
                   <tr>
-                    <th className="px-5 py-3">Ad Soyad</th>
-                    <th className="px-4 py-3">E-posta</th>
-                    <th className="px-4 py-3">Rol</th>
-                    <th className="px-5 py-3 text-right">Durum</th>
+                    <th className="px-5 py-3">{t("Ad Soyad", "Full Name")}</th>
+                    <th className="px-4 py-3">{t("E-posta", "Email")}</th>
+                    <th className="px-4 py-3">{t("Rol", "Role")}</th>
+                    <th className="px-5 py-3 text-right">{t("Durum", "Status")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E2E8F0]">
@@ -493,7 +542,7 @@ export default function SettingsPage() {
                       </td>
                       <td className="px-5 py-3 text-right">
                         <Badge tone={m.is_active ? "emerald" : "slate"} dot>
-                          {m.is_active ? "Aktif" : "Pasif"}
+                          {m.is_active ? t("Aktif", "Active") : t("Pasif", "Inactive")}
                         </Badge>
                       </td>
                     </tr>
@@ -505,55 +554,79 @@ export default function SettingsPage() {
         </Card>
       )}
 
-      {/* Denetim Kayıtları (Audit Logs) */}
+      {/* Denetim Kayıtları (Audit Logs) — Okunur metin ve kompakt özet rozetleri */}
       {canAdmin && (
         <Card
-          title={`Güvenlik Denetim Kayıtları (Toplam: ${auditQuery.data?.total ?? 0})`}
-          subtitle="Sistemde gerçekleştirilen kritik yapılandırma, doğrulama ve sensör işlemlerinin değiştirilemez kaydı"
+          title={t(
+            `Güvenlik Denetim Kayıtları (Toplam: ${auditQuery.data?.total ?? 0})`,
+            `Security Audit Logs (Total: ${auditQuery.data?.total ?? 0})`,
+          )}
+          subtitle={t(
+            "Sistemde gerçekleştirilen kritik yapılandırma, doğrulama ve sensör işlemlerinin değiştirilemez kaydı",
+            "Immutable record of critical configuration, verification and sensor operations",
+          )}
           noPadding
         >
           {auditQuery.isLoading ? (
             <div className="p-6">
-              <Empty>Yükleniyor…</Empty>
+              <Empty>{t("Yükleniyor…", "Loading…")}</Empty>
             </div>
           ) : (auditQuery.data?.items.length ?? 0) === 0 ? (
             <div className="p-6">
-              <Empty>Kayıt yok.</Empty>
+              <Empty>{t("Kayıt yok.", "No records.")}</Empty>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
                   <tr>
-                    <th className="px-5 py-3">Zaman</th>
-                    <th className="px-4 py-3">İşlem Kodu</th>
-                    <th className="px-4 py-3">Hedef Varlık</th>
-                    <th className="px-4 py-3">Kaynak IP</th>
-                    <th className="px-5 py-3">Detay (Metadata)</th>
+                    <th className="px-5 py-3">{t("Zaman", "Timestamp")}</th>
+                    <th className="px-4 py-3">{t("İşlem", "Action")}</th>
+                    <th className="px-4 py-3">{t("Hedef Türü", "Target Type")}</th>
+                    <th className="px-4 py-3">{t("Kaynak IP", "Source IP")}</th>
+                    <th className="px-5 py-3">{t("İşlem Özeti", "Operation Summary")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E2E8F0]">
-                  {auditQuery.data!.items.map((a) => (
-                    <tr key={a.id} className="hover:bg-[#F8FAFC]">
-                      <td className="px-5 py-2.5 font-mono whitespace-nowrap text-slate-500">
-                        {formatDate(a.created_at)}
-                      </td>
-                      <td className="px-4 py-2.5 font-mono font-bold text-[#1C2434]">
-                        {a.action}
-                      </td>
-                      <td className="px-4 py-2.5 text-slate-600">
-                        {a.target_type
-                          ? `${a.target_type}:${a.target_id?.slice(0, 8) ?? ""}`
-                          : "—"}
-                      </td>
-                      <td className="px-4 py-2.5 font-mono text-slate-500">
-                        {a.ip_address ?? "—"}
-                      </td>
-                      <td className="px-5 py-2.5 font-mono text-[11px] text-slate-600">
-                        {JSON.stringify(a.metadata)}
-                      </td>
-                    </tr>
-                  ))}
+                  {auditQuery.data!.items.map((a) => {
+                    const entries = formatMetadataEntries(a.metadata);
+                    return (
+                      <tr key={a.id} className="hover:bg-[#F8FAFC]">
+                        <td className="px-5 py-2.5 font-mono whitespace-nowrap text-slate-500">
+                          {formatDate(a.created_at)}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span className="font-semibold text-[#1C2434]">
+                            {formatAuditAction(a.action)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-slate-600">
+                          {formatAuditTarget(a.target_type)}
+                        </td>
+                        <td className="px-4 py-2.5 font-mono text-slate-500">
+                          {a.ip_address ?? "—"}
+                        </td>
+                        <td className="px-5 py-2.5">
+                          {entries.length === 0 ? (
+                            <span className="text-slate-400">—</span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1.5">
+                              {entries.map((item) => (
+                                <span
+                                  key={item.k}
+                                  title={`${item.k}: ${item.full}`}
+                                  className="inline-flex items-center gap-1 rounded-[3px] border border-[#E2E8F0] bg-[#F8FAFC] px-2 py-0.5 font-mono text-[11px] text-[#1C2434]"
+                                >
+                                  <span className="text-slate-500">{item.k}:</span>
+                                  <span>{item.v}</span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

@@ -8,11 +8,13 @@ import {
   Empty,
   ErrorBox,
   PageHeader,
-  ProtocolBadge,
   StatCard,
+  formatAuditAction,
+  formatAuditTarget,
   formatDate,
 } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
+import { useLang } from "../i18n";
 import { api, apiDownload } from "../services/api";
 import type {
   Asset,
@@ -30,6 +32,7 @@ const CHART_PALETTE = ["#0D9488", "#1C2434", "#0284C7", "#D97706", "#64748B", "#
 
 export default function DashboardPage() {
   const { activeOrg, canAdmin } = useAuth();
+  const { t } = useLang();
 
   const sitesQuery = useQuery({
     queryKey: ["sites", activeOrg?.id],
@@ -107,34 +110,43 @@ export default function DashboardPage() {
   ).length;
 
   // Üretici dağılımı (gerçek veritabanı verisinden)
-  const vendorCounts = new Map<string, number>();
+  const unverifiedVendorLabel = t("Üretici Doğrulanmadı (Pasif Gözlem)", "Unverified Vendor (Passive Observation)");
+  const vendorCounts = new Map<string, { count: number; unverified: boolean }>();
   for (const a of assets) {
-    const label = a.vendor
-      ? a.vendor
-      : a.vendor_status_label !== "Üretici bilgisi doğrulanmadı"
-        ? a.vendor_status_label
-        : "Üretici Doğrulanmadı (Pasif Gözlem)";
-    vendorCounts.set(label, (vendorCounts.get(label) ?? 0) + 1);
+    const isUnv = !a.vendor || a.vendor_status_label === "Üretici bilgisi doğrulanmadı";
+    const label = isUnv ? unverifiedVendorLabel : a.vendor!;
+    const prev = vendorCounts.get(label);
+    vendorCounts.set(label, { count: (prev?.count ?? 0) + 1, unverified: isUnv });
   }
-  const vendorRanking = Array.from(vendorCounts.entries()).sort((a, b) => b[1] - a[1]);
-  const maxVendorCount = Math.max(1, vendorRanking[0]?.[1] ?? 1);
+  const vendorRanking = Array.from(vendorCounts.entries()).sort((a, b) => b[1].count - a[1].count);
+  const maxVendorCount = Math.max(1, vendorRanking[0]?.[1].count ?? 1);
 
-  // Gözlemlenen protokol dağılımı (Donut grafiği için)
-  const protoCounts = new Map<string, number>();
+  // Gözlemlenen protokol dağılımı (Donut grafiği için: akış sayısı ve bağlantı sayısı tutarlı)
+  const protoStats = new Map<string, { flows: number; conns: number; isHint: boolean }>();
   for (const e of edges) {
-    const p = (e.protocol || "unknown").toUpperCase();
-    protoCounts.set(p, (protoCounts.get(p) ?? 0) + e.connection_count);
+    const raw = (e.protocol || "unknown").toUpperCase();
+    const isHint = e.protocol_confidence === "port_hint" || raw.endsWith("?");
+    const clean = raw.replace(/\?+$/, "");
+    const cur = protoStats.get(clean) ?? { flows: 0, conns: 0, isHint };
+    cur.flows += 1;
+    cur.conns += e.connection_count;
+    cur.isHint = cur.isHint && isHint;
+    protoStats.set(clean, cur);
   }
   for (const a of assets) {
     for (const p of a.observed_protocols ?? []) {
-      const up = p.toUpperCase();
-      if (!protoCounts.has(up)) protoCounts.set(up, 1);
+      const raw = p.toUpperCase();
+      const isHint = raw.endsWith("?");
+      const clean = raw.replace(/\?+$/, "");
+      if (!protoStats.has(clean)) {
+        protoStats.set(clean, { flows: 1, conns: 1, isHint });
+      }
     }
   }
-  const protoList = Array.from(protoCounts.entries()).sort((a, b) => b[1] - a[1]);
-  const totalProtoConns = Math.max(
+  const protoList = Array.from(protoStats.entries()).sort((a, b) => b[1].flows - a[1].flows);
+  const totalProtoFlows = Math.max(
     1,
-    protoList.reduce((acc, [, v]) => acc + v, 0),
+    protoList.reduce((acc, [, v]) => acc + v.flows, 0),
   );
 
   const radius = 52;
@@ -142,29 +154,29 @@ export default function DashboardPage() {
   let cumulativeOffset = 0;
 
   const posture = postureQuery.data;
-  const postureTone =
-    !posture || posture.health_score >= 75
-      ? "teal"
-      : posture.health_score >= 45
-        ? "amber"
-        : "red";
+  const postureScore = posture?.health_score ?? 100;
+  const postureGrade = posture?.grade ?? "A";
+  const postureTone = postureScore >= 75 ? "emerald" : postureScore >= 45 ? "amber" : "red";
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Overview Dashboard"
-        subtitle={`${activeOrg?.name ?? ""} · Gerçek zamanlı OT varlık görünürlüğü, pasif protokol telemetrisi ve açıklanabilir risk özeti`}
-        breadcrumb="Overview"
+        title={t("Genel Bakış", "Overview Dashboard")}
+        subtitle={t(
+          `${activeOrg?.name ?? ""} · Gerçek zamanlı OT varlık görünürlüğü ve açıklanabilir risk özeti`,
+          `${activeOrg?.name ?? ""} · Real-time OT asset visibility and explainable risk overview`,
+        )}
+        breadcrumb={t("Genel Bakış", "Overview")}
         actions={
           <>
             <Button
               variant="secondary"
-              onClick={() => void apiDownload("/reports/inventory?format=csv", "factoryguard-envanter.csv")}
+              onClick={() => void apiDownload("/reports/inventory?format=csv", "factoryguard-inventory.csv")}
             >
-              ↓ Envanter CSV
+              {t("↓ Envanter CSV", "↓ Inventory CSV")}
             </Button>
             <Link to="/sensors">
-              <Button variant="primary">PCAP / Zeek Analiz Et</Button>
+              <Button variant="primary">{t("PCAP / Zeek Analiz Et", "Analyze PCAP / Zeek")}</Button>
             </Link>
           </>
         }
@@ -176,11 +188,11 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           to="/assets"
-          label="Keşfedilen Toplam Cihaz"
+          label={t("Keşfedilen Toplam Cihaz", "Total Discovered Devices")}
           value={assetsQuery.isLoading ? "…" : totalAssets}
-          badge={`${verifiedCount} Doğrulandı`}
+          badge={t(`${verifiedCount} Doğrulandı`, `${verifiedCount} Verified`)}
           badgeTone={unverifiedCount > 0 ? "amber" : "teal"}
-          subtext={`${unverifiedCount} doğrulanmamış`}
+          subtext={t(`${unverifiedCount} doğrulama bekliyor`, `${unverifiedCount} pending verification`)}
           icon={
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <rect x="2" y="4" width="20" height="6" rx="1.5" />
@@ -193,15 +205,14 @@ export default function DashboardPage() {
 
         <StatCard
           to="/risks"
-          label="OT Güvenlik Duruş Endeksi"
-          value={
-            postureQuery.isLoading
-              ? "…"
-              : `Not ${posture?.grade ?? "A"} · ${posture?.health_score ?? 100}/100`
-          }
-          badge={posture?.status_label?.split("·")[0]?.trim() ?? "Duruş Notu"}
+          label={t("Güvenlik Duruş Skoru", "Security Posture Score")}
+          value={postureQuery.isLoading ? "…" : `${postureScore}/100`}
+          badge={t(`Derece ${postureGrade}`, `Grade ${postureGrade}`)}
           badgeTone={postureTone}
-          subtext={`Envanter: %${Math.round((posture?.verified_asset_ratio ?? 0) * 100)}`}
+          subtext={t(
+            `Envanter doğrulama: %${Math.round((posture?.verified_asset_ratio ?? 0) * 100)}`,
+            `Verified inventory: ${Math.round((posture?.verified_asset_ratio ?? 0) * 100)}%`,
+          )}
           icon={
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
@@ -211,11 +222,15 @@ export default function DashboardPage() {
 
         <StatCard
           to="/risks"
-          label="Açık Risk Bulguları"
+          label={t("Açık Risk Bulguları", "Open Risk Findings")}
           value={risksQuery.isLoading ? "…" : totalOpenRisks}
-          badge={highCritRisks > 0 ? `${highCritRisks} Yüksek / Kritik` : "Kritik Bulgu Yok"}
+          badge={
+            highCritRisks > 0
+              ? t(`${highCritRisks} Yüksek / Kritik`, `${highCritRisks} High / Critical`)
+              : t("Kritik Bulgu Yok", "No Critical Risks")
+          }
           badgeTone={highCritRisks > 0 ? "red" : "teal"}
-          subtext="6 açıklanabilir kural aktif"
+          subtext={t("6 deterministik kural aktif", "6 deterministic rules active")}
           icon={
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
@@ -227,11 +242,11 @@ export default function DashboardPage() {
 
         <StatCard
           to="/network"
-          label="Gözlemlenen Ağ İletişim Akışı"
+          label={t("Gözlemlenen İletişim Akışı", "Observed Network Flows")}
           value={graphQuery.isLoading ? "…" : edges.length}
-          badge={`${connectedSensors}/${sensors.length} Sensör Aktif`}
+          badge={t(`${connectedSensors}/${sensors.length} Sensör Aktif`, `${connectedSensors}/${sensors.length} Sensors Online`)}
           badgeTone={crossZoneCount > 0 ? "amber" : "teal"}
-          subtext={`${approvedFlowsCount} baseline onaylı`}
+          subtext={t(`${approvedFlowsCount} baseline onaylı`, `${approvedFlowsCount} baseline approved`)}
           icon={
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
@@ -240,16 +255,19 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* 2. Satır: TailAdmin 12 Sütunlu Analitik Grid (8 Sütun Envanter/Üretici + 4 Sütun Protokol Donut) */}
+      {/* 2. Satır: TailAdmin 12 Sütunlu Analitik Grid */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {/* Sol 8 Sütun: Endüstriyel Varlık Katmanları ve Üretici Dağılımı */}
         <Card
           className="lg:col-span-8"
-          title="Endüstriyel Varlık Dağılımı ve Donanım Üreticileri"
-          subtitle="ISA-95 / Purdue fonksiyonel katmanlarına ve pasif MAC OUI / doğrulanmış üretici kayıtlarına göre envanter yapısı"
+          title={t("Endüstriyel Varlık Dağılımı ve Üreticiler", "Industrial Asset Breakdown & Vendors")}
+          subtitle={t(
+            "Purdue fonksiyonel katmanlarına ve doğrulanmış üretici kayıtlarına göre envanter",
+            "Inventory structure by Purdue functional levels and verified vendor records",
+          )}
           actions={
             <Link to="/assets" className="text-xs font-semibold text-[#0D9488] hover:underline">
-              Envanteri Aç →
+              {t("Envanteri Aç →", "Open Inventory →")}
             </Link>
           }
         >
@@ -257,59 +275,72 @@ export default function DashboardPage() {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="rounded-[4px] border border-teal-200/80 bg-teal-50/40 p-3.5">
               <div className="font-mono text-[10px] font-semibold text-[#0F766E] uppercase">
-                PURDUE L1 · CONTROL
+                {t("PURDUE L1 · KONTROL", "PURDUE L1 · CONTROL")}
               </div>
               <div className="mt-1.5 text-2xl font-bold text-[#1C2434]">{plcCount}</div>
-              <div className="mt-0.5 text-xs text-[#64748B]">PLC & Saha Kontrolcü</div>
+              <div className="mt-0.5 text-xs text-[#64748B]">
+                {t("PLC & Saha Kontrolcü", "PLC & Field Controllers")}
+              </div>
             </div>
 
             <div className="rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] p-3.5">
               <div className="font-mono text-[10px] font-semibold text-[#64748B] uppercase">
-                PURDUE L2 · SUPERVISORY
+                {t("PURDUE L2 · SÜPERVİZÖR", "PURDUE L2 · SUPERVISORY")}
               </div>
               <div className="mt-1.5 text-2xl font-bold text-[#1C2434]">{hmiScadaCount}</div>
-              <div className="mt-0.5 text-xs text-[#64748B]">HMI, SCADA & Mühendislik</div>
+              <div className="mt-0.5 text-xs text-[#64748B]">
+                {t("HMI, SCADA & Mühendislik", "HMI, SCADA & Engineering")}
+              </div>
             </div>
 
             <div className="rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] p-3.5">
               <div className="font-mono text-[10px] font-semibold text-[#64748B] uppercase">
-                PURDUE L3 · OPERATIONS
+                {t("PURDUE L3 · OPERASYON", "PURDUE L3 · OPERATIONS")}
               </div>
               <div className="mt-1.5 text-2xl font-bold text-[#1C2434]">{infraCount}</div>
-              <div className="mt-0.5 text-xs text-[#64748B]">Sunucu, Ağ & İstemci</div>
+              <div className="mt-0.5 text-xs text-[#64748B]">
+                {t("Sunucu, Ağ & İstemci", "Servers, Network & Clients")}
+              </div>
             </div>
 
             <div className="rounded-[4px] border border-amber-200/80 bg-amber-50/40 p-3.5">
               <div className="font-mono text-[10px] font-semibold text-amber-800 uppercase">
-                UNVERIFIED ASSETS
+                {t("DOĞRULANMAMIŞ VARLIK", "UNVERIFIED ASSETS")}
               </div>
               <div className="mt-1.5 text-2xl font-bold text-amber-900">{unverifiedCount}</div>
-              <div className="mt-0.5 text-xs text-amber-800">Doğrulama Bekleyen</div>
+              <div className="mt-0.5 text-xs text-amber-800">
+                {t("Doğrulama Bekleyen", "Pending Verification")}
+              </div>
             </div>
           </div>
 
-          {/* Üretici (Vendor) Yatay Çubuk Grafiği */}
+          {/* Üretici Yatay Çubuk Grafiği */}
           <div className="mt-5 border-t border-[#E2E8F0] pt-4">
             <div className="mb-3 flex items-center justify-between text-xs">
-              <span className="font-semibold text-[#1C2434]">Donanım Üreticisi Dağılımı (Vendors)</span>
-              <span className="text-[#64748B]">{vendorRanking.length} farklı üretici / durum</span>
+              <span className="font-semibold text-[#1C2434]">
+                {t("Donanım Üreticisi Dağılımı", "Hardware Vendor Distribution")}
+              </span>
+              <span className="text-[#64748B]">
+                {t(`${vendorRanking.length} üretici / grup`, `${vendorRanking.length} vendors / groups`)}
+              </span>
             </div>
             {vendorRanking.length === 0 ? (
-              <Empty>Henüz cihaz kaydı bulunmuyor.</Empty>
+              <Empty>{t("Henüz cihaz kaydı bulunmuyor.", "No device records found yet.")}</Empty>
             ) : (
               <div className="space-y-2.5">
-                {vendorRanking.slice(0, 6).map(([vendorName, count]) => {
-                  const pct = Math.max(6, Math.round((count / maxVendorCount) * 100));
-                  const isUnverified = vendorName.includes("Doğrulanmadı");
+                {vendorRanking.slice(0, 6).map(([vendorName, meta]) => {
+                  const pct = Math.max(6, Math.round((meta.count / maxVendorCount) * 100));
                   return (
                     <div key={vendorName}>
                       <div className="flex items-center justify-between text-xs">
                         <span className="font-medium text-[#1C2434]">{vendorName}</span>
-                        <span className="font-mono font-semibold text-[#1C2434]">{count} cihaz</span>
+                        <span className="font-mono font-semibold text-[#1C2434]">
+                          {t(`${meta.count} cihaz`, `${meta.count} devices`)}
+                        </span>
                       </div>
                       <div className="mt-1 h-2 w-full rounded-full bg-[#F1F5F9]">
                         <div
-                          className={`h-2 rounded-full ${isUnverified ? "bg-amber-500" : "bg-[#0D9488]"}`}
+                          className={`h-2 rounded-full ${meta.unverified ? "bg-amber-500" : "bg-[#0D9488]"}`}
                           style={{ width: `${pct}%` }}
                         />
                       </div>
@@ -321,22 +352,22 @@ export default function DashboardPage() {
           </div>
         </Card>
 
-        {/* Sağ 4 Sütun: Gözlemlenen Endüstriyel Protokoller (TailAdmin Donut Chart Card) */}
+        {/* Sağ 4 Sütun: Gözlemlenen Endüstriyel Protokoller */}
         <Card
           className="lg:col-span-4"
-          title="Gözlemlenen Ağ Protokolleri"
-          subtitle="Pasif trafik ve DPI ile doğrulanan protokoller"
-          actions={<Badge variant="teal">{protoList.length} Protokol</Badge>}
+          title={t("Gözlemlenen Ağ Protokolleri", "Observed Network Protocols")}
+          subtitle={t("Pasif trafik ve DPI ile sınıflandırılan akışlar", "Flows classified via passive traffic & DPI")}
+          actions={<Badge variant="teal">{t(`${protoList.length} Protokol`, `${protoList.length} Protocols`)}</Badge>}
         >
           {protoList.length === 0 ? (
-            <Empty>Henüz protokol trafiği gözlenmedi.</Empty>
+            <Empty>{t("Henüz protokol trafiği gözlenmedi.", "No protocol traffic observed yet.")}</Empty>
           ) : (
             <div className="flex flex-col items-center">
               <div className="relative my-2 flex h-40 w-40 items-center justify-center">
                 <svg viewBox="0 0 140 140" className="h-40 w-40 -rotate-90">
                   <circle cx="70" cy="70" r={radius} fill="none" stroke="#F1F5F9" strokeWidth="16" />
-                  {protoList.slice(0, 6).map(([proto, count], idx) => {
-                    const frac = count / totalProtoConns;
+                  {protoList.slice(0, 6).map(([proto, stat], idx) => {
+                    const frac = stat.flows / totalProtoFlows;
                     const dash = frac * circumference;
                     const offset = cumulativeOffset;
                     cumulativeOffset += dash;
@@ -356,16 +387,16 @@ export default function DashboardPage() {
                   })}
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                  <span className="text-2xl font-bold text-[#1C2434]">{edges.length}</span>
+                  <span className="text-2xl font-bold text-[#1C2434]">{totalProtoFlows}</span>
                   <span className="text-[10px] font-semibold tracking-wider text-[#64748B] uppercase">
-                    AKTİF AKIŞ
+                    {t("AKTİF AKIŞ", "ACTIVE FLOWS")}
                   </span>
                 </div>
               </div>
 
               <div className="mt-3 w-full divide-y divide-[#E2E8F0] text-xs">
-                {protoList.slice(0, 6).map(([proto, count], idx) => {
-                  const pct = Math.round((count / totalProtoConns) * 100);
+                {protoList.slice(0, 6).map(([proto, stat], idx) => {
+                  const pct = Math.round((stat.flows / totalProtoFlows) * 100);
                   return (
                     <div key={proto} className="flex items-center justify-between py-2">
                       <span className="flex items-center gap-2 font-mono font-semibold text-[#1C2434]">
@@ -373,10 +404,16 @@ export default function DashboardPage() {
                           className="h-2.5 w-2.5 rounded-xs"
                           style={{ backgroundColor: CHART_PALETTE[idx % CHART_PALETTE.length] }}
                         />
-                        {proto}
+                        <span>{proto}</span>
+                        {stat.isHint && (
+                          <span className="rounded bg-amber-50 px-1.5 py-0.2 font-sans text-[10px] font-normal text-amber-800">
+                            {t("port tahmini", "port hint")}
+                          </span>
+                        )}
                       </span>
                       <span className="font-mono text-[#64748B]">
-                        {count} bağlantı (<strong className="text-[#1C2434]">{pct}%</strong>)
+                        {t(`${stat.flows} akış`, `${stat.flows} flows`)} (
+                        <strong className="text-[#1C2434]">{pct}%</strong>)
                       </span>
                     </div>
                   );
@@ -392,27 +429,27 @@ export default function DashboardPage() {
         <Card
           className="lg:col-span-7"
           noPadding
-          title="Öncelikli Açık Risk Bulguları"
-          subtitle="100 puanlık açıklanabilir kural motoru tarafından en yüksek öncelikle işaretlenen bulgular"
+          title={t("Öncelikli Açık Risk Bulguları", "Priority Open Risk Findings")}
+          subtitle={t("Açıklanabilir kural motoru tarafından işaretlenen bulgular", "Findings flagged by the explainable rule engine")}
           actions={
             <Link to="/risks" className="text-xs font-semibold text-[#0D9488] hover:underline">
-              Tüm Bulgular ({totalOpenRisks}) →
+              {t(`Tüm Bulgular (${totalOpenRisks}) →`, `All Findings (${totalOpenRisks}) →`)}
             </Link>
           }
         >
           {risksQuery.isLoading ? (
-            <Empty>Yükleniyor…</Empty>
+            <Empty>{t("Yükleniyor…", "Loading…")}</Empty>
           ) : risks.length === 0 ? (
-            <Empty>Açık risk bulgusu bulunmuyor.</Empty>
+            <Empty>{t("Açık risk bulgusu bulunmuyor.", "No open risk findings.")}</Empty>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold text-[#64748B] uppercase">
                   <tr>
-                    <th className="px-5 py-3">Bulgular & Kural</th>
-                    <th className="px-4 py-3">Etkilenen Cihaz</th>
-                    <th className="px-4 py-3">Puan / Seviye</th>
-                    <th className="px-5 py-3 text-right">İncele</th>
+                    <th className="px-5 py-3">{t("Bulgu & Kural", "Finding & Rule")}</th>
+                    <th className="px-4 py-3">{t("Etkilenen Cihaz", "Affected Device")}</th>
+                    <th className="px-4 py-3">{t("Puan / Seviye", "Score / Severity")}</th>
+                    <th className="px-5 py-3 text-right">{t("İncele", "Inspect")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E2E8F0]">
@@ -423,19 +460,25 @@ export default function DashboardPage() {
                         <div className="mt-0.5 flex items-center gap-2 font-mono text-[11px] text-[#64748B]">
                           <span>{r.evidence.rule_id ?? r.rule_key}</span>
                           <span>·</span>
-                          <span>Güven: %{Math.round(r.confidence * 100)}</span>
+                          <span>
+                            {t("Güven", "Confidence")}: %{Math.round(r.confidence * 100)}
+                          </span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 font-mono">
+                      <td className="px-4 py-3 font-mono whitespace-nowrap">
                         <Link
                           to={`/assets/${r.asset_id}`}
                           className="font-semibold text-[#0D9488] hover:underline"
                         >
                           {r.asset_ip ?? r.asset_name ?? "—"}
                         </Link>
-                        {r.asset_name && <div className="font-sans text-[11px] text-[#64748B]">{r.asset_name}</div>}
+                        {r.asset_name && r.asset_name !== r.asset_ip && (
+                          <div className="max-w-[160px] truncate font-sans text-[11px] text-[#64748B]" title={r.asset_name}>
+                            {r.asset_name}
+                          </div>
+                        )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <span className="rounded bg-[#1C2434] px-2 py-0.5 font-mono text-[11px] font-bold text-white">
                             {r.score}/100
@@ -446,7 +489,7 @@ export default function DashboardPage() {
                       <td className="px-5 py-3 text-right">
                         <Link to="/risks">
                           <Button variant="secondary" size="sm">
-                            Detay
+                            {t("Detay", "Detail")}
                           </Button>
                         </Link>
                       </td>
@@ -460,18 +503,18 @@ export default function DashboardPage() {
 
         <div className="space-y-6 lg:col-span-5">
           <Card
-            title="Fabrikalar ve Ağ Bölgeleri (Sites & Zones)"
-            subtitle="Kayıtlı üretim tesisleri ve segmentasyon bölgeleri"
+            title={t("Fabrikalar ve Ağ Bölgeleri", "Sites & Network Zones")}
+            subtitle={t("Kayıtlı üretim tesisleri ve segmentasyon bölgeleri", "Registered production sites and segmentation zones")}
             actions={
               <Link to="/settings" className="text-xs font-semibold text-[#0D9488] hover:underline">
-                Yönet →
+                {t("Yönet →", "Manage →")}
               </Link>
             }
           >
             {sitesQuery.isLoading ? (
-              <Empty>Yükleniyor…</Empty>
+              <Empty>{t("Yükleniyor…", "Loading…")}</Empty>
             ) : sites.length === 0 ? (
-              <Empty>Henüz fabrika kaydı yok.</Empty>
+              <Empty>{t("Henüz fabrika kaydı yok.", "No sites registered yet.")}</Empty>
             ) : (
               <div className="divide-y divide-[#E2E8F0]">
                 {sites.map((site) => {
@@ -482,10 +525,12 @@ export default function DashboardPage() {
                         <div>
                           <div className="text-xs font-semibold text-[#1C2434]">{site.name}</div>
                           <div className="text-[11px] text-[#64748B]">
-                            {site.industry || "Endüstriyel Üretim"} · {site.timezone}
+                            {site.industry || t("Endüstriyel Üretim", "Industrial Manufacturing")} · {site.timezone}
                           </div>
                         </div>
-                        <Badge variant="mono">{siteZones.length} Bölge</Badge>
+                        <Badge variant="mono">
+                          {t(`${siteZones.length} Bölge`, `${siteZones.length} Zones`)}
+                        </Badge>
                       </div>
                       {siteZones.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1.5">
@@ -508,26 +553,35 @@ export default function DashboardPage() {
           </Card>
 
           <Card
-            title="Son Denetim Kayıtları (Audit Trail)"
-            subtitle="Sistemde gerçekleştirilen kritik yapılandırma ve analiz işlemleri"
+            title={t("Son Denetim Kayıtları", "Recent Audit Logs")}
+            subtitle={t("Kritik yapılandırma ve analiz işlemleri", "Critical configuration and analysis actions")}
           >
             {!canAdmin ? (
-              <Empty>Denetim kayıtlarını görüntülemek için yönetici yetkisi gerekir.</Empty>
+              <Empty>
+                {t(
+                  "Denetim kayıtlarını görüntülemek için yönetici yetkisi gerekir.",
+                  "Administrator permission is required to view audit logs.",
+                )}
+              </Empty>
             ) : auditQuery.isLoading ? (
-              <Empty>Yükleniyor…</Empty>
+              <Empty>{t("Yükleniyor…", "Loading…")}</Empty>
             ) : (auditQuery.data?.items.length ?? 0) === 0 ? (
-              <Empty>Henüz denetim kaydı yok.</Empty>
+              <Empty>{t("Henüz denetim kaydı yok.", "No audit logs yet.")}</Empty>
             ) : (
               <div className="divide-y divide-[#E2E8F0]">
                 {auditQuery.data!.items.slice(0, 5).map((log) => (
-                  <div key={log.id} className="flex items-center justify-between py-2 text-xs first:pt-0 last:pb-0">
-                    <div className="flex items-center gap-2">
-                      <ProtocolBadge protocol={log.action} />
+                  <div key={log.id} className="flex items-center justify-between gap-2 py-2 text-xs first:pt-0 last:pb-0">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Badge variant="teal">{formatAuditAction(log.action)}</Badge>
                       {log.target_type && (
-                        <span className="text-[11px] text-[#64748B]">({log.target_type})</span>
+                        <span className="truncate text-[11px] text-[#64748B]">
+                          {formatAuditTarget(log.target_type)}
+                        </span>
                       )}
                     </div>
-                    <span className="font-mono text-[11px] text-[#64748B]">{formatDate(log.created_at)}</span>
+                    <span className="shrink-0 font-mono text-[11px] text-[#64748B]">
+                      {formatDate(log.created_at)}
+                    </span>
                   </div>
                 ))}
               </div>

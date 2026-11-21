@@ -19,6 +19,7 @@ import {
   formatDate,
 } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
+import { useLang } from "../i18n";
 import { api, apiDownload } from "../services/api";
 import type {
   Asset,
@@ -33,6 +34,7 @@ import type {
 
 export default function AssetsPage() {
   const { activeOrg, canEditAssets } = useAuth();
+  const { t } = useLang();
   const qc = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -108,7 +110,10 @@ export default function AssetsPage() {
       }),
     onSuccess: async (res) => {
       setBulkVerifyNotice(
-        `${res.verified_count} cihaz doğrulandı ve ilgili NEW_ASSET risk bulguları otomatik çözüldü.`,
+        t(
+          `${res.verified_count} cihaz doğrulandı ve ilgili yeni cihaz risk bulguları otomatik çözüldü.`,
+          `${res.verified_count} devices verified and related new-asset risk findings resolved automatically.`,
+        ),
       );
       setSelectedIds([]);
       await Promise.all([
@@ -142,7 +147,7 @@ export default function AssetsPage() {
   if (q.trim()) {
     activeFilterChips.push({
       key: "q",
-      label: `Arama: "${q.trim()}"`,
+      label: `${t("Arama", "Search")}: "${q.trim()}"`,
       clear: () => {
         setQ("");
         setSearchParams({});
@@ -152,14 +157,14 @@ export default function AssetsPage() {
   if (assetType) {
     activeFilterChips.push({
       key: "type",
-      label: `Tür: ${ASSET_TYPE_LABEL[assetType]}`,
+      label: `${t("Tür", "Type")}: ${ASSET_TYPE_LABEL[assetType as AssetType]}`,
       clear: () => setAssetType(""),
     });
   }
   if (vendor.trim()) {
     activeFilterChips.push({
       key: "vendor",
-      label: `Üretici: ${vendor.trim()}`,
+      label: `${t("Üretici", "Vendor")}: ${vendor.trim()}`,
       clear: () => setVendor(""),
     });
   }
@@ -167,21 +172,23 @@ export default function AssetsPage() {
     const zName = zones.find((z) => z.id === zoneId)?.name ?? zoneId;
     activeFilterChips.push({
       key: "zone",
-      label: `Bölge: ${zName}`,
+      label: `${t("Bölge", "Zone")}: ${zName}`,
       clear: () => setZoneId(""),
     });
   }
   if (criticality) {
     activeFilterChips.push({
       key: "crit",
-      label: `Kritiklik: ${CRITICALITY_LABEL[criticality as Criticality]}`,
+      label: `${t("Kritiklik", "Criticality")}: ${CRITICALITY_LABEL[criticality as Criticality]}`,
       clear: () => setCriticality(""),
     });
   }
   if (verified !== "") {
     activeFilterChips.push({
       key: "ver",
-      label: `Doğrulama: ${verified === "true" ? "Doğrulanmış" : "Doğrulanmamış"}`,
+      label: `${t("Doğrulama", "Verification")}: ${
+        verified === "true" ? t("Doğrulanmış", "Verified") : t("Doğrulanmamış", "Unverified")
+      }`,
       clear: () => setVerified(""),
     });
   }
@@ -196,36 +203,48 @@ export default function AssetsPage() {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
+  function shortPurdue(raw?: string): string {
+    if (!raw) return "L1/L2";
+    const m = raw.match(/L\d(?:\s*\/\s*L\d)?/i);
+    return m ? m[0].toUpperCase() : raw.split("-")[0]?.trim() ?? "L1/L2";
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Device Inventory"
-        subtitle="Pasif trafik gözlemiyle keşfedilen veya CSV ile içe aktarılan merkezi endüstriyel cihaz envanteri"
-        breadcrumb="Device Inventory"
+        title={t("Cihaz Envanteri", "Device Inventory")}
+        subtitle={t(
+          "Pasif trafik gözlemiyle keşfedilen veya CSV ile içe aktarılan merkezi endüstriyel varlıklar",
+          "Centralized industrial assets discovered via passive traffic or imported from CSV",
+        )}
+        breadcrumb={t("Cihaz Envanteri", "Device Inventory")}
         actions={
           <>
             <Button
               variant="secondary"
-              onClick={() => void apiDownload("/reports/inventory?format=csv", "factoryguard-envanter.csv")}
+              onClick={() => void apiDownload("/reports/inventory?format=csv", "factoryguard-inventory.csv")}
             >
-              ↓ CSV Dışa Aktar
+              {t("↓ CSV Dışa Aktar", "↓ Export CSV")}
             </Button>
             {canEditAssets && (
               <Button variant="primary" onClick={() => setShowImport((v) => !v)}>
-                {showImport ? "İçe Aktarmayı Kapat" : "+ CSV Envanter İçe Aktar"}
+                {showImport
+                  ? t("İçe Aktarmayı Kapat", "Close Import")
+                  : t("+ CSV Envanter İçe Aktar", "+ Import CSV Inventory")}
               </Button>
             )}
           </>
         }
       />
 
-      {/* TailAdmin 4 Sütunlu Envanter Özeti */}
+      {/* TailAdmin 4 Sütunlu Envanter Özeti (Tek sayı değeri, eşit yükseklik) */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="Toplam Envanter Varlığı"
+          label={t("Toplam Envanter Varlığı", "Total Inventory Assets")}
           value={total}
-          badge={`${sites.length} Fabrika`}
+          badge={t(`${sites.length} Fabrika`, `${sites.length} Sites`)}
           badgeTone="teal"
+          subtext={t(`${zones.length} güvenlik bölgesi`, `${zones.length} security zones`)}
           icon={
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <rect x="2" y="4" width="20" height="6" rx="1.5" />
@@ -234,10 +253,11 @@ export default function AssetsPage() {
           }
         />
         <StatCard
-          label="Endüstriyel OT Cihazı"
+          label={t("Endüstriyel OT Cihazı", "Industrial OT Devices")}
           value={otDeviceCount}
-          badge="Modbus / S7 / ENIP"
+          badge={t("OT Protokolleri", "OT Protocols")}
           badgeTone="teal"
+          subtext="Modbus · S7comm · ENIP · OPC UA"
           icon={
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
@@ -245,10 +265,14 @@ export default function AssetsPage() {
           }
         />
         <StatCard
-          label="Doğrulanmış Varlıklar"
+          label={t("Doğrulanmış Varlıklar", "Verified Assets")}
           value={verifiedCount}
-          badge={`%${total > 0 ? Math.round((verifiedCount / total) * 100) : 0} Tamamlandı`}
+          badge={t(
+            `%${total > 0 ? Math.round((verifiedCount / total) * 100) : 0} Tamamlandı`,
+            `${total > 0 ? Math.round((verifiedCount / total) * 100) : 0}% Complete`,
+          )}
           badgeTone="emerald"
+          subtext={t("Envanter onayı tamamlananlar", "Confirmed in inventory baseline")}
           icon={
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
@@ -257,10 +281,11 @@ export default function AssetsPage() {
           }
         />
         <StatCard
-          label="Doğrulama Bekleyen / Kritik"
-          value={`${unverifiedCount} / ${highCritAssets}`}
-          badge={unverifiedCount > 0 ? "İnceleme Gerekli" : "Tamamı Doğrulandı"}
+          label={t("Doğrulama Bekleyen", "Pending Verification")}
+          value={unverifiedCount}
+          badge={unverifiedCount > 0 ? t("İnceleme Gerekli", "Review Needed") : t("Tamamı Doğrulandı", "All Verified")}
           badgeTone={unverifiedCount > 0 ? "amber" : "teal"}
+          subtext={t(`${highCritAssets} kritik / yüksek varlık`, `${highCritAssets} critical / high assets`)}
           icon={
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="12" cy="12" r="10" />
@@ -272,10 +297,13 @@ export default function AssetsPage() {
       </div>
 
       {showImport && canEditAssets && (
-        <Card title="CSV ile Envanter İçe Aktar" subtitle="Mevcut fabrika varlık listesini toplu olarak içe aktarın">
+        <Card
+          title={t("CSV ile Envanter İçe Aktar", "Import Inventory via CSV")}
+          subtitle={t("Mevcut fabrika varlık listesini toplu olarak içe aktarın", "Bulk import your existing plant asset list")}
+        >
           <form onSubmit={handleImport} className="space-y-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Field label="Hedef Fabrika *">
+              <Field label={t("Hedef Fabrika *", "Target Site *")}>
                 <Select value={effectiveSiteId} onChange={(e) => setImportSiteId(e.target.value)}>
                   {sites.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -284,23 +312,35 @@ export default function AssetsPage() {
                   ))}
                 </Select>
               </Field>
-              <Field label="CSV Dosyası Seç">
-                <input
-                  type="file"
-                  accept=".csv,text/csv"
-                  className="w-full text-xs text-[#64748B] file:mr-3 file:rounded-[4px] file:border-0 file:bg-[#F1F5F9] file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-[#1C2434]"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) file.text().then((t) => setCsvContent(t));
-                  }}
-                />
+              <Field label={t("CSV Dosyası Seç", "Select CSV File")}>
+                <label className="flex h-9 cursor-pointer items-center justify-between rounded-[4px] border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-3 text-xs text-[#1C2434] hover:border-[#0D9488]">
+                  <span className="truncate">
+                    {csvContent
+                      ? t("CSV içeriği yüklendi", "CSV content loaded")
+                      : t("CSV dosyası seçin…", "Choose a CSV file…")}
+                  </span>
+                  <span className="ml-2 rounded bg-[#1C2434] px-2 py-0.5 text-[11px] font-medium text-white">
+                    {t("Gözat", "Browse")}
+                  </span>
+                  <input
+                    type="file"
+                    accept=".csv,text/csv"
+                    className="sr-only"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) file.text().then((txt) => setCsvContent(txt));
+                    }}
+                  />
+                </label>
               </Field>
             </div>
-            <Field label="CSV İçeriği">
+            <Field label={t("CSV İçeriği", "CSV Content")}>
               <textarea
                 rows={4}
                 className="w-full rounded-[4px] border border-[#E2E8F0] p-2.5 font-mono text-xs focus:border-[#0D9488] focus:outline-none"
-                placeholder={"name,ip_address,mac_address,hostname,asset_type,vendor,model,firmware_version,zone,criticality,is_verified\nPLC-01,192.168.10.20,00:11:22:33:44:20,plc01,plc,Siemens,S7-1500,V2.9,Üretim Hattı,high,true"}
+                placeholder={
+                  "name,ip_address,mac_address,hostname,asset_type,vendor,model,firmware_version,zone,criticality,is_verified\nPLC-01,192.168.10.20,00:11:22:33:44:20,plc01,plc,Siemens,S7-1500,V2.9,Line-1,high,true"
+                }
                 value={csvContent}
                 onChange={(e) => setCsvContent(e.target.value)}
               />
@@ -309,19 +349,21 @@ export default function AssetsPage() {
             {importResult && (
               <div className="rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] p-3 text-xs">
                 <div className="font-semibold text-[#1C2434]">
-                  İşlenen: {importResult.processed_rows} · Yeni: {importResult.created} · Güncellenen:{" "}
-                  {importResult.updated} · Hatalı: {importResult.errors.length}
+                  {t(
+                    `İşlenen: ${importResult.processed_rows} · Yeni: ${importResult.created} · Güncellenen: ${importResult.updated} · Hatalı: ${importResult.errors.length}`,
+                    `Processed: ${importResult.processed_rows} · Created: ${importResult.created} · Updated: ${importResult.updated} · Errors: ${importResult.errors.length}`,
+                  )}
                 </div>
               </div>
             )}
             <Button type="submit" disabled={importMut.isPending || !csvContent.trim()}>
-              {importMut.isPending ? "İçe Aktarılıyor…" : "CSV'yi İçe Aktar"}
+              {importMut.isPending ? t("İçe Aktarılıyor…", "Importing…") : t("CSV'yi İçe Aktar", "Import CSV")}
             </Button>
           </form>
         </Card>
       )}
 
-      {/* TailAdmin Envanter Tablo Kartı */}
+      {/* TailAdmin 7 Sütunlu Kompakt Envanter Tablo Kartı */}
       <Card noPadding>
         {/* Üst Sekme ve Filtre Araç Çubuğu */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E2E8F0] px-5 py-3.5">
@@ -335,7 +377,7 @@ export default function AssetsPage() {
                   : "text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#1C2434]"
               }`}
             >
-              Cihaz Listesi ({total})
+              {t(`Cihaz Listesi (${total})`, `Device List (${total})`)}
             </button>
             <button
               type="button"
@@ -346,7 +388,7 @@ export default function AssetsPage() {
                   : "text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#1C2434]"
               }`}
             >
-              Bölgeler & Purdue Katmanları ({zones.length})
+              {t(`Bölgeler & Purdue (${zones.length})`, `Zones & Purdue (${zones.length})`)}
             </button>
           </div>
 
@@ -358,14 +400,14 @@ export default function AssetsPage() {
                   setQ(e.target.value);
                   setPageIdx(1);
                 }}
-                placeholder="IP, MAC, üretici, model ara..."
+                placeholder={t("IP, MAC, üretici, model ara...", "Search IP, MAC, vendor, model...")}
               />
             </div>
             <Button
               variant={showFilters ? "outline" : "secondary"}
               onClick={() => setShowFilters((v) => !v)}
             >
-              Filtreler ({activeFilterChips.length}) ▾
+              {t(`Filtreler (${activeFilterChips.length}) ▾`, `Filters (${activeFilterChips.length}) ▾`)}
             </Button>
             {canEditAssets && (
               <Button
@@ -374,10 +416,10 @@ export default function AssetsPage() {
                 onClick={() => bulkVerifyMut.mutate(selectedIds.length > 0 ? selectedIds : undefined)}
               >
                 {bulkVerifyMut.isPending
-                  ? "Doğrulanıyor…"
+                  ? t("Doğrulanıyor…", "Verifying…")
                   : selectedIds.length > 0
-                    ? `✓ Seçili ${selectedIds.length} Cihazı Doğrula`
-                    : "✓ Yerel Cihazları Toplu Doğrula"}
+                    ? t(`✓ Seçili ${selectedIds.length} Cihazı Doğrula`, `✓ Verify ${selectedIds.length} Selected`)
+                    : t("✓ Tümünü Toplu Doğrula", "✓ Bulk Verify All")}
               </Button>
             )}
           </div>
@@ -386,28 +428,28 @@ export default function AssetsPage() {
         {/* Açılır Detaylı Filtre Çekmecesi */}
         {showFilters && (
           <div className="grid grid-cols-1 gap-3 border-b border-[#E2E8F0] bg-[#F8FAFC] px-5 py-4 sm:grid-cols-3 lg:grid-cols-6">
-            <Field label="IP Adresi">
+            <Field label={t("IP Adresi", "IP Address")}>
               <Input placeholder="192.168.10..." value={ip} onChange={(e) => setIp(e.target.value)} />
             </Field>
-            <Field label="MAC Adresi">
+            <Field label={t("MAC Adresi", "MAC Address")}>
               <Input placeholder="00:1b:1b..." value={mac} onChange={(e) => setMac(e.target.value)} />
             </Field>
-            <Field label="Cihaz Türü">
+            <Field label={t("Cihaz Türü", "Device Type")}>
               <Select value={assetType} onChange={(e) => setAssetType(e.target.value)}>
-                <option value="">Tümü</option>
-                {(Object.keys(ASSET_TYPE_LABEL) as AssetType[]).map((t) => (
-                  <option key={t} value={t}>
-                    {ASSET_TYPE_LABEL[t]}
+                <option value="">{t("Tümü", "All")}</option>
+                {(Object.keys(ASSET_TYPE_LABEL) as AssetType[]).map((typeKey) => (
+                  <option key={typeKey} value={typeKey}>
+                    {ASSET_TYPE_LABEL[typeKey]}
                   </option>
                 ))}
               </Select>
             </Field>
-            <Field label="Üretici">
+            <Field label={t("Üretici", "Vendor")}>
               <Input placeholder="Siemens, Omron…" value={vendor} onChange={(e) => setVendor(e.target.value)} />
             </Field>
-            <Field label="Bölge (Zone)">
+            <Field label={t("Bölge", "Zone")}>
               <Select value={zoneId} onChange={(e) => setZoneId(e.target.value)}>
-                <option value="">Tümü</option>
+                <option value="">{t("Tümü", "All")}</option>
                 {zones.map((z) => (
                   <option key={z.id} value={z.id}>
                     {z.name}
@@ -415,11 +457,11 @@ export default function AssetsPage() {
                 ))}
               </Select>
             </Field>
-            <Field label="Doğrulama">
+            <Field label={t("Doğrulama", "Verification")}>
               <Select value={verified} onChange={(e) => setVerified(e.target.value)}>
-                <option value="">Tümü</option>
-                <option value="true">Doğrulanmış</option>
-                <option value="false">Doğrulanmamış</option>
+                <option value="">{t("Tümü", "All")}</option>
+                <option value="true">{t("Doğrulanmış", "Verified")}</option>
+                <option value="false">{t("Doğrulanmamış", "Unverified")}</option>
               </Select>
             </Field>
           </div>
@@ -457,7 +499,7 @@ export default function AssetsPage() {
               }}
               className="text-xs font-semibold text-[#0D9488] hover:underline"
             >
-              Filtreleri Temizle
+              {t("Filtreleri Temizle", "Clear Filters")}
             </button>
           </div>
         )}
@@ -487,11 +529,13 @@ export default function AssetsPage() {
                       <CriticalityBadge value={z.criticality} />
                     </div>
                     <p className="mt-1 text-xs text-[#64748B]">
-                      {z.description || "Endüstriyel üretim bölgesi"}
+                      {z.description || t("Endüstriyel üretim bölgesi", "Industrial production zone")}
                     </p>
                   </div>
                   <div className="mt-4 flex items-center justify-between border-t border-[#E2E8F0] pt-3 text-xs">
-                    <span className="font-mono font-semibold text-[#1C2434]">{zAssets.length} cihaz</span>
+                    <span className="font-mono font-semibold text-[#1C2434]">
+                      {t(`${zAssets.length} cihaz`, `${zAssets.length} devices`)}
+                    </span>
                     <button
                       type="button"
                       onClick={() => {
@@ -500,7 +544,7 @@ export default function AssetsPage() {
                       }}
                       className="font-semibold text-[#0D9488] hover:underline"
                     >
-                      Bölgedeki Cihazları Gör →
+                      {t("Bölgedeki Cihazları Gör →", "View Devices in Zone →")}
                     </button>
                   </div>
                 </div>
@@ -508,12 +552,13 @@ export default function AssetsPage() {
             })}
           </div>
         ) : assetsQuery.isLoading ? (
-          <Empty>Yükleniyor…</Empty>
+          <Empty>{t("Yükleniyor…", "Loading…")}</Empty>
         ) : assets.length === 0 ? (
-          <Empty>Filtrelere uygun cihaz bulunamadı.</Empty>
+          <Empty>{t("Filtrelere uygun cihaz bulunamadı.", "No devices match the current filters.")}</Empty>
         ) : (
           <div>
             <div className="overflow-x-auto">
+              {/* 7 Veri Sütunu (+ Seçim Kutusu): Tek/İki Satırlık Kompakt Tablo */}
               <table className="w-full text-left text-xs">
                 <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold text-[#64748B] uppercase">
                   <tr>
@@ -526,84 +571,126 @@ export default function AssetsPage() {
                         }
                       />
                     </th>
-                    <th className="px-4 py-3">Cihaz / Hostname</th>
-                    <th className="px-4 py-3">IP & MAC Adresi</th>
-                    <th className="px-4 py-3">Tür & Purdue Katmanı</th>
-                    <th className="px-4 py-3">Kanıta Dayalı Sınıflandırma</th>
-                    <th className="px-4 py-3">Üretici / Model / FW</th>
-                    <th className="px-4 py-3">Bölge & Kritiklik</th>
-                    <th className="px-4 py-3">Güven / Durum</th>
-                    <th className="px-4 py-3">Son Görülme</th>
-                    <th className="px-4 py-3 text-right">İşlem</th>
+                    <th className="px-4 py-3">{t("Cihaz / Hostname", "Device / Hostname")}</th>
+                    <th className="px-4 py-3">{t("IP & MAC Adresi", "IP & MAC Address")}</th>
+                    <th className="px-4 py-3">{t("Tür & Sınıflandırma", "Type & Classification")}</th>
+                    <th className="px-4 py-3">{t("Üretici & Model", "Vendor & Model")}</th>
+                    <th className="px-4 py-3">{t("Bölge & Kritiklik", "Zone & Criticality")}</th>
+                    <th className="px-4 py-3">{t("Durum & Son Görülme", "Status & Last Seen")}</th>
+                    <th className="px-4 py-3 text-right">{t("İşlem", "Action")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E2E8F0]">
                   {pagedAssets.map((a) => {
                     const zone = zones.find((z) => z.id === a.zone_id);
                     const isChecked = selectedIds.includes(a.id);
+                    const primaryName =
+                      a.name || a.model || a.hostname || a.ip_address || t("İsimsiz Cihaz", "Unnamed Device");
+                    const showSubHostname = Boolean(a.hostname && a.hostname !== primaryName);
+                    const vendorDisplay = a.vendor
+                      ? a.vendor
+                      : t("Doğrulanmadı", "Unverified");
+                    const modelFw = [a.model, a.firmware_version ? `v${a.firmware_version}` : null]
+                      .filter(Boolean)
+                      .join(" · ");
+
                     return (
                       <tr key={a.id} className="transition-colors hover:bg-[#F8FAFC]">
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-2.5">
                           <input
                             type="checkbox"
                             checked={isChecked}
                             onChange={() => toggleSelect(a.id)}
                           />
                         </td>
-                        <td className="px-4 py-3">
+
+                        {/* 1. Cihaz / Hostname (tekrarsız) */}
+                        <td className="max-w-[190px] px-4 py-2.5">
                           <Link
                             to={`/assets/${a.id}`}
-                            className="font-semibold text-[#1C2434] hover:text-[#0D9488] hover:underline"
+                            title={primaryName}
+                            className="block truncate font-semibold text-[#1C2434] hover:text-[#0D9488] hover:underline"
                           >
-                            {a.name || a.model || a.hostname || a.ip_address || "İsimsiz Cihaz"}
+                            {primaryName}
                           </Link>
-                          {a.hostname && <div className="font-mono text-[11px] text-[#64748B]">{a.hostname}</div>}
+                          {showSubHostname && (
+                            <div className="truncate font-mono text-[11px] text-[#64748B]" title={a.hostname!}>
+                              {a.hostname}
+                            </div>
+                          )}
                         </td>
-                        <td className="px-4 py-3 font-mono">
+
+                        {/* 2. IP & MAC Adresi */}
+                        <td className="px-4 py-2.5 font-mono whitespace-nowrap">
                           <div className="flex items-center gap-1.5 font-semibold text-[#1C2434]">
                             <span>{a.ip_address ?? "—"}</span>
-                            {a.is_external && <Badge variant="danger">Dış Ağ</Badge>}
+                            {a.is_external && <Badge variant="danger">{t("Dış Ağ", "External")}</Badge>}
                           </div>
                           <div className="text-[11px] text-[#64748B]">{a.mac_address ?? "—"}</div>
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="font-medium text-[#1C2434]">{ASSET_TYPE_LABEL[a.asset_type]}</div>
-                          <div className="text-[11px] text-[#64748B]">{a.purdue_level ?? "L1/L2"}</div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="font-medium text-[#1C2434]">{a.classification_label}</div>
+
+                        {/* 3. Tür & Sınıflandırma (Purdue + Protokoller tek hücrede) */}
+                        <td className="px-4 py-2.5" title={a.classification_label}>
+                          <div className="flex items-center gap-1.5 whitespace-nowrap">
+                            <span className="font-medium text-[#1C2434]">{ASSET_TYPE_LABEL[a.asset_type]}</span>
+                            <Badge variant="mono">{shortPurdue(a.purdue_level)}</Badge>
+                          </div>
                           {a.observed_protocols && a.observed_protocols.length > 0 && (
                             <div className="mt-1 flex flex-wrap gap-1">
-                              {a.observed_protocols.map((p) => (
+                              {a.observed_protocols.slice(0, 3).map((p) => (
                                 <ProtocolBadge key={p} protocol={p} />
                               ))}
                             </div>
                           )}
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="font-medium text-[#1C2434]">{a.vendor || a.vendor_status_label}</div>
-                          {(a.model || a.firmware_version) && (
-                            <div className="font-mono text-[11px] text-[#64748B]">
-                              {a.model ?? "—"} {a.firmware_version ? `(${a.firmware_version})` : ""}
+
+                        {/* 4. Üretici & Model */}
+                        <td className="max-w-[170px] px-4 py-2.5">
+                          <div
+                            className={`truncate font-medium ${a.vendor ? "text-[#1C2434]" : "text-[#64748B]"}`}
+                            title={a.vendor || a.vendor_status_label}
+                          >
+                            {vendorDisplay}
+                          </div>
+                          {modelFw && (
+                            <div className="truncate font-mono text-[11px] text-[#64748B]" title={modelFw}>
+                              {modelFw}
                             </div>
                           )}
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="mb-1 text-[#1C2434]">{zone?.name ?? "Atanmadı"}</div>
-                          <CriticalityBadge value={a.criticality} />
+
+                        {/* 5. Bölge & Kritiklik */}
+                        <td className="max-w-[175px] px-4 py-2.5">
+                          <div className="truncate text-[#1C2434]" title={zone?.name ?? t("Atanmadı", "Unassigned")}>
+                            {zone?.name ?? t("Atanmadı", "Unassigned")}
+                          </div>
+                          <div className="mt-0.5">
+                            <CriticalityBadge value={a.criticality} />
+                          </div>
                         </td>
-                        <td className="px-4 py-3">
-                          <Badge variant={a.is_verified ? "success" : "warning"}>
-                            {a.is_verified ? "✓ Doğrulandı" : `Doğrulanmadı (%${Math.round(a.confidence * 100)})`}
-                          </Badge>
+
+                        {/* 6. Durum & Son Görülme */}
+                        <td className="px-4 py-2.5 whitespace-nowrap">
+                          <div>
+                            <Badge variant={a.is_verified ? "success" : "warning"}>
+                              {a.is_verified
+                                ? t("✓ Doğrulandı", "✓ Verified")
+                                : t(
+                                    `Doğrulanmadı (%${Math.round(a.confidence * 100)})`,
+                                    `Unverified (${Math.round(a.confidence * 100)}%)`,
+                                  )}
+                            </Badge>
+                          </div>
+                          <div className="mt-0.5 font-mono text-[11px] text-[#64748B]">
+                            {formatDate(a.last_seen_at)}
+                          </div>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-[#64748B]">
-                          {formatDate(a.last_seen_at)}
-                        </td>
-                        <td className="px-4 py-3 text-right">
+
+                        {/* 7. İşlem */}
+                        <td className="px-4 py-2.5 text-right whitespace-nowrap">
                           <Link to={`/assets/${a.id}`}>
                             <Button variant="secondary" size="sm">
-                              Detay
+                              {t("Detay", "Detail")}
                             </Button>
                           </Link>
                         </td>
@@ -617,7 +704,7 @@ export default function AssetsPage() {
             {/* TailAdmin Sayfalama Alt Çubuğu */}
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#E2E8F0] bg-white px-5 py-3 text-xs text-[#64748B]">
               <div className="flex items-center gap-2">
-                <span>Sayfa başına satır:</span>
+                <span>{t("Sayfa başına satır:", "Rows per page:")}</span>
                 <select
                   value={rowsPerPage}
                   onChange={(e) => {
@@ -633,11 +720,16 @@ export default function AssetsPage() {
               </div>
 
               <div>
-                Toplam <strong className="text-[#1C2434]">{assets.length}</strong> kayıttan{" "}
-                <strong className="text-[#1C2434]">
-                  {assets.length === 0 ? 0 : startOffset + 1}–{Math.min(startOffset + rowsPerPage, assets.length)}
-                </strong>{" "}
-                arası gösteriliyor
+                {t(
+                  `Toplam ${assets.length} kayıttan ${assets.length === 0 ? 0 : startOffset + 1}–${Math.min(
+                    startOffset + rowsPerPage,
+                    assets.length,
+                  )} arası gösteriliyor`,
+                  `Showing ${assets.length === 0 ? 0 : startOffset + 1}–${Math.min(
+                    startOffset + rowsPerPage,
+                    assets.length,
+                  )} of ${assets.length} records`,
+                )}
               </div>
 
               <div className="flex items-center gap-1">
@@ -647,7 +739,7 @@ export default function AssetsPage() {
                   disabled={safePage <= 1}
                   onClick={() => setPageIdx((p) => Math.max(1, p - 1))}
                 >
-                  ‹ Önceki
+                  {t("‹ Önceki", "‹ Previous")}
                 </Button>
                 <Button
                   variant="secondary"
@@ -655,7 +747,7 @@ export default function AssetsPage() {
                   disabled={safePage >= totalPages}
                   onClick={() => setPageIdx((p) => Math.min(totalPages, p + 1))}
                 >
-                  Sonraki ›
+                  {t("Sonraki ›", "Next ›")}
                 </Button>
               </div>
             </div>

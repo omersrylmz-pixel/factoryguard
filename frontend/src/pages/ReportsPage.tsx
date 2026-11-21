@@ -15,6 +15,7 @@ import {
   formatDate,
 } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
+import { bi, useLang } from "../i18n";
 import { api, apiDownload } from "../services/api";
 import type {
   AssetType,
@@ -26,25 +27,26 @@ import type {
   Zone,
 } from "../types/api";
 
-const RULE_LABELS: Record<RiskRuleKey, string> = {
-  NEW_ASSET: "Yeni / Doğrulanmamış Cihaz",
-  UNKNOWN_OT_ASSET: "Doğrulanmamış OT Cihazı",
-  UNEXPECTED_COMMUNICATION: "Beklenmeyen İletişim",
-  UNAPPROVED_REMOTE_PATH: "Onaysız Uzaktan Erişim",
-  KNOWN_VULNERABILITY: "Doğrulanmış Zafiyet (CVE)",
-  ASSET_NOT_SEEN: "Uzun Süredir Gözlemlenmeyen Cihaz",
-};
+const RULE_LABELS: Record<RiskRuleKey, string> = bi({
+  NEW_ASSET: ["Yeni / Doğrulanmamış Cihaz", "New / Unverified Device"],
+  UNKNOWN_OT_ASSET: ["Doğrulanmamış OT Cihazı", "Unverified OT Device"],
+  UNEXPECTED_COMMUNICATION: ["Beklenmeyen İletişim", "Unexpected Communication"],
+  UNAPPROVED_REMOTE_PATH: ["Onaysız Uzaktan Erişim", "Unapproved Remote Access"],
+  KNOWN_VULNERABILITY: ["Doğrulanmış Zafiyet (CVE)", "Verified Vulnerability (CVE)"],
+  ASSET_NOT_SEEN: ["Uzun Süredir Gözlemlenmeyen Cihaz", "Device Not Seen Recently"],
+});
 
-const STATUS_LABELS: Record<RiskStatus, string> = {
-  open: "Açık",
-  investigating: "İnceleniyor",
-  accepted: "Kabul Edildi",
-  resolved: "Çözüldü",
-  false_positive: "Yanlış Pozitif",
-};
+const STATUS_LABELS: Record<RiskStatus, string> = bi({
+  open: ["Açık", "Open"],
+  investigating: ["İnceleniyor", "Investigating"],
+  accepted: ["Kabul Edildi", "Accepted"],
+  resolved: ["Çözüldü", "Resolved"],
+  false_positive: ["Yanlış Alarm", "False Positive"],
+});
 
 export default function ReportsPage() {
   const { activeOrg } = useAuth();
+  const { t } = useLang();
   const [siteId, setSiteId] = useState("");
 
   // Cihaz Envanteri raporu filtreleri
@@ -120,20 +122,23 @@ export default function ReportsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        breadcrumb="Reports & SIEM"
-        title="Kurumsal Denetim Raporları & SIEM Dışa Aktarım"
-        subtitle="ISO/IEC 62443 ve iç denetim süreçleri için PDF/CSV envanter raporları, açıklanabilir risk çıktıları ve ArcSight/QRadar/Splunk CEF akışı"
+        breadcrumb={t("Raporlar & SIEM", "Reports & SIEM")}
+        title={t("Kurumsal Denetim Raporları & SIEM Dışa Aktarım", "Enterprise Audit Reports & SIEM Export")}
+        subtitle={t(
+          "ISO/IEC 62443 denetimleri için PDF/CSV envanter raporları, açıklanabilir risk çıktıları ve SIEM CEF akışı",
+          "PDF/CSV inventory reports, explainable risk exports and SIEM CEF feeds for ISO/IEC 62443 audits",
+        )}
         actions={
           <div className="w-60">
             <Select
-              aria-label="Fabrika kapsamı"
+              aria-label={t("Fabrika kapsamı", "Site scope")}
               value={siteId}
               onChange={(e) => {
                 setSiteId(e.target.value);
                 setInvZoneId("");
               }}
             >
-              <option value="">Tüm Fabrikalar</option>
+              <option value="">{t("Tüm Fabrikalar", "All Sites")}</option>
               {sites.map((site) => (
                 <option key={site.id} value={site.id}>
                   {site.name}
@@ -150,12 +155,15 @@ export default function ReportsPage() {
       {s && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
-            label="Rapor Kapsamındaki Varlık"
+            label={t("Rapor Kapsamındaki Varlık", "Assets in Report Scope")}
             value={s.assets.total}
-            hint={`Doğrulanan: ${s.assets.verified} · Doğrulanmamış: ${s.assets.unverified}`}
+            hint={t(
+              `Doğrulanan: ${s.assets.verified} · Bekleyen: ${s.assets.unverified}`,
+              `Verified: ${s.assets.verified} · Pending: ${s.assets.unverified}`,
+            )}
             tone="teal"
             badge={{
-              text: s.site_name ?? "Tüm Tesisler",
+              text: s.site_name ?? t("Tüm Tesisler", "All Sites"),
               tone: "teal",
             }}
             icon={
@@ -167,11 +175,14 @@ export default function ReportsPage() {
           />
 
           <StatCard
-            label="Kritik / Yüksek Riskler"
+            label={t("Kritik / Yüksek Riskler", "Critical / High Risks")}
             value={
               (s.risks.by_severity.critical ?? 0) + (s.risks.by_severity.high ?? 0)
             }
-            hint={`Kritik: ${s.risks.by_severity.critical ?? 0} · Yüksek: ${s.risks.by_severity.high ?? 0}`}
+            hint={t(
+              `Kritik: ${s.risks.by_severity.critical ?? 0} · Yüksek: ${s.risks.by_severity.high ?? 0}`,
+              `Critical: ${s.risks.by_severity.critical ?? 0} · High: ${s.risks.by_severity.high ?? 0}`,
+            )}
             tone={
               (s.risks.by_severity.critical ?? 0) + (s.risks.by_severity.high ?? 0) > 0
                 ? "red"
@@ -185,9 +196,12 @@ export default function ReportsPage() {
           />
 
           <StatCard
-            label="Toplam Risk Bulgusu"
-            value={s.risks.total}
-            hint={`Açık: ${s.risks.open_total} · Maks Puan: ${s.risks.max_score}`}
+            label={t("Açık Risk Bulgusu", "Open Risk Findings")}
+            value={s.risks.open_total}
+            hint={t(
+              `Toplam kayıt: ${s.risks.total} · Maks puan: ${s.risks.max_score}`,
+              `Total findings: ${s.risks.total} · Max score: ${s.risks.max_score}`,
+            )}
             tone="amber"
             icon={
               <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -198,11 +212,14 @@ export default function ReportsPage() {
           />
 
           <StatCard
-            label="İletişim & Sensör Kapsamı"
+            label={t("Gözlemlenen İletişim Akışı", "Observed Network Flows")}
             value={s.communications.total_flows}
-            hint={`${s.sensors.active}/${s.sensors.total} aktif pasif sensör`}
+            hint={t(
+              `${s.sensors.active}/${s.sensors.total} aktif sensör`,
+              `${s.sensors.active}/${s.sensors.total} active sensors`,
+            )}
             tone="navy"
-            badge={{ text: "SIEM CEF Hazır", tone: "teal" }}
+            badge={{ text: t("SIEM CEF Hazır", "SIEM CEF Ready"), tone: "teal" }}
             icon={
               <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <circle cx="6" cy="6" r="3" />
@@ -217,14 +234,17 @@ export default function ReportsPage() {
       {/* Rapor İndirme Kartları */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card
-          title="1. OT Cihaz Envanteri Raporu (CSV / PDF)"
-          subtitle="Tüm pasif keşfedilen varlıkları, bölge, Purdue katmanı, üretici, protokol ve doğrulama durumuyla dışa aktarın"
-          actions={<Badge tone="teal">ISO/IEC 62443 Envanter</Badge>}
+          title={t("1. OT Cihaz Envanteri Raporu (CSV / PDF)", "1. OT Device Inventory Report (CSV / PDF)")}
+          subtitle={t(
+            "Keşfedilen varlıkları bölge, Purdue katmanı, üretici, protokol ve doğrulama durumuyla dışa aktarın",
+            "Export discovered assets with zone, Purdue level, vendor, protocol and verification status",
+          )}
+          actions={<Badge tone="teal">{t("ISO/IEC 62443 Envanter", "ISO/IEC 62443 Inventory")}</Badge>}
         >
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Field label="Bölge (Zone)">
+            <Field label={t("Bölge", "Zone")}>
               <Select value={invZoneId} onChange={(e) => setInvZoneId(e.target.value)}>
-                <option value="">Tüm Bölgeler</option>
+                <option value="">{t("Tüm Bölgeler", "All Zones")}</option>
                 {filteredZones.map((z) => (
                   <option key={z.id} value={z.id}>
                     {z.name}
@@ -232,23 +252,23 @@ export default function ReportsPage() {
                 ))}
               </Select>
             </Field>
-            <Field label="Kritiklik">
+            <Field label={t("Kritiklik", "Criticality")}>
               <Select
                 value={invCriticality}
                 onChange={(e) => setInvCriticality(e.target.value)}
               >
-                <option value="">Tümü</option>
-                <option value="critical">Kritik</option>
-                <option value="high">Yüksek</option>
-                <option value="medium">Orta</option>
-                <option value="low">Düşük</option>
+                <option value="">{t("Tümü", "All")}</option>
+                <option value="critical">{CRITICALITY_LABEL.critical}</option>
+                <option value="high">{CRITICALITY_LABEL.high}</option>
+                <option value="medium">{CRITICALITY_LABEL.medium}</option>
+                <option value="low">{CRITICALITY_LABEL.low}</option>
               </Select>
             </Field>
-            <Field label="Doğrulama">
+            <Field label={t("Doğrulama", "Verification")}>
               <Select value={invVerified} onChange={(e) => setInvVerified(e.target.value)}>
-                <option value="">Tümü</option>
-                <option value="true">Doğrulanmış</option>
-                <option value="false">Doğrulanmamış</option>
+                <option value="">{t("Tümü", "All")}</option>
+                <option value="true">{t("Doğrulanmış", "Verified")}</option>
+                <option value="false">{t("Doğrulanmamış", "Unverified")}</option>
               </Select>
             </Field>
           </div>
@@ -265,7 +285,9 @@ export default function ReportsPage() {
                 )
               }
             >
-              {busyKey === "inv-pdf" ? "Hazırlanıyor…" : "Envanter PDF İndir"}
+              {busyKey === "inv-pdf"
+                ? t("Hazırlanıyor…", "Generating…")
+                : t("Envanter PDF İndir", "Download Inventory PDF")}
             </Button>
             <Button
               variant="secondary"
@@ -278,20 +300,25 @@ export default function ReportsPage() {
                 )
               }
             >
-              {busyKey === "inv-csv" ? "Hazırlanıyor…" : "Envanter CSV İndir"}
+              {busyKey === "inv-csv"
+                ? t("Hazırlanıyor…", "Generating…")
+                : t("Envanter CSV İndir", "Download Inventory CSV")}
             </Button>
           </div>
         </Card>
 
         <Card
-          title="2. Açıklanabilir Risk & SIEM Raporu (PDF / CSV / CEF)"
-          subtitle="Yönetici özeti, bulgu kanıtları, çözüm önerileri ve kurumsal SIEM sistemleri için Common Event Format (CEF)"
-          actions={<Badge tone="navy">SIEM & Denetim</Badge>}
+          title={t("2. Açıklanabilir Risk & SIEM Raporu (PDF / CSV / CEF)", "2. Explainable Risk & SIEM Report (PDF / CSV / CEF)")}
+          subtitle={t(
+            "Yönetici özeti, bulgu kanıtları, çözüm önerileri ve kurumsal SIEM sistemleri için CEF çıktısı",
+            "Executive summary, finding evidence, remediation steps and CEF export for enterprise SIEMs",
+          )}
+          actions={<Badge tone="navy">{t("SIEM & Denetim", "SIEM & Audit")}</Badge>}
         >
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Field label="Durum">
+            <Field label={t("Durum", "Status")}>
               <Select value={riskStatus} onChange={(e) => setRiskStatus(e.target.value)}>
-                <option value="">Tümü</option>
+                <option value="">{t("Tümü", "All")}</option>
                 {(Object.keys(STATUS_LABELS) as RiskStatus[]).map((st) => (
                   <option key={st} value={st}>
                     {STATUS_LABELS[st]}
@@ -299,18 +326,18 @@ export default function ReportsPage() {
                 ))}
               </Select>
             </Field>
-            <Field label="Önem Derecesi">
+            <Field label={t("Önem Derecesi", "Severity")}>
               <Select value={riskSeverity} onChange={(e) => setRiskSeverity(e.target.value)}>
-                <option value="">Tümü</option>
-                <option value="critical">Kritik</option>
-                <option value="high">Yüksek</option>
-                <option value="medium">Orta</option>
-                <option value="low">Düşük</option>
+                <option value="">{t("Tümü", "All")}</option>
+                <option value="critical">{CRITICALITY_LABEL.critical}</option>
+                <option value="high">{CRITICALITY_LABEL.high}</option>
+                <option value="medium">{CRITICALITY_LABEL.medium}</option>
+                <option value="low">{CRITICALITY_LABEL.low}</option>
               </Select>
             </Field>
-            <Field label="Kural">
+            <Field label={t("Kural", "Rule")}>
               <Select value={riskRuleKey} onChange={(e) => setRiskRuleKey(e.target.value)}>
-                <option value="">Tüm Kurallar</option>
+                <option value="">{t("Tüm Kurallar", "All Rules")}</option>
                 {(Object.keys(RULE_LABELS) as RiskRuleKey[]).map((rk) => (
                   <option key={rk} value={rk}>
                     {RULE_LABELS[rk]}
@@ -332,7 +359,9 @@ export default function ReportsPage() {
                 )
               }
             >
-              {busyKey === "risk-pdf" ? "Hazırlanıyor…" : "Risk Raporu PDF İndir"}
+              {busyKey === "risk-pdf"
+                ? t("Hazırlanıyor…", "Generating…")
+                : t("Risk Raporu PDF İndir", "Download Risk PDF")}
             </Button>
             <Button
               variant="secondary"
@@ -345,7 +374,9 @@ export default function ReportsPage() {
                 )
               }
             >
-              {busyKey === "risk-csv" ? "Hazırlanıyor…" : "Risk Bulguları CSV İndir"}
+              {busyKey === "risk-csv"
+                ? t("Hazırlanıyor…", "Generating…")
+                : t("Risk Bulguları CSV İndir", "Download Risk CSV")}
             </Button>
             <Button
               variant="outline"
@@ -358,7 +389,9 @@ export default function ReportsPage() {
                 )
               }
             >
-              {busyKey === "risk-cef" ? "Hazırlanıyor…" : "SIEM (CEF) Dışa Aktar"}
+              {busyKey === "risk-cef"
+                ? t("Hazırlanıyor…", "Generating…")
+                : t("SIEM (CEF) Dışa Aktar", "Export SIEM (CEF)")}
             </Button>
           </div>
         </Card>
@@ -367,7 +400,10 @@ export default function ReportsPage() {
       {/* Canlı Yönetici Özeti Dağılım Kartları */}
       {s && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <Card title="Cihaz Türü Dağılımı" subtitle="Envanterdeki endüstriyel rol kırılımı">
+          <Card
+            title={t("Cihaz Türü Dağılımı", "Device Type Distribution")}
+            subtitle={t("Envanterdeki endüstriyel rol kırılımı", "Industrial role breakdown across inventory")}
+          >
             <div className="space-y-2 text-xs">
               {Object.entries(s.assets.by_type).map(([type, count]) => (
                 <div
@@ -383,7 +419,10 @@ export default function ReportsPage() {
             </div>
           </Card>
 
-          <Card title="Risk Önem Derecesi Dağılımı" subtitle="Tüm bulguların kritiklik özeti">
+          <Card
+            title={t("Risk Önem Derecesi Dağılımı", "Risk Severity Distribution")}
+            subtitle={t("Tüm bulguların kritiklik özeti", "Severity summary across all findings")}
+          >
             <div className="space-y-2.5 text-xs">
               {(["critical", "high", "medium", "low"] as Criticality[]).map((sev) => (
                 <div
@@ -397,7 +436,7 @@ export default function ReportsPage() {
                 </div>
               ))}
               <div className="pt-1 text-[11px] text-slate-500">
-                Durum özeti:{" "}
+                {t("Durum özeti", "Status summary")}:{" "}
                 {(Object.keys(STATUS_LABELS) as RiskStatus[])
                   .map((st) => `${STATUS_LABELS[st]}: ${s.risks.by_status[st] ?? 0}`)
                   .join(" · ")}
@@ -405,7 +444,10 @@ export default function ReportsPage() {
             </div>
           </Card>
 
-          <Card title="Tetiklenen Kural Özeti" subtitle="Deterministik kurallara göre bulgular">
+          <Card
+            title={t("Tetiklenen Kural Özeti", "Triggered Rule Summary")}
+            subtitle={t("Deterministik kurallara göre bulgular", "Findings grouped by deterministic rule")}
+          >
             <div className="space-y-2 text-xs">
               {(Object.keys(RULE_LABELS) as RiskRuleKey[]).map((rk) => (
                 <div
@@ -419,9 +461,8 @@ export default function ReportsPage() {
                 </div>
               ))}
               <div className="pt-1 text-[11px] text-slate-500">
-                Son hesaplama: {formatDate(s.generated_at)} · Kapsam:{" "}
-                {s.site_name ?? "Tüm Fabrikalar"} ({CRITICALITY_LABEL.high} /{" "}
-                {CRITICALITY_LABEL.critical} öncelikli)
+                {t("Son hesaplama", "Last generated")}: {formatDate(s.generated_at)} ·{" "}
+                {s.site_name ?? t("Tüm Fabrikalar", "All Sites")}
               </div>
             </div>
           </Card>
