@@ -5,6 +5,7 @@ import type {
   SelectHTMLAttributes,
 } from "react";
 import { Link } from "react-router";
+import { bi, getLocale, tx } from "../i18n";
 import type { Criticality } from "../types/api";
 
 /**
@@ -13,7 +14,9 @@ import type { Criticality } from "../types/api";
  * - Koyu Lacivert Kenar Çubuğu: #1C2434
  * - İçerik Zemin: #F1F5F9 / Kartlar: #FFFFFF (Border: #E2E8F0)
  * - Birincil Vurgu (Teal): #0D9488 (teal-600) / #0F766E (teal-700)
- * - Anlamlı Risk Durumları: Amber (Orta/Doğrulanmamış), Orange (Yüksek), Red/Rose (Kritik)
+ * - Anlamlı Risk Durumları: Amber (Orta/Doğrulanmamış), Orange (Yüksek), Red (Kritik)
+ *
+ * Tüm görünür metinler iki dillidir (TR / EN) — bkz. ../i18n.tsx.
  */
 
 export function Button({
@@ -25,17 +28,18 @@ export function Button({
   variant?: "primary" | "secondary" | "outline" | "ghost" | "danger" | "dark";
   size?: "sm" | "md" | "lg";
 }) {
+  // Pasif (disabled) butonlar her varyantta nötr gri görünür; aktif gibi algılanmaz.
   const variantStyles = {
     primary:
-      "bg-[#0D9488] text-white shadow-2xs hover:bg-[#0F766E] focus-visible:ring-2 focus-visible:ring-[#0D9488]/30 disabled:bg-teal-300",
+      "bg-[#0D9488] text-white shadow-2xs hover:bg-[#0F766E] focus-visible:ring-2 focus-visible:ring-[#0D9488]/30 disabled:bg-slate-200 disabled:text-slate-500 disabled:shadow-none",
     secondary:
-      "border border-[#E2E8F0] bg-white text-[#1C2434] shadow-2xs hover:bg-[#F8FAFC] hover:text-[#0D9488] disabled:text-slate-400",
+      "border border-[#E2E8F0] bg-white text-[#1C2434] shadow-2xs hover:bg-[#F8FAFC] hover:text-[#0D9488] disabled:bg-slate-50 disabled:text-slate-400",
     outline:
-      "border border-[#0D9488] bg-transparent text-[#0D9488] hover:bg-teal-50/70 disabled:border-slate-200 disabled:text-slate-400",
-    ghost: "bg-transparent text-slate-600 hover:bg-slate-100 hover:text-[#1C2434]",
+      "border border-[#0D9488] bg-transparent text-[#0F766E] hover:bg-teal-50/70 disabled:border-slate-200 disabled:text-slate-400",
+    ghost: "bg-transparent text-slate-600 hover:bg-slate-100 hover:text-[#1C2434] disabled:text-slate-400",
     danger:
-      "border border-red-200 bg-red-50/60 text-red-700 hover:bg-red-100 disabled:text-red-300",
-    dark: "bg-[#1C2434] text-white hover:bg-[#2E3A52] disabled:bg-slate-400",
+      "border border-red-200 bg-red-50/60 text-red-700 hover:bg-red-100 disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400",
+    dark: "bg-[#1C2434] text-white hover:bg-[#2E3A52] disabled:bg-slate-200 disabled:text-slate-500",
   }[variant];
 
   const sizeStyles = {
@@ -46,7 +50,7 @@ export function Button({
 
   return (
     <button
-      className={`inline-flex items-center justify-center rounded-[4px] font-medium transition-colors disabled:cursor-not-allowed ${variantStyles} ${sizeStyles} ${className}`}
+      className={`inline-flex items-center justify-center rounded-[4px] font-medium whitespace-nowrap transition-colors disabled:cursor-not-allowed ${variantStyles} ${sizeStyles} ${className}`}
       {...props}
     />
   );
@@ -100,11 +104,11 @@ export function Card({
     >
       {title && (
         <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E2E8F0] px-5 py-3.5">
-          <div>
+          <div className="min-w-0">
             <h2 className="text-sm font-semibold text-[#1C2434]">{title}</h2>
             {subtitle && <p className="mt-0.5 text-xs text-[#64748B]">{subtitle}</p>}
           </div>
-          {actions && <div className="flex items-center gap-2">{actions}</div>}
+          {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
         </header>
       )}
       <div className={noPadding ? "" : "p-5"}>{children}</div>
@@ -112,7 +116,14 @@ export function Card({
   );
 }
 
-/** TailAdmin imza KPI / Metrik Kartı */
+type Tone = "teal" | "amber" | "red" | "slate" | "emerald";
+
+/**
+ * TailAdmin KPI / Metrik Kartı.
+ * Düzen: ikon + rozet üstte; değer (yalnızca kısa sayı/metrik), etiket ve alt metin
+ * alt alta, her biri TEK satır (taşarsa kesilir, tam metin title ile görünür).
+ * Böylece bir satırdaki tüm kartlar eşit yükseklikte kalır.
+ */
 export function StatCard({
   label,
   value,
@@ -128,17 +139,17 @@ export function StatCard({
   subtext?: ReactNode;
   hint?: ReactNode;
   tone?: "teal" | "navy" | "emerald" | "amber" | "red" | "slate";
-  badge?: string | { text: string; tone?: "teal" | "amber" | "red" | "slate" | "emerald" };
-  badgeTone?: "teal" | "amber" | "red" | "slate" | "emerald";
+  badge?: string | { text: string; tone?: Tone };
+  badgeTone?: Tone;
   icon: ReactNode;
   to?: string;
 }) {
   const badgeText = typeof badge === "object" && badge !== null ? badge.text : badge;
-  const effectiveTone =
+  const effectiveTone: Tone =
     typeof badge === "object" && badge !== null ? (badge.tone ?? badgeTone) : badgeTone;
 
   const toneMap = {
-    teal: "bg-teal-50 text-[#0D9488] border-teal-200/70",
+    teal: "bg-teal-50 text-[#0F766E] border-teal-200/70",
     emerald: "bg-emerald-50 text-emerald-700 border-emerald-200/70",
     amber: "bg-amber-50 text-amber-800 border-amber-200/70",
     red: "bg-red-50 text-red-700 border-red-200/70",
@@ -146,30 +157,46 @@ export function StatCard({
   }[effectiveTone];
 
   const displaySub = subtext ?? hint;
+  const subTitle = typeof displaySub === "string" ? displaySub : undefined;
 
   const inner = (
-    <div className="rounded-[4px] border border-[#E2E8F0] bg-white px-5 py-4 shadow-[0px_8px_13px_-3px_rgba(0,0,0,0.05)] transition hover:border-teal-600/40">
-      <div className="flex items-center justify-between">
-        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#F1F5F9] text-[#0D9488]">
+    <div className="flex h-full flex-col rounded-[4px] border border-[#E2E8F0] bg-white px-5 py-4 shadow-[0px_8px_13px_-3px_rgba(0,0,0,0.05)] transition hover:border-teal-600/40">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F5F9] text-[#0D9488]">
           {icon}
         </div>
         {badgeText && (
-          <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${toneMap}`}>
+          <span
+            title={badgeText}
+            className={`max-w-[60%] truncate rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${toneMap}`}
+          >
             {badgeText}
           </span>
         )}
       </div>
-      <div className="mt-3.5 flex items-end justify-between gap-2">
-        <div>
-          <h4 className="text-2xl font-bold tracking-tight text-[#1C2434]">{value}</h4>
-          <span className="mt-0.5 block text-xs font-medium text-[#64748B]">{label}</span>
+      <div className="mt-4 min-w-0">
+        <h4 className="truncate text-2xl leading-tight font-bold tracking-tight text-[#1C2434] tabular-nums">
+          {value}
+        </h4>
+        <div title={label} className="mt-1 truncate text-xs font-medium text-[#64748B]">
+          {label}
         </div>
-        {displaySub && <div className="text-right text-[11px] text-[#64748B]">{displaySub}</div>}
+        {displaySub && (
+          <div title={subTitle} className="mt-0.5 truncate text-[11px] text-slate-400">
+            {displaySub}
+          </div>
+        )}
       </div>
     </div>
   );
 
-  return to ? <Link to={to} className="block">{inner}</Link> : inner;
+  return to ? (
+    <Link to={to} className="block h-full">
+      {inner}
+    </Link>
+  ) : (
+    inner
+  );
 }
 
 export function Badge({
@@ -208,7 +235,7 @@ export function Badge({
 
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-[3px] border px-2 py-0.5 text-[11px] font-medium ${styles} ${className}`}
+      className={`inline-flex items-center gap-1 rounded-[3px] border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${styles} ${className}`}
     >
       {dot && <span className="h-1.5 w-1.5 rounded-full bg-current" />}
       {children}
@@ -244,32 +271,30 @@ export function PageHeader({
 }) {
   return (
     <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
-      <div>
-        <h1 className="text-xl font-bold tracking-tight text-[#1C2434]">{title}</h1>
-        {subtitle && <p className="mt-0.5 text-xs text-[#64748B]">{subtitle}</p>}
-      </div>
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="min-w-0">
         {breadcrumb && (
-          <nav className="hidden items-center gap-1.5 text-xs font-medium text-[#64748B] sm:flex">
+          <nav className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-[#64748B]">
             <Link to="/" className="hover:text-[#0D9488]">
-              Dashboard
+              {tx("Genel Bakış", "Overview")}
             </Link>
             <span>/</span>
-            <span className="text-[#0D9488]">{breadcrumb}</span>
+            <span className="text-[#0F766E]">{breadcrumb}</span>
           </nav>
         )}
-        {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+        <h1 className="text-xl font-bold tracking-tight text-[#1C2434]">{title}</h1>
+        {subtitle && <p className="mt-0.5 max-w-3xl text-xs text-[#64748B]">{subtitle}</p>}
       </div>
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }
 
-export const CRITICALITY_LABEL: Record<Criticality, string> = {
-  low: "Düşük",
-  medium: "Orta",
-  high: "Yüksek",
-  critical: "Kritik",
-};
+export const CRITICALITY_LABEL: Record<Criticality, string> = bi({
+  low: ["Düşük", "Low"],
+  medium: ["Orta", "Medium"],
+  high: ["Yüksek", "High"],
+  critical: ["Kritik", "Critical"],
+});
 
 export function CriticalityBadge({ value }: { value: Criticality }) {
   const style = {
@@ -279,47 +304,111 @@ export function CriticalityBadge({ value }: { value: Criticality }) {
     critical: "border-red-200 bg-red-50 text-red-700",
   }[value];
   return (
-    <span className={`inline-flex items-center rounded-[3px] border px-2 py-0.5 text-[11px] font-semibold ${style}`}>
+    <span
+      className={`inline-flex items-center rounded-[3px] border px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap ${style}`}
+    >
       {CRITICALITY_LABEL[value]}
     </span>
   );
 }
 
+/**
+ * Protokol rozeti. Yalnızca port numarasından tahmin edilen protokoller (backend'de
+ * `?` son ekiyle veya confidence="port_hint" ile gelir) soru işareti yerine
+ * amber renk ve "port" etiketiyle gösterilir.
+ */
 export function ProtocolBadge({ protocol, confidence }: { protocol: string; confidence?: string }) {
   const isHint = confidence === "port_hint" || protocol.endsWith("?");
+  const clean = protocol.replace(/\?+$/, "");
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-[3px] border px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase ${
+      title={isHint ? tx("Yalnızca port numarasından tahmin edildi", "Inferred from port number only") : undefined}
+      className={`inline-flex items-center gap-1 rounded-[3px] border px-1.5 py-0.5 font-mono text-[10px] font-semibold whitespace-nowrap uppercase ${
         isHint
           ? "border-amber-200 bg-amber-50/70 text-amber-800"
           : "border-teal-200/80 bg-teal-50/80 text-[#0F766E]"
       }`}
     >
-      {protocol}
-      {isHint && <span className="font-sans text-[9px] font-normal">(port)</span>}
+      {clean}
+      {isHint && (
+        <span className="font-sans text-[9px] font-normal normal-case">{tx("port tahmini", "port hint")}</span>
+      )}
     </span>
   );
 }
 
-export const ROLE_LABEL: Record<string, string> = {
-  owner: "Sahip",
-  admin: "Yönetici",
-  analyst: "Analist",
-  viewer: "İzleyici",
-};
+export const ROLE_LABEL: Record<string, string> = bi({
+  owner: ["Sahip", "Owner"],
+  admin: ["Yönetici", "Admin"],
+  analyst: ["Analist", "Analyst"],
+  viewer: ["İzleyici", "Viewer"],
+});
 
-export const ASSET_TYPE_LABEL: Record<string, string> = {
-  plc: "PLC / Kontrolcü",
-  hmi: "HMI Paneli",
-  scada_server: "SCADA Sunucusu",
-  industrial_pc: "Endüstriyel PC",
-  network_device: "Ağ Cihazı",
-  engineering_workstation: "Mühendislik İstasyonu",
-  server: "Sunucu",
-  computer: "İş İstasyonu",
-  unknown_device: "Bilinmeyen Cihaz",
-};
+export const ASSET_TYPE_LABEL: Record<string, string> = bi({
+  plc: ["PLC / Kontrolcü", "PLC / Controller"],
+  hmi: ["HMI Paneli", "HMI Panel"],
+  scada_server: ["SCADA Sunucusu", "SCADA Server"],
+  industrial_pc: ["Endüstriyel PC", "Industrial PC"],
+  network_device: ["Ağ Cihazı", "Network Device"],
+  engineering_workstation: ["Mühendislik İstasyonu", "Engineering Workstation"],
+  server: ["Sunucu", "Server"],
+  computer: ["İş İstasyonu", "Workstation"],
+  unknown_device: ["Bilinmeyen Cihaz", "Unknown Device"],
+});
 
+/** Kısa, tek satırlık tarih-saat (ör. 20.11.2026 02:19 / 20/11/2026, 02:19). */
 export function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" });
+  return new Date(iso).toLocaleString(getLocale(), { dateStyle: "short", timeStyle: "short" });
+}
+
+/** Denetim kaydı eylem kodlarını (ör. "asset.update") okunur metne çevirir. */
+const AUDIT_ACTION_LABEL: Record<string, readonly [string, string]> = {
+  "auth.login": ["Oturum açıldı", "Signed in"],
+  "auth.logout": ["Oturum kapatıldı", "Signed out"],
+  "auth.register": ["Kullanıcı kaydı", "User registered"],
+  "asset.create": ["Cihaz eklendi", "Asset created"],
+  "asset.update": ["Cihaz güncellendi", "Asset updated"],
+  "asset.verify": ["Cihaz doğrulandı", "Asset verified"],
+  "asset.bulk_verify": ["Cihazlar toplu doğrulandı", "Assets bulk-verified"],
+  "asset.csv_import": ["CSV envanter içe aktarıldı", "CSV inventory imported"],
+  "sensor.enroll": ["Sensör kaydedildi", "Sensor enrolled"],
+  "sensor.analyze_upload": ["PCAP / log analizi yüklendi", "PCAP / log analysis uploaded"],
+  "site.create": ["Fabrika eklendi", "Site created"],
+  "site.delete": ["Fabrika silindi", "Site deleted"],
+  "zone.create": ["Bölge eklendi", "Zone created"],
+  "zone.delete": ["Bölge silindi", "Zone deleted"],
+  "risk.status_change": ["Risk durumu değişti", "Risk status changed"],
+  "risk.bulk_status": ["Risk durumları toplu değişti", "Risk statuses bulk-changed"],
+  "risk.evaluate": ["Risk motoru çalıştırıldı", "Risk engine run"],
+  "communication.approve_baseline": ["İletişim baseline'a alındı", "Flow approved to baseline"],
+  "communication.approve_all_baseline": ["Tüm akışlar baseline'a alındı", "All flows approved to baseline"],
+  "organization.update": ["Organizasyon güncellendi", "Organization updated"],
+  "cli.seed_demo": ["Demo verisi yüklendi", "Demo data seeded"],
+};
+
+export function formatAuditAction(action: string): string {
+  const key = action.toLowerCase();
+  const hit = AUDIT_ACTION_LABEL[key];
+  if (hit) return tx(hit[0], hit[1]);
+  // Bilinmeyen kod: "foo.bar_baz" → "Foo · bar baz"
+  const [entity, verb] = key.split(".");
+  const pretty = (s: string) => s.replace(/_/g, " ");
+  return verb ? `${pretty(entity).replace(/^./, (c) => c.toUpperCase())} · ${pretty(verb)}` : pretty(key);
+}
+
+const TARGET_TYPE_LABEL = bi({
+  asset: ["Cihaz", "Asset"],
+  sensor: ["Sensör", "Sensor"],
+  site: ["Fabrika", "Site"],
+  zone: ["Bölge", "Zone"],
+  risk: ["Risk", "Risk"],
+  risk_finding: ["Risk bulgusu", "Risk finding"],
+  communication: ["İletişim", "Flow"],
+  organization: ["Organizasyon", "Organization"],
+  user: ["Kullanıcı", "User"],
+});
+
+export function formatAuditTarget(targetType: string | null): string {
+  if (!targetType) return "—";
+  return (TARGET_TYPE_LABEL as Record<string, string>)[targetType] ?? targetType;
 }

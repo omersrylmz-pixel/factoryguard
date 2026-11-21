@@ -3,6 +3,7 @@ import { useState, type FormEvent } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { ROLE_LABEL } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
+import { useLang } from "../i18n";
 import { api } from "../services/api";
 import type { Page, RiskFinding, Sensor, Site } from "../types/api";
 
@@ -86,6 +87,7 @@ function SidebarIcon({ name }: { name: SidebarItem["icon"] }) {
 
 export default function AppLayout() {
   const { user, organizations, activeOrg, setActiveOrg, logout } = useAuth();
+  const { lang, setLang, t } = useLang();
   const navigate = useNavigate();
   const location = useLocation();
   const [globalSearch, setGlobalSearch] = useState("");
@@ -116,26 +118,26 @@ export default function AppLayout() {
 
   const MENU_GROUPS: { title: string; items: SidebarItem[] }[] = [
     {
-      title: "VISIBILITY & INVENTORY",
+      title: t("Görünürlük & Envanter", "Visibility & Inventory"),
       items: [
-        { to: "/", label: "Overview Dashboard", icon: "dashboard" },
-        { to: "/assets", label: "Device Inventory", icon: "inventory" },
-        { to: "/network", label: "Network Topology", icon: "topology" },
+        { to: "/", label: t("Genel Bakış", "Overview"), icon: "dashboard" },
+        { to: "/assets", label: t("Cihaz Envanteri", "Device Inventory"), icon: "inventory" },
+        { to: "/network", label: t("Ağ Topolojisi", "Network Topology"), icon: "topology" },
       ],
     },
     {
-      title: "DETECTION & MONITORING",
+      title: t("Tespit & İzleme", "Detection & Monitoring"),
       items: [
         {
           to: "/risks",
-          label: "Events & Risk Findings",
+          label: t("Olaylar & Risk Bulguları", "Events & Risk Findings"),
           icon: "events",
           badge: openRiskCount,
           badgeTone: openRiskCount > 0 ? "amber" : "teal",
         },
         {
           to: "/sensors",
-          label: "Sensors & PCAP Analysis",
+          label: t("Sensörler & PCAP Analizi", "Sensors & PCAP Analysis"),
           icon: "sensors",
           badge: totalSensorCount,
           badgeTone: "teal",
@@ -143,10 +145,10 @@ export default function AppLayout() {
       ],
     },
     {
-      title: "REPORTING & GOVERNANCE",
+      title: t("Raporlama & Yönetişim", "Reporting & Governance"),
       items: [
-        { to: "/reports", label: "Reports & SIEM Export", icon: "reports" },
-        { to: "/settings", label: "Settings & Zones", icon: "settings" },
+        { to: "/reports", label: t("Raporlar & SIEM", "Reports & SIEM"), icon: "reports" },
+        { to: "/settings", label: t("Ayarlar & Bölgeler", "Settings & Zones"), icon: "settings" },
       ],
     },
   ];
@@ -175,7 +177,9 @@ export default function AppLayout() {
             </div>
             <div>
               <div className="text-base font-bold tracking-tight text-white">FactoryGuard</div>
-              <div className="text-[11px] font-medium text-[#8A99AF]">OT Asset & Risk Console</div>
+              <div className="text-[11px] font-medium text-[#8A99AF]">
+                {t("OT Varlık & Risk Konsolu", "OT Asset & Risk Console")}
+              </div>
             </div>
           </Link>
           <button
@@ -192,7 +196,7 @@ export default function AppLayout() {
           <nav className="space-y-6">
             {MENU_GROUPS.map((group) => (
               <div key={group.title}>
-                <h3 className="mb-2.5 px-3 text-[11px] font-semibold tracking-wider text-[#8A99AF] uppercase">
+                <h3 className="mb-2.5 px-3 text-[10px] font-semibold tracking-wider text-[#8A99AF] uppercase">
                   {group.title}
                 </h3>
                 <ul className="space-y-1">
@@ -255,18 +259,30 @@ export default function AppLayout() {
         <div className="border-t border-[#2E3A47] p-4">
           <div className="rounded-[4px] border border-[#333A48] bg-[#24303F] p-3">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-white">Passive Observation Only</span>
+              <span className="text-[11px] font-semibold text-white">
+                {t("Yalnızca Pasif Gözlem", "Passive Observation Only")}
+              </span>
               <span className="inline-flex items-center gap-1 rounded bg-teal-500/20 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-teal-300">
                 <span className="h-1.5 w-1.5 rounded-full bg-teal-400" />
-                SAFE
+                {t("GÜVENLİ", "SAFE")}
               </span>
             </div>
             <p className="mt-1 text-[11px] leading-relaxed text-[#8A99AF]">
-              Sıfır aktif tarama · PLC ve saha ekipmanlarına paket gönderilmez.
+              {t(
+                "Aktif tarama yok · Saha ekipmanına paket gönderilmez.",
+                "No active scanning · No packets sent to field devices.",
+              )}
             </p>
-            <div className="mt-2 flex items-center justify-between border-t border-[#333A48] pt-2 font-mono text-[10px] text-[#DEE4EE]">
-              <span>Sensörler: {activeSensorCount}/{totalSensorCount}</span>
-              <span>{primarySite?.name ?? "Ana Tesis"}</span>
+            <div className="mt-2 space-y-1 border-t border-[#333A48] pt-2 text-[10px] text-[#DEE4EE]">
+              <div className="flex items-center justify-between">
+                <span className="text-[#8A99AF]">{t("Aktif sensör", "Active sensors")}</span>
+                <span className="font-mono">
+                  {activeSensorCount}/{totalSensorCount}
+                </span>
+              </div>
+              <div className="truncate" title={primarySite?.name}>
+                {primarySite?.name ?? t("Ana Tesis", "Main Site")}
+              </div>
             </div>
           </div>
         </div>
@@ -282,7 +298,7 @@ export default function AppLayout() {
               type="button"
               onClick={() => setMobileMenuOpen(true)}
               className="rounded-[4px] border border-[#E2E8F0] p-1.5 text-[#1C2434] lg:hidden"
-              title="Menüyü Aç"
+              title={t("Menüyü aç", "Open menu")}
             >
               <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="3" y1="6" x2="21" y2="6" />
@@ -307,7 +323,10 @@ export default function AppLayout() {
                   type="text"
                   value={globalSearch}
                   onChange={(e) => setGlobalSearch(e.target.value)}
-                  placeholder="Cihaz adı, IP, MAC, üretici veya protokol ara..."
+                  placeholder={t(
+                    "Cihaz adı, IP, MAC, üretici veya protokol ara...",
+                    "Search device name, IP, MAC, vendor or protocol...",
+                  )}
                   className="h-9 w-full rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] pr-3 pl-9 text-xs text-[#1C2434] placeholder:text-[#64748B] focus:border-[#0D9488] focus:bg-white focus:outline-none"
                 />
               </div>
@@ -333,19 +352,45 @@ export default function AppLayout() {
                   ))}
                 </select>
               ) : (
-                <span className="font-semibold text-[#1C2434]">
-                  {activeOrg?.name ?? "Organizasyon Yok"}
+                <span className="max-w-[180px] truncate font-semibold text-[#1C2434]" title={activeOrg?.name}>
+                  {activeOrg?.name ?? t("Organizasyon Yok", "No Organization")}
                 </span>
               )}
               {primarySite && (
-                <span className="border-l border-[#E2E8F0] pl-2 text-[#64748B]">{primarySite.name}</span>
+                <span
+                  className="hidden max-w-[160px] truncate border-l border-[#E2E8F0] pl-2 text-[#64748B] xl:inline"
+                  title={primarySite.name}
+                >
+                  {primarySite.name}
+                </span>
               )}
+            </div>
+
+            {/* Dil Seçici (TR / EN) */}
+            <div
+              role="group"
+              aria-label={t("Arayüz dili", "Interface language")}
+              className="flex h-9 items-center rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] p-0.5"
+            >
+              {(["tr", "en"] as const).map((l) => (
+                <button
+                  key={l}
+                  type="button"
+                  onClick={() => setLang(l)}
+                  aria-pressed={lang === l}
+                  className={`h-full rounded-[3px] px-2.5 text-[11px] font-semibold uppercase transition-colors ${
+                    lang === l ? "bg-[#1C2434] text-white" : "text-[#64748B] hover:text-[#1C2434]"
+                  }`}
+                >
+                  {l}
+                </button>
+              ))}
             </div>
 
             {/* Bildirim Zili (TailAdmin tarzı dairesel ikon) */}
             <Link
               to="/risks"
-              title={`${openRiskCount} Açık Risk Bulgusu`}
+              title={t(`${openRiskCount} açık risk bulgusu`, `${openRiskCount} open risk findings`)}
               className="relative flex h-9 w-9 items-center justify-center rounded-full border border-[#E2E8F0] bg-[#F8FAFC] text-[#64748B] transition hover:border-[#0D9488] hover:text-[#0D9488]"
             >
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -353,18 +398,21 @@ export default function AppLayout() {
                 <path d="M13.73 21a2 2 0 0 1-3.46 0" />
               </svg>
               {openRiskCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 font-mono text-[9px] font-bold text-white">
-                  {openRiskCount}
+                <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-600 px-1 font-mono text-[9px] font-bold text-white ring-2 ring-white">
+                  {openRiskCount > 99 ? "99+" : openRiskCount}
                 </span>
               )}
             </Link>
 
             {/* Kullanıcı Profili + Çıkış */}
             <div className="flex items-center gap-3 border-l border-[#E2E8F0] pl-3">
-              <div className="hidden text-right sm:block">
-                <div className="text-xs font-semibold text-[#1C2434]">{user?.full_name ?? "OT Kullanıcı"}</div>
+              <div className="hidden min-w-0 text-left md:block">
+                <div className="max-w-[160px] truncate text-xs font-semibold text-[#1C2434]" title={user?.full_name}>
+                  {/* Parantez içi unvanlar rol satırına bırakılır; ad satırı kısa kalır. */}
+                  {(user?.full_name ?? t("OT Kullanıcısı", "OT User")).replace(/\s*\(.*\)\s*$/, "")}
+                </div>
                 <div className="text-[11px] text-[#64748B]">
-                  {activeOrg ? ROLE_LABEL[activeOrg.role] : "Analist"}
+                  {activeOrg ? ROLE_LABEL[activeOrg.role] : ROLE_LABEL.analyst}
                 </div>
               </div>
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#1C2434] font-mono text-xs font-bold text-white">
@@ -380,7 +428,7 @@ export default function AppLayout() {
                 onClick={() => void logout()}
                 className="rounded-[4px] border border-[#E2E8F0] bg-white px-2.5 py-1.5 text-xs font-medium text-[#64748B] hover:border-red-200 hover:bg-red-50 hover:text-red-700"
               >
-                Çıkış
+                {t("Çıkış", "Sign out")}
               </button>
             </div>
           </div>
@@ -389,10 +437,16 @@ export default function AppLayout() {
         {/* Ana İçerik Alanı */}
         <main className="mx-auto w-full max-w-screen-2xl flex-1 p-5 md:p-6">
           {activeOrg ? (
-            <Outlet />
+            // key={lang}: dil değişince sayfa ağacı yeniden oluşturulur; tüm metinler güncellenir.
+            <div key={lang}>
+              <Outlet />
+            </div>
           ) : (
             <div className="rounded-[4px] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-              Herhangi bir organizasyona üye değilsiniz. Yöneticinizden davet isteyin.
+              {t(
+                "Herhangi bir organizasyona üye değilsiniz. Yöneticinizden davet isteyin.",
+                "You are not a member of any organization. Ask your administrator for an invite.",
+              )}
             </div>
           )}
         </main>
