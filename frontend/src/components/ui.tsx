@@ -100,13 +100,16 @@ export function Card({
 }) {
   return (
     <section
-      className={`rounded-[4px] border border-[#E2E8F0] bg-white shadow-[0px_8px_13px_-3px_rgba(0,0,0,0.05)] ${className}`}
+      className={`overflow-hidden rounded-[6px] border border-[#CBD5E1]/80 bg-white shadow-[0px_10px_18px_-4px_rgba(15,23,42,0.06)] ${className}`}
     >
       {title && (
-        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E2E8F0] px-5 py-3.5">
+        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E2E8F0] bg-gradient-to-r from-[#F8FAFC] via-white to-[#F8FAFC] px-5 py-3.5">
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-[#1C2434]">{title}</h2>
-            {subtitle && <p className="mt-0.5 text-xs text-[#64748B]">{subtitle}</p>}
+            <div className="flex items-center gap-2">
+              <span className="h-3.5 w-1 shrink-0 rounded-full bg-[#0D9488]" />
+              <h2 className="text-sm font-bold text-[#1C2434]">{title}</h2>
+            </div>
+            {subtitle && <p className="mt-0.5 pl-3 text-xs text-[#64748B]">{subtitle}</p>}
           </div>
           {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
         </header>
@@ -119,16 +122,14 @@ export function Card({
 type Tone = "teal" | "amber" | "red" | "slate" | "emerald";
 
 /**
- * TailAdmin KPI / Metrik Kartı.
- * Düzen: ikon + rozet üstte; değer (yalnızca kısa sayı/metrik), etiket ve alt metin
- * alt alta, her biri TEK satır (taşarsa kesilir, tam metin title ile görünür).
- * Böylece bir satırdaki tüm kartlar eşit yükseklikte kalır.
+ * TailAdmin KPI / Metrik Kartı (Üst vurgu şeritli, ikon halkalı ve eşit yükseklikli).
  */
 export function StatCard({
   label,
   value,
   subtext,
   hint,
+  tone = "teal",
   badge,
   badgeTone = "teal",
   icon,
@@ -149,20 +150,39 @@ export function StatCard({
     typeof badge === "object" && badge !== null ? (badge.tone ?? badgeTone) : badgeTone;
 
   const toneMap = {
-    teal: "bg-teal-50 text-[#0F766E] border-teal-200/70",
-    emerald: "bg-emerald-50 text-emerald-700 border-emerald-200/70",
-    amber: "bg-amber-50 text-amber-800 border-amber-200/70",
-    red: "bg-red-50 text-red-700 border-red-200/70",
+    teal: "bg-teal-50 text-[#0F766E] border-teal-200/80",
+    emerald: "bg-emerald-50 text-emerald-700 border-emerald-200/80",
+    amber: "bg-amber-50 text-amber-800 border-amber-200/80",
+    red: "bg-red-50 text-red-700 border-red-200/80",
     slate: "bg-slate-100 text-slate-700 border-slate-200",
   }[effectiveTone];
+
+  const topBarColor = {
+    teal: "bg-gradient-to-r from-[#0D9488] to-[#14B8A6]",
+    emerald: "bg-gradient-to-r from-emerald-600 to-emerald-400",
+    amber: "bg-gradient-to-r from-amber-500 to-amber-400",
+    red: "bg-gradient-to-r from-rose-600 to-rose-400",
+    navy: "bg-gradient-to-r from-[#1C2434] to-[#334155]",
+    slate: "bg-gradient-to-r from-slate-500 to-slate-400",
+  }[tone];
+
+  const iconStyle = {
+    teal: "bg-teal-50 text-[#0D9488] ring-1 ring-teal-200/80",
+    emerald: "bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200/80",
+    amber: "bg-amber-50 text-amber-600 ring-1 ring-amber-200/80",
+    red: "bg-rose-50 text-rose-600 ring-1 ring-rose-200/80",
+    navy: "bg-slate-100 text-[#1C2434] ring-1 ring-slate-300/80",
+    slate: "bg-slate-100 text-slate-600 ring-1 ring-slate-200",
+  }[tone];
 
   const displaySub = subtext ?? hint;
   const subTitle = typeof displaySub === "string" ? displaySub : undefined;
 
   const inner = (
-    <div className="flex h-full flex-col rounded-[4px] border border-[#E2E8F0] bg-white px-5 py-4 shadow-[0px_8px_13px_-3px_rgba(0,0,0,0.05)] transition hover:border-teal-600/40">
+    <div className="relative flex h-full flex-col overflow-hidden rounded-[6px] border border-[#CBD5E1]/80 bg-white px-5 pt-4 pb-4 shadow-[0px_10px_18px_-4px_rgba(15,23,42,0.06)] transition-all duration-150 hover:-translate-y-0.5 hover:border-teal-600/50 hover:shadow-md">
+      <div className={`absolute top-0 right-0 left-0 h-1 ${topBarColor}`} />
       <div className="flex items-center justify-between gap-2">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F5F9] text-[#0D9488]">
+        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-[8px] ${iconStyle}`}>
           {icon}
         </div>
         {badgeText && (
@@ -174,15 +194,15 @@ export function StatCard({
           </span>
         )}
       </div>
-      <div className="mt-4 min-w-0">
-        <h4 className="truncate text-2xl leading-tight font-bold tracking-tight text-[#1C2434] tabular-nums">
+      <div className="mt-3.5 min-w-0">
+        <h4 className="truncate text-2xl leading-tight font-extrabold tracking-tight text-[#1C2434] tabular-nums">
           {value}
         </h4>
-        <div title={label} className="mt-1 truncate text-xs font-medium text-[#64748B]">
+        <div title={label} className="mt-1 truncate text-xs font-semibold text-[#334155]">
           {label}
         </div>
         {displaySub && (
-          <div title={subTitle} className="mt-0.5 truncate text-[11px] text-slate-400">
+          <div title={subTitle} className="mt-0.5 truncate text-[11px] text-[#64748B]">
             {displaySub}
           </div>
         )}

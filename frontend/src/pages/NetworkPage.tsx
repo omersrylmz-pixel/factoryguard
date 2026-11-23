@@ -736,14 +736,58 @@ export default function NetworkPage() {
                           strokeWidth="0.8"
                           strokeOpacity="0.45"
                         />
-                        <g stroke="#1C2434" strokeWidth="1.4" fill="none">
-                          <rect x="-7" y="-8" width="14" height="4.5" rx="1" />
-                          <rect x="-7" y="-2" width="14" height="4.5" rx="1" />
-                          <rect x="-7" y="4" width="14" height="4.5" rx="1" />
-                          <circle cx="-4.5" cy="-5.8" r="0.7" fill="#0D9488" />
-                          <circle cx="-4.5" cy="0.2" r="0.7" fill="#0D9488" />
-                          <circle cx="-4.5" cy="6.2" r="0.7" fill="#0D9488" />
-                        </g>
+                        {/* Cihaz Türüne Özel Donanım Çizimi (PLC / HMI / SCADA / Switch / İstasyon) */}
+                        {n.asset_type === "plc" ? (
+                          <g stroke="#1C2434" strokeWidth="1.2" fill="none">
+                            {/* DIN-Rail PLC Modülü + LCD + LED */}
+                            <rect x="-9" y="-9" width="11" height="18" rx="1" fill="#F8FAFC" />
+                            <rect x="2" y="-9" width="7" height="18" rx="1" fill="#F1F5F9" />
+                            <rect x="-7" y="-4" width="7" height="5" rx="0.5" fill="#CCFBF1" stroke="#0D9488" strokeWidth="0.9" />
+                            <circle cx="-6" cy="-6.8" r="0.9" fill="#10B981" stroke="none" />
+                            <circle cx="-3" cy="-6.8" r="0.9" fill={borderCol} stroke="none" />
+                            <circle cx="5.5" cy="-5" r="0.8" fill="#10B981" stroke="none" />
+                            <circle cx="5.5" cy="-1" r="0.8" fill="#10B981" stroke="none" />
+                            <circle cx="5.5" cy="3" r="0.8" fill="#F59E0B" stroke="none" />
+                          </g>
+                        ) : n.asset_type === "hmi" ? (
+                          <g stroke="#1C2434" strokeWidth="1.2" fill="none">
+                            {/* Dokunmatik HMI Paneli + Proses Dalga Grafiği */}
+                            <rect x="-10" y="-8" width="20" height="15" rx="1.5" fill="#F8FAFC" />
+                            <rect x="-8" y="-6" width="14" height="11" rx="0.8" fill="#F0FDFA" stroke="#0D9488" strokeWidth="0.9" />
+                            <polyline points="-6,2 -3,-2 0,1 3,-4 5,-2" stroke="#0D9488" strokeWidth="1.2" />
+                            <circle cx="8" cy="-4" r="0.8" fill="#10B981" stroke="none" />
+                            <circle cx="8" cy="0" r="0.8" fill="#0284C7" stroke="none" />
+                          </g>
+                        ) : n.asset_type === "scada_server" || n.asset_type === "server" ? (
+                          <g stroke="#1C2434" strokeWidth="1.2" fill="none">
+                            {/* 2U Rackmount SCADA Sunucusu */}
+                            <rect x="-10" y="-8" width="20" height="7" rx="1" fill="#F8FAFC" />
+                            <rect x="-10" y="1" width="20" height="7" rx="1" fill="#F8FAFC" />
+                            <line x1="-6" y1="-6" x2="-6" y2="-3" stroke="#0D9488" strokeWidth="1.2" />
+                            <line x1="-3" y1="-6" x2="-3" y2="-3" stroke="#0D9488" strokeWidth="1.2" />
+                            <line x1="-6" y1="3" x2="-6" y2="6" stroke="#0D9488" strokeWidth="1.2" />
+                            <line x1="-3" y1="3" x2="-3" y2="6" stroke="#0D9488" strokeWidth="1.2" />
+                            <circle cx="6" cy="-4.5" r="1" fill="#10B981" stroke="none" />
+                            <circle cx="6" cy="4.5" r="1" fill="#10B981" stroke="none" />
+                          </g>
+                        ) : n.asset_type === "network_device" ? (
+                          <g stroke="#1C2434" strokeWidth="1.2" fill="none">
+                            {/* Endüstriyel Switch */}
+                            <rect x="-10" y="-5" width="20" height="10" rx="1.2" fill="#F8FAFC" />
+                            {[-7, -3, 1, 5].map((px) => (
+                              <rect key={px} x={px} y="-2" width="2.5" height="4" fill="#0D9488" stroke="none" />
+                            ))}
+                          </g>
+                        ) : (
+                          <g stroke="#1C2434" strokeWidth="1.2" fill="none">
+                            {/* Mühendislik İstasyonu / Saha Ünitesi */}
+                            <rect x="-9" y="-8" width="18" height="12" rx="1.2" fill="#F8FAFC" />
+                            <line x1="-6" y1="-4" x2="5" y2="-4" stroke="#0D9488" strokeWidth="1.1" />
+                            <line x1="-6" y1="-1" x2="2" y2="-1" stroke="#0284C7" strokeWidth="1.1" />
+                            <line x1="0" y1="4" x2="0" y2="8" />
+                            <line x1="-5" y1="8" x2="5" y2="8" />
+                          </g>
+                        )}
 
                         {/* Alt Koyu Lacivert (#1C2434) IP Adresi Rozeti */}
                         <rect

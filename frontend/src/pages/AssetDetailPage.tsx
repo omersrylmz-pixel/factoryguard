@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router";
+import { DeviceHardwareChassisCard } from "../components/deviceVisuals";
 import {
   ASSET_TYPE_LABEL,
   Badge,
@@ -108,6 +109,14 @@ export default function AssetDetailPage() {
   const inboundFlows = asset.communications.filter((c) => c.direction === "inbound");
   const totalConnections = asset.communications.reduce((acc, c) => acc + c.connection_count, 0);
 
+  const activePorts = asset.communications
+    .filter((c) => c.target_port !== null)
+    .map((c) => ({
+      port: c.target_port!,
+      proto: c.protocol.replace(/\?+$/, "").toUpperCase(),
+      direction: c.direction,
+    }));
+
   const openFindings = asset.risk_findings.filter(
     (f) => f.status === "open" || f.status === "investigating",
   );
@@ -202,6 +211,23 @@ export default function AssetDetailPage() {
             </Button>
           </>
         }
+      />
+
+      {/* Endüstriyel Donanım Şasisi & Ön Panel Dijital İkizi (Hardware Digital Twin) */}
+      <DeviceHardwareChassisCard
+        name={asset.name || asset.model || asset.hostname || asset.ip_address || t("Endüstriyel Cihaz", "Industrial Device")}
+        ip={asset.ip_address}
+        mac={asset.mac_address}
+        assetType={asset.asset_type}
+        vendor={asset.vendor}
+        model={asset.model}
+        firmware={asset.firmware_version}
+        serial={asset.serial_number}
+        purdueLevel={asset.purdue_level}
+        isVerified={asset.is_verified}
+        criticality={asset.criticality}
+        protocols={asset.observed_protocols ?? []}
+        activePorts={activePorts}
       />
 
       {/* TailAdmin 4 Sütunlu Cihaz Telemetri KPI Kartları */}

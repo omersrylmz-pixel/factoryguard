@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router";
+import { DeviceHardwareThumb } from "../components/deviceVisuals";
 import {
   ASSET_TYPE_LABEL,
   Badge,
@@ -604,20 +605,36 @@ export default function AssetsPage() {
                           />
                         </td>
 
-                        {/* 1. Cihaz / Hostname (tekrarsız) */}
-                        <td className="max-w-[175px] px-3 py-2.5">
+                        {/* 1. Cihaz / Hostname (Gerçekçi Donanım Küçük Görseli ile) */}
+                        <td className="max-w-[230px] px-3 py-2.5">
                           <Link
                             to={`/assets/${a.id}`}
-                            title={primaryName}
-                            className="block truncate font-semibold text-[#1C2434] hover:text-[#0D9488] hover:underline"
+                            className="group flex items-center gap-2.5"
                           >
-                            {primaryName}
-                          </Link>
-                          {showSubHostname && (
-                            <div className="truncate font-mono text-[11px] text-[#64748B]" title={a.hostname!}>
-                              {a.hostname}
+                            <DeviceHardwareThumb
+                              assetType={a.asset_type}
+                              vendor={a.vendor}
+                              isVerified={a.is_verified}
+                              criticality={a.criticality}
+                            />
+                            <div className="min-w-0">
+                              <div
+                                title={primaryName}
+                                className="truncate font-semibold text-[#1C2434] group-hover:text-[#0D9488] group-hover:underline"
+                              >
+                                {primaryName}
+                              </div>
+                              {showSubHostname ? (
+                                <div className="truncate font-mono text-[11px] text-[#64748B]" title={a.hostname!}>
+                                  {a.hostname}
+                                </div>
+                              ) : (
+                                <div className="truncate text-[10.5px] text-slate-400">
+                                  {a.vendor || t("Pasif Saha Düğümü", "Passive Field Node")}
+                                </div>
+                              )}
                             </div>
-                          )}
+                          </Link>
                         </td>
 
                         {/* 2. IP & MAC Adresi */}
