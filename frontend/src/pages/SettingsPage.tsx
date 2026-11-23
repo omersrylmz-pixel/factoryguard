@@ -134,6 +134,56 @@ export default function SettingsPage() {
     },
   });
 
+  // Yeni Kullanıcı / Üye Ekleme (RBAC)
+  const [memberName, setMemberName] = useState("");
+  const [memberEmail, setMemberEmail] = useState("");
+  const [memberPassword, setMemberPassword] = useState("");
+  const [memberRole, setMemberRole] = useState<"admin" | "analyst" | "viewer">("analyst");
+
+  const addMemberMut = useMutation({
+    mutationFn: (body: {
+      full_name: string;
+      email: string;
+      password: string;
+      role: "admin" | "analyst" | "viewer";
+    }) =>
+      api<Member>(`/organizations/${activeOrg!.id}/members`, {
+        method: "POST",
+        body,
+      }),
+    onSuccess: async () => {
+      setMemberName("");
+      setMemberEmail("");
+      setMemberPassword("");
+      setMemberRole("analyst");
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["members", activeOrg?.id] }),
+        qc.invalidateQueries({ queryKey: ["audit-logs", activeOrg?.id] }),
+      ]);
+    },
+  });
+
+  const updateMemberMut = useMutation({
+    mutationFn: (args: {
+      user_id: string;
+      role?: "admin" | "analyst" | "viewer";
+      is_active?: boolean;
+    }) =>
+      api<Member>(`/organizations/${activeOrg!.id}/members/${args.user_id}`, {
+        method: "PATCH",
+        body: {
+          ...(args.role ? { role: args.role } : {}),
+          ...(args.is_active !== undefined ? { is_active: args.is_active } : {}),
+        },
+      }),
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["members", activeOrg?.id] }),
+        qc.invalidateQueries({ queryKey: ["audit-logs", activeOrg?.id] }),
+      ]);
+    },
+  });
+
   const sites = sitesQuery.data ?? [];
   const zones = zonesQuery.data ?? [];
   const effectiveSiteId = zoneSiteId || sites[0]?.id || "";
@@ -162,6 +212,17 @@ export default function SettingsPage() {
       name: zoneName.trim(),
       criticality: zoneCrit,
       description: zoneDesc.trim() || null,
+    });
+  }
+
+  function handleAddMember(e: FormEvent) {
+    e.preventDefault();
+    if (!memberName.trim() || !memberEmail.trim() || memberPassword.length < 8) return;
+    addMemberMut.mutate({
+      full_name: memberName.trim(),
+      email: memberEmail.trim(),
+      password: memberPassword,
+      role: memberRole,
     });
   }
 
@@ -515,42 +576,132 @@ export default function SettingsPage() {
             "Platforma erişim yetkisi olan kullanıcılar ve görev rolleri",
             "Users authorized to access the platform and their assigned roles",
           )}
-          noPadding
         >
-          {membersQuery.isLoading ? (
-            <div className="p-6">
+          <div className="space-y-4">
+            <form
+              onSubmit={handleAddMember}
+              className="grid grid-cols-1 gap-3 rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] p-4 sm:grid-cols-5"
+            >
+              <Field label={t("Ad Soyad *", "Full Name *")}>
+                <Input
+                  required
+                  placeholder={t("Örn: Ahmet Yılmaz", "e.g. Jane Doe")}
+                  value={memberName}
+                  onChange={(e) => setMemberName(e.target.value)}
+                />
+              </Field>
+              <Field label={t("Kurumsal E-posta *", "Corporate Email *")}>
+                <Input
+                  required
+                  type="email"
+                  placeholder="analist@factoryguard.com"
+                  value={memberEmail}
+                  onChange={(e) => setMemberEmail(e.target.value)}
+                />
+              </Field>
+              <Field label={t("Geçici Parola (En az 8 kr) *", "Temp Password (Min 8 chars) *")}>
+                <Input
+                  required
+                  type="password"
+                  minLength={8}
+                  placeholder="••••••••••••"
+                  value={memberPassword}
+                  onChange={(e) => setMemberPassword(e.target.value)}
+                />
+              </Field>
+              <Field label={t("Yetki Rolü *", "Access Role *")}>
+                <Select
+                  value={memberRole}
+                  onChange={(e) => setMemberRole(e.target.value as "admin" | "analyst" | "viewer")}
+                >
+                  <option value="admin">{ROLE_LABEL.admin}</option>
+                  <option value="analyst">{ROLE_LABEL.analyst}</option>
+                  <option value="viewer">{ROLE_LABEL.viewer}</option>
+                </Select>
+              </Field>
+              <div className="flex items-end">
+                <Button type="submit" className="w-full" disabled={addMemberMut.isPending}>
+                  {addMemberMut.isPending
+                    ? t("Ekleniyor…", "Adding…")
+                    : t("+ Kullanıcı Ekle", "+ Add Member")}
+                </Button>
+              </div>
+            </form>
+
+            <ErrorBox error={addMemberMut.error || updateMemberMut.error} />
+
+            {membersQuery.isLoading ? (
               <Empty>{t("Yükleniyor…", "Loading…")}</Empty>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
-                  <tr>
-                    <th className="px-5 py-3">{t("Ad Soyad", "Full Name")}</th>
-                    <th className="px-4 py-3">{t("E-posta", "Email")}</th>
-                    <th className="px-4 py-3">{t("Rol", "Role")}</th>
-                    <th className="px-5 py-3 text-right">{t("Durum", "Status")}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#E2E8F0]">
-                  {(membersQuery.data ?? []).map((m) => (
-                    <tr key={m.user_id} className="hover:bg-[#F8FAFC]">
-                      <td className="px-5 py-3 font-semibold text-[#1C2434]">{m.full_name}</td>
-                      <td className="px-4 py-3 font-mono text-slate-600">{m.email}</td>
-                      <td className="px-4 py-3">
-                        <Badge tone="teal">{ROLE_LABEL[m.role]}</Badge>
-                      </td>
-                      <td className="px-5 py-3 text-right">
-                        <Badge tone={m.is_active ? "emerald" : "slate"} dot>
-                          {m.is_active ? t("Aktif", "Active") : t("Pasif", "Inactive")}
-                        </Badge>
-                      </td>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
+                    <tr>
+                      <th className="px-4 py-3">{t("Ad Soyad", "Full Name")}</th>
+                      <th className="px-4 py-3">{t("E-posta", "Email")}</th>
+                      <th className="px-4 py-3">{t("Rol", "Role")}</th>
+                      <th className="px-4 py-3">{t("Durum", "Status")}</th>
+                      <th className="px-4 py-3 text-right">{t("Yetki Yönetimi", "Role Management")}</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                  </thead>
+                  <tbody className="divide-y divide-[#E2E8F0]">
+                    {(membersQuery.data ?? []).map((m) => (
+                      <tr key={m.user_id} className="hover:bg-[#F8FAFC]">
+                        <td className="px-4 py-3 font-semibold text-[#1C2434]">{m.full_name}</td>
+                        <td className="px-4 py-3 font-mono text-slate-600">{m.email}</td>
+                        <td className="px-4 py-3">
+                          <Badge tone="teal">{ROLE_LABEL[m.role]}</Badge>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge tone={m.is_active ? "emerald" : "slate"} dot>
+                            {m.is_active ? t("Aktif", "Active") : t("Pasif", "Inactive")}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {m.role === "owner" ? (
+                            <span className="text-[11px] text-slate-400">
+                              {t("Organizasyon Sahibi", "Organization Owner")}
+                            </span>
+                          ) : (
+                            <div className="inline-flex items-center gap-2">
+                              <select
+                                value={m.role}
+                                disabled={updateMemberMut.isPending}
+                                onChange={(e) =>
+                                  updateMemberMut.mutate({
+                                    user_id: m.user_id,
+                                    role: e.target.value as "admin" | "analyst" | "viewer",
+                                  })
+                                }
+                                className="h-7 rounded-[4px] border border-[#E2E8F0] bg-white px-2 text-xs text-[#1C2434]"
+                              >
+                                <option value="admin">{ROLE_LABEL.admin}</option>
+                                <option value="analyst">{ROLE_LABEL.analyst}</option>
+                                <option value="viewer">{ROLE_LABEL.viewer}</option>
+                              </select>
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                disabled={updateMemberMut.isPending}
+                                onClick={() =>
+                                  updateMemberMut.mutate({
+                                    user_id: m.user_id,
+                                    is_active: !m.is_active,
+                                  })
+                                }
+                              >
+                                {m.is_active ? t("Pasife Al", "Deactivate") : t("Aktifleştir", "Activate")}
+                              </Button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </Card>
       )}
 

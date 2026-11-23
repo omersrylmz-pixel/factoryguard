@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
-import { ROLE_LABEL } from "../components/ui";
+import { CriticalityBadge, ROLE_LABEL, formatDate } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { useLang } from "../i18n";
 import { api } from "../services/api";
@@ -92,6 +92,7 @@ export default function AppLayout() {
   const location = useLocation();
   const [globalSearch, setGlobalSearch] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   const sitesQuery = useQuery({
     queryKey: ["sites", activeOrg?.id],
@@ -112,6 +113,9 @@ export default function AppLayout() {
   });
 
   const openRiskCount = openRisksQuery.data?.total ?? 0;
+  const topOpenRisks = [...(openRisksQuery.data?.items ?? [])]
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6);
   const activeSensorCount = (sensorsQuery.data ?? []).filter((s) => s.is_connected).length;
   const totalSensorCount = (sensorsQuery.data ?? []).length;
   const primarySite = sitesQuery.data?.[0];
@@ -387,22 +391,110 @@ export default function AppLayout() {
               ))}
             </div>
 
-            {/* Bildirim Zili (TailAdmin tarzı dairesel ikon) */}
-            <Link
-              to="/risks"
-              title={t(`${openRiskCount} açık risk bulgusu`, `${openRiskCount} open risk findings`)}
-              className="relative flex h-9 w-9 items-center justify-center rounded-full border border-[#E2E8F0] bg-[#F8FAFC] text-[#64748B] transition hover:border-[#0D9488] hover:text-[#0D9488]"
-            >
-              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-              </svg>
-              {openRiskCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-600 px-1 font-mono text-[9px] font-bold text-white ring-2 ring-white">
-                  {openRiskCount > 99 ? "99+" : openRiskCount}
-                </span>
+            {/* Bildirim Zili & Açılır Canlı Uyarı Çekmecesi */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setNotificationsOpen((v) => !v)}
+                aria-expanded={notificationsOpen}
+                title={t(`${openRiskCount} açık risk bulgusu`, `${openRiskCount} open risk findings`)}
+                className={`relative flex h-9 w-9 items-center justify-center rounded-full border transition ${
+                  notificationsOpen
+                    ? "border-[#0D9488] bg-teal-50 text-[#0D9488]"
+                    : "border-[#E2E8F0] bg-[#F8FAFC] text-[#64748B] hover:border-[#0D9488] hover:text-[#0D9488]"
+                }`}
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                </svg>
+                {openRiskCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-600 px-1 font-mono text-[9px] font-bold text-white ring-2 ring-white">
+                    {openRiskCount > 99 ? "99+" : openRiskCount}
+                  </span>
+                )}
+              </button>
+
+              {notificationsOpen && (
+                <div className="absolute right-0 z-50 mt-2 w-88 overflow-hidden rounded-[4px] border border-[#E2E8F0] bg-white shadow-xl sm:w-96">
+                  <div className="flex items-center justify-between border-b border-[#E2E8F0] bg-[#1C2434] px-4 py-3 text-white">
+                    <div>
+                      <div className="text-xs font-bold">
+                        {t("Canlı OT Güvenlik Bildirimleri", "Live OT Security Notifications")}
+                      </div>
+                      <div className="text-[11px] text-[#8A99AF]">
+                        {t(
+                          `${openRiskCount} açık bulgu · En yüksek öncelikliler`,
+                          `${openRiskCount} open findings · Highest priority`,
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setNotificationsOpen(false)}
+                      className="rounded px-1.5 py-0.5 text-xs text-[#8A99AF] hover:bg-[#333A48] hover:text-white"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {topOpenRisks.length === 0 ? (
+                    <div className="p-5 text-center text-xs text-[#64748B]">
+                      {t("Açık risk bildirimi bulunmuyor.", "No open risk notifications.")}
+                    </div>
+                  ) : (
+                    <div className="max-h-80 divide-y divide-[#E2E8F0] overflow-y-auto">
+                      {topOpenRisks.map((rf) => (
+                        <div
+                          key={rf.id}
+                          onClick={() => {
+                            setNotificationsOpen(false);
+                            navigate("/risks");
+                          }}
+                          className="cursor-pointer px-4 py-2.5 text-xs transition hover:bg-[#F8FAFC]"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5">
+                              <CriticalityBadge value={rf.severity} />
+                              <span className="font-mono font-bold text-[#1C2434]">
+                                {rf.score}/100
+                              </span>
+                            </div>
+                            <span className="font-mono text-[10px] text-[#64748B]">
+                              {formatDate(rf.last_seen_at)}
+                            </span>
+                          </div>
+                          <div className="mt-1 font-semibold text-[#1C2434]">{rf.title}</div>
+                          <div className="mt-0.5 flex items-center justify-between font-mono text-[11px] text-[#64748B]">
+                            <span>{rf.rule_key}</span>
+                            {rf.asset_ip && (
+                              <span className="font-semibold text-[#0D9488]">{rf.asset_ip}</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between border-t border-[#E2E8F0] bg-[#F8FAFC] px-4 py-2.5 text-xs">
+                    <Link
+                      to="/network"
+                      onClick={() => setNotificationsOpen(false)}
+                      className="font-medium text-[#64748B] hover:text-[#1C2434]"
+                    >
+                      {t("Topoloji Haritası", "Topology Map")}
+                    </Link>
+                    <Link
+                      to="/risks"
+                      onClick={() => setNotificationsOpen(false)}
+                      className="font-semibold text-[#0D9488] hover:underline"
+                    >
+                      {t(`Tüm Bulguları İncele (${openRiskCount}) →`, `Inspect All Findings (${openRiskCount}) →`)}
+                    </Link>
+                  </div>
+                </div>
               )}
-            </Link>
+            </div>
 
             {/* Kullanıcı Profili + Çıkış */}
             <div className="flex items-center gap-3 border-l border-[#E2E8F0] pl-3">

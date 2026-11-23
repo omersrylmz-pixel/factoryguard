@@ -266,3 +266,14 @@ def test_pcap_dpi_bacnet_dnp3_and_profinet_signatures():
     assert "profinet.dcerpc_request" in obs["10.30.0.12"]["protocol_messages"]
 
 
+def test_build_multi_protocol_ot_pcap_discovers_all_seven_protocols():
+    from sensor.parsers.pcap_binary import build_multi_protocol_ot_pcap, parse_pcap_bytes
+
+    raw = build_multi_protocol_ot_pcap()
+    bundle = parse_pcap_bytes(raw, "snr-multi-7")
+    protos = {c["protocol"] for c in bundle["communications"]}
+    assert {"modbus", "s7comm", "enip", "opcua", "bacnet", "dnp3", "profinet"} <= protos
+    assert all(c["protocol_confidence"] == "observed" for c in bundle["communications"])
+
+
+

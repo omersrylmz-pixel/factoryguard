@@ -310,6 +310,19 @@ export interface RiskRulesCatalog {
   rules: RiskRuleDefinition[];
 }
 
+export interface VulnerabilityCatalogItem {
+  id: string;
+  cve_id: string;
+  cpe: string | null;
+  vendor: string;
+  product: string;
+  version_exact: string;
+  cvss: number;
+  description: string;
+  recommendation: string | null;
+  published_at: string | null;
+}
+
 export interface RiskBulkStatusResult {
   updated_count: number;
   new_status: RiskStatus;

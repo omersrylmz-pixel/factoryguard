@@ -383,6 +383,9 @@ const AUDIT_ACTION_LABEL: Record<string, readonly [string, string]> = {
   "communication.approve_baseline": ["İletişim baseline'a alındı", "Flow approved to baseline"],
   "communication.approve_all_baseline": ["Tüm akışlar baseline'a alındı", "All flows approved to baseline"],
   "organization.update": ["Organizasyon güncellendi", "Organization updated"],
+  "vulnerability_catalog.create": ["Zafiyet kataloğuna CVE eklendi", "CVE added to vulnerability catalog"],
+  "member.add": ["Yeni kullanıcı eklendi", "New member added"],
+  "member.update": ["Kullanıcı yetkisi güncellendi", "Member role updated"],
   "cli.seed_demo": ["Demo verisi yüklendi", "Demo data seeded"],
 };
 

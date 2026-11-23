@@ -320,3 +320,142 @@ def parse_pcap_bytes(data: bytes, sensor_id: str) -> dict[str, Any]:
             "non_unicast_skipped": normalizer.non_unicast_skipped,
         },
     }
+
+
+def _pack_ethernet_ipv4_frame(
+    *,
+    src_mac: str,
+    dst_mac: str,
+    src_ip: str,
+    dst_ip: str,
+    sport: int,
+    dport: int,
+    transport: str,
+    payload: bytes,
+) -> bytes:
+    smac = bytes(int(x, 16) for x in src_mac.split(":"))
+    dmac = bytes(int(x, 16) for x in dst_mac.split(":"))
+    eth = dmac + smac + struct.pack("!H", 0x0800)
+
+    if transport == "tcp":
+        proto_num = 6
+        l4 = struct.pack("!HHIIBBHHH", sport, dport, 1000, 1, 0x50, 0x18, 64240, 0, 0) + payload
+    else:
+        proto_num = 17
+        l4 = struct.pack("!HHHH", sport, dport, 8 + len(payload), 0) + payload
+
+    ip_total = 20 + len(l4)
+    ip_hdr = struct.pack(
+        "!BBHHHBBH4s4s",
+        0x45,
+        0,
+        ip_total,
+        1,
+        0,
+        64,
+        proto_num,
+        0,
+        socket.inet_aton(src_ip),
+        socket.inet_aton(dst_ip),
+    )
+    return eth + ip_hdr + l4
+
+
+def build_multi_protocol_ot_pcap() -> bytes:
+    """7 endüstriyel OT protokolünün (Modbus, S7comm, EtherNet/IP, OPC UA, BACnet, DNP3, PROFINET)
+    tamamını gerçek L7 DPI bayt imzalarıyla içeren çoklu-üretici fabrika PCAP akışı üretir."""
+    global_hdr = struct.pack("<IHHiIII", 0xA1B2C3D4, 2, 4, 0, 0, 65535, 1)
+    base_ts = int(datetime.now(UTC).timestamp()) - 60
+
+    scada_mac = "00:0c:29:36:05:a2"
+    scada_ip = "10.10.5.128"
+    eng_mac = "dc:a6:32:88:99:aa"
+    eng_ip = "10.10.20.99"
+
+    frames = [
+        # 1. Modbus/TCP (Port 502) — FC 0x06 WRITE_SINGLE_REGISTER
+        _pack_ethernet_ipv4_frame(
+            src_mac=scada_mac,
+            dst_mac="00:1b:1b:00:00:09",
+            src_ip=scada_ip,
+            dst_ip="10.0.0.9",
+            sport=51200,
+            dport=502,
+            transport="tcp",
+            payload=struct.pack("!HHHB", 1, 0, 6, 1) + bytes([0x06, 0x00, 0x10, 0x00, 0xFF]),
+        ),
+        # 2. Siemens S7comm (Port 102) — TPKT 0x03 0x00 + COTP + S7 0x32 JOB_REQUEST (0x01)
+        _pack_ethernet_ipv4_frame(
+            src_mac=eng_mac,
+            dst_mac="00:1b:1b:00:00:09",
+            src_ip=eng_ip,
+            dst_ip="10.0.0.9",
+            sport=51201,
+            dport=102,
+            transport="tcp",
+            payload=bytes([0x03, 0x00, 0x00, 0x13, 0x02, 0xF0, 0x80, 0x32, 0x01, 0x00, 0x00, 0x01, 0x00]),
+        ),
+        # 3. Rockwell EtherNet/IP (Port 44818) — 0x0065 REGISTER_SESSION (24-byte header)
+        _pack_ethernet_ipv4_frame(
+            src_mac=scada_mac,
+            dst_mac="00:00:bc:11:22:21",
+            src_ip=scada_ip,
+            dst_ip="10.0.0.21",
+            sport=51202,
+            dport=44818,
+            transport="tcp",
+            payload=struct.pack("<HHII8sI", 0x0065, 4, 1, 0, b"\x00" * 8, 0) + b"\x01\x00\x00\x00",
+        ),
+        # 4. OPC UA Binary (Port 4840) — HELF
+        _pack_ethernet_ipv4_frame(
+            src_mac=scada_mac,
+            dst_mac="00:80:f4:11:22:22",
+            src_ip=scada_ip,
+            dst_ip="10.0.0.22",
+            sport=51203,
+            dport=4840,
+            transport="tcp",
+            payload=b"HELF" + struct.pack("<I", 32) + b"\x00" * 24,
+        ),
+        # 5. BACnet/IP (UDP Port 47808) — BVLC 0x81 0x0A (ORIGINAL_UNICAST_NPDU)
+        _pack_ethernet_ipv4_frame(
+            src_mac=scada_mac,
+            dst_mac="00:0e:8c:11:22:23",
+            src_ip=scada_ip,
+            dst_ip="10.0.0.23",
+            sport=47808,
+            dport=47808,
+            transport="udp",
+            payload=bytes([0x81, 0x0A, 0x00, 0x0C, 0x01, 0x20, 0xFF, 0xFF, 0x00, 0xFF, 0x10, 0x08]),
+        ),
+        # 6. DNP3 (TCP Port 20000) — Start Bytes 0x05 0x64
+        _pack_ethernet_ipv4_frame(
+            src_mac=scada_mac,
+            dst_mac="00:90:e8:11:22:24",
+            src_ip=scada_ip,
+            dst_ip="10.0.0.24",
+            sport=51205,
+            dport=20000,
+            transport="tcp",
+            payload=bytes([0x05, 0x64, 0x05, 0xC4, 0x01, 0x00, 0x00, 0x04, 0xE9, 0x21]),
+        ),
+        # 7. PROFINET IO CM (UDP Port 34964) — DCE/RPC v4 Request (0x04, 0x00)
+        _pack_ethernet_ipv4_frame(
+            src_mac="00:1b:1b:00:00:09",
+            dst_mac="00:a0:45:11:22:25",
+            src_ip="10.0.0.9",
+            dst_ip="10.0.0.25",
+            sport=49152,
+            dport=34964,
+            transport="udp",
+            payload=bytes([0x04, 0x00, 0x20, 0x00, 0x10, 0x00, 0x00, 0x00]) + b"\x00" * 16,
+        ),
+    ]
+
+    chunks = [global_hdr]
+    for idx, frame in enumerate(frames):
+        pkt_hdr = struct.pack("<IIII", base_ts + idx * 2, 0, len(frame), len(frame))
+        chunks.append(pkt_hdr)
+        chunks.append(frame)
+    return b"".join(chunks)
+

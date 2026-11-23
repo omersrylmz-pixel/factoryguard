@@ -193,7 +193,7 @@ export default function SensorsPage() {
     });
   }
 
-  function handleSampleAnalyze(sampleKey: "real-modbus-pcap" | "synthetic-zeek") {
+  function handleSampleAnalyze(sampleKey: "real-modbus-pcap" | "synthetic-zeek" | "multi-ot-pcap") {
     if (!effectiveUploadSensorId) return;
     setUploadResult(null);
     analyzeUploadMut.mutate({
@@ -408,11 +408,22 @@ export default function SensorsPage() {
             <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
+                variant="primary"
+                disabled={analyzeUploadMut.isPending}
+                onClick={() => handleSampleAnalyze("multi-ot-pcap")}
+              >
+                {t(
+                  "7 Protokollü Karma OT PCAP Analiz Et (DPI)",
+                  "Analyze 7-Protocol Multi-Vendor OT PCAP (DPI)",
+                )}
+              </Button>
+              <Button
+                type="button"
                 variant="outline"
                 disabled={analyzeUploadMut.isPending}
                 onClick={() => handleSampleAnalyze("real-modbus-pcap")}
               >
-                {t("Gerçek Modbus PCAP Analiz Et (Zeek 9.0.1)", "Analyze Real Modbus PCAP (Zeek 9.0.1)")}
+                {t("Gerçek Modbus PCAP (Zeek 9.0.1)", "Real Modbus PCAP (Zeek 9.0.1)")}
               </Button>
               <Button
                 type="button"
@@ -420,7 +431,7 @@ export default function SensorsPage() {
                 disabled={analyzeUploadMut.isPending}
                 onClick={() => handleSampleAnalyze("synthetic-zeek")}
               >
-                {t("Örnek Fabrika Senaryosu Yükle", "Load Sample Plant Scenario")}
+                {t("Örnek Fabrika Senaryosu", "Sample Plant Scenario")}
               </Button>
             </div>
           </div>

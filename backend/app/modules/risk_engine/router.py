@@ -59,6 +59,7 @@ class RiskPage(BaseModel):
 
 class RiskStatusUpdate(BaseModel):
     status: str
+    resolution_note: str | None = None
 
     @field_validator("status")
     @classmethod
@@ -78,12 +79,13 @@ class RiskEvaluateOut(BaseModel):
 class RiskBulkStatusUpdate(BaseModel):
     finding_ids: list[uuid.UUID] | None = None
     filter_status: str = "open"
-    new_status: str
+    new_status: str | None = None
+    status: str | None = None
+    resolution_note: str | None = None
 
-    @field_validator("new_status")
-    @classmethod
-    def _validate_new_status(cls, v: str) -> str:
-        val = v.strip().lower().replace(" ", "_")
+    def effective_status(self) -> str:
+        raw = self.new_status or self.status or ""
+        val = raw.strip().lower().replace(" ", "_")
         if val not in RISK_STATUSES:
             raise ValueError(f"Durum şunlardan biri olmalı: {', '.join(RISK_STATUSES)}")
         return val
@@ -291,6 +293,11 @@ def bulk_update_risk_status(
     ctx: AnalystTenant,
 ):
     """Birden fazla risk bulgusunun durumunu tek işlemde günceller ve denetim kaydına yazar."""
+    try:
+        target_status = body.effective_status()
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+
     stmt = select(RiskFinding).where(RiskFinding.organization_id == ctx.organization_id)
     if body.finding_ids:
         stmt = stmt.where(RiskFinding.id.in_(body.finding_ids))
@@ -301,29 +308,33 @@ def bulk_update_risk_status(
     now = datetime.now(UTC)
     updated = 0
     for f in findings:
-        if f.status != body.new_status:
-            f.status = body.new_status
-            f.resolved_at = now if body.new_status in ("resolved", "false_positive", "accepted") else None
+        if f.status != target_status:
+            f.status = target_status
+            f.resolved_at = now if target_status in ("resolved", "false_positive", "accepted") else None
+            if body.resolution_note:
+                ev = dict(f.evidence or {})
+                ev["resolution_note"] = body.resolution_note
+                f.evidence = ev
             updated += 1
 
     if updated > 0:
         record(
             db,
-            "risk.bulk_status_change",
+            "risk.bulk_status",
             user_id=ctx.user.id,
             organization_id=ctx.organization_id,
             target_type="risk_finding",
             target_id=None,
             metadata={
                 "updated_count": updated,
-                "new_status": body.new_status,
+                "new_status": target_status,
                 "filter_status": body.filter_status,
             },
             ip_address=client_ip(request),
         )
         db.commit()
 
-    return RiskBulkStatusOut(updated_count=updated, new_status=body.new_status)
+    return RiskBulkStatusOut(updated_count=updated, new_status=target_status)
 
 
 @router.get("/{finding_id}", response_model=RiskFindingOut)
@@ -334,6 +345,7 @@ def get_risk(finding_id: uuid.UUID, db: DbSession, ctx: Tenant):
 
 
 @router.patch("/{finding_id}", response_model=RiskFindingOut)
+@router.patch("/{finding_id}/status", response_model=RiskFindingOut)
 def update_risk_status(
     finding_id: uuid.UUID,
     body: RiskStatusUpdate,
@@ -345,12 +357,16 @@ def update_risk_status(
     old_status = finding.status
     new_status = body.status
 
-    if old_status != new_status:
+    if old_status != new_status or body.resolution_note:
         finding.status = new_status
         if new_status in ("resolved", "false_positive", "accepted"):
             finding.resolved_at = datetime.now(UTC)
         else:
             finding.resolved_at = None
+        if body.resolution_note:
+            ev = dict(finding.evidence or {})
+            ev["resolution_note"] = body.resolution_note
+            finding.evidence = ev
 
         record(
             db,

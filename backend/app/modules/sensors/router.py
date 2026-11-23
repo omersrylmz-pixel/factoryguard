@@ -43,7 +43,7 @@ from app.modules.sites.router import get_site_or_404
 from app.schemas.common import Name
 from sensor.cli import run as run_zeek_dir
 from sensor.normalizer.normalize import Normalizer
-from sensor.parsers.pcap_binary import parse_pcap_bytes
+from sensor.parsers.pcap_binary import build_multi_protocol_ot_pcap, parse_pcap_bytes
 from sensor.parsers.zeek import read_zeek_log
 
 router = APIRouter(prefix="/sensors", tags=["sensors"])
@@ -325,17 +325,23 @@ def analyze_sensor_upload(
 
     repo_root = _REPO_ROOT_PATH
     if body.sample:
-        if body.sample == "real-modbus-pcap":
+        if body.sample == "multi-ot-pcap":
+            label = "Multi-Protocol-7-OT-DPI-Capture.pcap (Modbus/S7/ENIP/OPCUA/BACnet/DNP3/Profinet)"
+            bundle = parse_pcap_bytes(build_multi_protocol_ot_pcap(), str(sensor.id))
+        elif body.sample == "real-modbus-pcap":
             sample_dir = repo_root / "sample-data" / "zeek" / "real-modbus-testdata-part1"
             label = "MODBUS-TestDataPart1.pcap (Zeek 9.0.1)"
+            if not sample_dir.is_dir():
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Örnek veri dizini bulunamadı")
+            bundle = run_zeek_dir(sample_dir, str(sensor.id))
         elif body.sample in ("synthetic-zeek", "lab-basic"):
             sample_dir = repo_root / "sample-data" / "zeek" / "lab-basic"
             label = "Ornek-Fabrika-Zeek-Paketi (lab-basic)"
+            if not sample_dir.is_dir():
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Örnek veri dizini bulunamadı")
+            bundle = run_zeek_dir(sample_dir, str(sensor.id))
         else:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Geçersiz örnek veri adı")
-        if not sample_dir.is_dir():
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Örnek veri dizini bulunamadı")
-        bundle = run_zeek_dir(sample_dir, str(sensor.id))
     elif body.content_base64:
         label = (body.filename or "yuklenen-dosya").strip()
         try:

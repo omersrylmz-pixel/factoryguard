@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import {
   Badge,
@@ -28,6 +28,7 @@ import type {
   RiskRuleKey,
   RiskRulesCatalog,
   RiskStatus,
+  VulnerabilityCatalogItem,
 } from "../types/api";
 
 export const RISK_STATUS_LABEL: Record<RiskStatus, string> = bi({
@@ -63,7 +64,7 @@ function statusTone(st: RiskStatus): "red" | "amber" | "teal" | "emerald" | "sla
 }
 
 export default function RisksPage() {
-  const { activeOrg, canEditAssets } = useAuth();
+  const { activeOrg, canAdmin, canEditAssets } = useAuth();
   const { t } = useLang();
   const qc = useQueryClient();
 
@@ -74,6 +75,16 @@ export default function RisksPage() {
   const [checkedIds, setCheckedIds] = useState<string[]>([]);
   const [note, setNote] = useState("");
   const [showRulesCatalog, setShowRulesCatalog] = useState(false);
+  const [showCveCatalog, setShowCveCatalog] = useState(false);
+
+  // Yeni CVE ekleme formu
+  const [cveId, setCveId] = useState("");
+  const [cveVendor, setCveVendor] = useState("");
+  const [cveProduct, setCveProduct] = useState("");
+  const [cveVersion, setCveVersion] = useState("");
+  const [cveCvss, setCveCvss] = useState("8.8");
+  const [cveDesc, setCveDesc] = useState("");
+  const [cveRec, setCveRec] = useState("");
 
   const params = new URLSearchParams();
   if (statusFilter) params.set("status", statusFilter);
@@ -97,6 +108,36 @@ export default function RisksPage() {
     queryKey: ["risks", activeOrg?.id, "rules-catalog"],
     queryFn: () => api<RiskRulesCatalog>("/risks/rules"),
     enabled: !!activeOrg,
+  });
+
+  const cveCatalogQuery = useQuery({
+    queryKey: ["vulnerabilities-catalog", activeOrg?.id],
+    queryFn: () => api<VulnerabilityCatalogItem[]>("/vulnerabilities/catalog"),
+    enabled: !!activeOrg,
+  });
+
+  const addCveMut = useMutation({
+    mutationFn: (body: {
+      cve_id: string;
+      vendor: string;
+      product: string;
+      version_exact: string;
+      cvss: number;
+      description: string;
+      recommendation: string | null;
+    }) => api<VulnerabilityCatalogItem>("/vulnerabilities/catalog", { method: "POST", body }),
+    onSuccess: async () => {
+      setCveId("");
+      setCveVendor("");
+      setCveProduct("");
+      setCveVersion("");
+      setCveDesc("");
+      setCveRec("");
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["vulnerabilities-catalog", activeOrg?.id] }),
+        qc.invalidateQueries({ queryKey: ["risks", activeOrg?.id] }),
+      ]);
+    },
   });
 
   const evalMut = useMutation({
@@ -163,6 +204,20 @@ export default function RisksPage() {
     setCheckedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
+  function handleAddCve(e: FormEvent) {
+    e.preventDefault();
+    if (!cveId.trim() || !cveVendor.trim() || !cveProduct.trim() || !cveVersion.trim()) return;
+    addCveMut.mutate({
+      cve_id: cveId.trim().toUpperCase(),
+      vendor: cveVendor.trim(),
+      product: cveProduct.trim(),
+      version_exact: cveVersion.trim(),
+      cvss: Math.min(10, Math.max(0, Number(cveCvss) || 7.5)),
+      description: cveDesc.trim() || t("Endüstriyel firmware güvenlik açığı", "Industrial firmware vulnerability"),
+      recommendation: cveRec.trim() || null,
+    });
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -175,7 +230,18 @@ export default function RisksPage() {
         actions={
           <>
             <Button
-              variant="secondary"
+              variant={showCveCatalog ? "outline" : "secondary"}
+              onClick={() => setShowCveCatalog((v) => !v)}
+            >
+              {showCveCatalog
+                ? t("CVE Kataloğunu Gizle", "Hide CVE Catalog")
+                : t(
+                    `ICS-CERT / CVE Kataloğu (${cveCatalogQuery.data?.length ?? 0})`,
+                    `ICS-CERT / CVE Catalog (${cveCatalogQuery.data?.length ?? 0})`,
+                  )}
+            </Button>
+            <Button
+              variant={showRulesCatalog ? "outline" : "secondary"}
               onClick={() => setShowRulesCatalog((v) => !v)}
             >
               {showRulesCatalog
@@ -332,6 +398,183 @@ export default function RisksPage() {
                 </div>
               </div>
             ))}
+          </div>
+        </Card>
+      )}
+
+      {/* ICS-CERT / CVE Endüstriyel Zafiyet Kataloğu & Firmware Eşleştirme */}
+      {showCveCatalog && (
+        <Card
+          title={t(
+            `Endüstriyel Zafiyet Kataloğu (ICS-CERT / CVE) — ${cveCatalogQuery.data?.length ?? 0} Kayıt`,
+            `Industrial Vulnerability Catalog (ICS-CERT / CVE) — ${cveCatalogQuery.data?.length ?? 0} Advisories`,
+          )}
+          subtitle={t(
+            "Üretici, model ve tam firmware sürümü eşleştiğinde otomatik KNOWN_VULNERABILITY bulgusu üretilir",
+            "Automatically generates KNOWN_VULNERABILITY findings when vendor, model and exact firmware version match",
+          )}
+        >
+          <div className="space-y-4">
+            {canAdmin && (
+              <form
+                onSubmit={handleAddCve}
+                className="space-y-3 rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] p-4"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-[#1C2434]">
+                    {t(
+                      "Kataloğa Yeni Endüstriyel CVE Ekle & Envanteri Tara",
+                      "Add New Industrial CVE Advisory & Scan Inventory",
+                    )}
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setCveId("CVE-2023-28489");
+                      setCveVendor("Siemens");
+                      setCveProduct("SIMATIC HMI Comfort");
+                      setCveVersion("17.0.0");
+                      setCveCvss("8.8");
+                      setCveDesc(
+                        t(
+                          "Siemens SIMATIC HMI Comfort panellerinde kimlik doğrulama atlama ve uzaktan kod çalıştırma zafiyeti.",
+                          "Authentication bypass and remote code execution vulnerability in Siemens SIMATIC HMI Comfort panels.",
+                        ),
+                      );
+                      setCveRec(
+                        t(
+                          "TIA Portal üzerinden HMI firmware sürümünü V17.0.0.6 veya üstüne güncelleyin ve mühendislik erişimini kısıtlayın.",
+                          "Update HMI firmware to V17.0.0.6 or later via TIA Portal and restrict engineering access.",
+                        ),
+                      );
+                    }}
+                  >
+                    {t("Örnek Siemens HMI CVE Doldur", "Fill Sample Siemens HMI CVE")}
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-5">
+                  <Field label="CVE ID *">
+                    <Input
+                      required
+                      placeholder="CVE-2023-28489"
+                      value={cveId}
+                      onChange={(e) => setCveId(e.target.value)}
+                    />
+                  </Field>
+                  <Field label={t("Üretici *", "Vendor *")}>
+                    <Input
+                      required
+                      placeholder="Siemens"
+                      value={cveVendor}
+                      onChange={(e) => setCveVendor(e.target.value)}
+                    />
+                  </Field>
+                  <Field label={t("Model / Ürün *", "Model / Product *")}>
+                    <Input
+                      required
+                      placeholder="SIMATIC HMI Comfort"
+                      value={cveProduct}
+                      onChange={(e) => setCveProduct(e.target.value)}
+                    />
+                  </Field>
+                  <Field label={t("Tam Firmware Sürümü *", "Exact Firmware *")}>
+                    <Input
+                      required
+                      placeholder="17.0.0"
+                      value={cveVersion}
+                      onChange={(e) => setCveVersion(e.target.value)}
+                    />
+                  </Field>
+                  <Field label="CVSS (0-10) *">
+                    <Input
+                      required
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="10"
+                      value={cveCvss}
+                      onChange={(e) => setCveCvss(e.target.value)}
+                    />
+                  </Field>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <Field label={t("Zafiyet Açıklaması *", "Vulnerability Description *")}>
+                    <Input
+                      required
+                      placeholder={t("Teknik etki özeti...", "Technical impact summary...")}
+                      value={cveDesc}
+                      onChange={(e) => setCveDesc(e.target.value)}
+                    />
+                  </Field>
+                  <Field label={t("Önerilen Yama / Önlem", "Recommended Patch / Mitigation")}>
+                    <Input
+                      placeholder={t("Firmware güncelleme veya ağ izolasyonu...", "Firmware update or network isolation...")}
+                      value={cveRec}
+                      onChange={(e) => setCveRec(e.target.value)}
+                    />
+                  </Field>
+                  <div className="flex items-end">
+                    <Button type="submit" className="w-full" disabled={addCveMut.isPending}>
+                      {addCveMut.isPending
+                        ? t("Eşleştiriliyor…", "Matching…")
+                        : t("+ CVE Ekle & Otomatik Eşleştir", "+ Add CVE & Match Firmware")}
+                    </Button>
+                  </div>
+                </div>
+                <ErrorBox error={addCveMut.error} />
+              </form>
+            )}
+
+            {(cveCatalogQuery.data ?? []).length === 0 ? (
+              <Empty>{t("Katalogda kayıtlı CVE yok.", "No CVEs registered in catalog.")}</Empty>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold text-slate-500 uppercase">
+                    <tr>
+                      <th className="px-4 py-2.5">CVE ID</th>
+                      <th className="px-4 py-2.5">CVSS</th>
+                      <th className="px-4 py-2.5">{t("Üretici & Model", "Vendor & Model")}</th>
+                      <th className="px-4 py-2.5">Firmware</th>
+                      <th className="px-4 py-2.5">{t("Açıklama & Çözüm", "Description & Mitigation")}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E2E8F0]">
+                    {(cveCatalogQuery.data ?? []).map((v) => (
+                      <tr key={v.id} className="hover:bg-[#F8FAFC]">
+                        <td className="px-4 py-2.5 font-mono font-bold whitespace-nowrap text-[#0D9488]">
+                          {v.cve_id}
+                        </td>
+                        <td className="px-4 py-2.5 whitespace-nowrap">
+                          <Badge tone={v.cvss >= 9 ? "red" : v.cvss >= 7 ? "amber" : "teal"}>
+                            CVSS {v.cvss.toFixed(1)}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-2.5 whitespace-nowrap">
+                          <span className="font-semibold text-[#1C2434]">{v.vendor}</span> ·{" "}
+                          <span className="text-slate-600">{v.product}</span>
+                        </td>
+                        <td className="px-4 py-2.5 font-mono font-semibold whitespace-nowrap text-[#1C2434]">
+                          v{v.version_exact}
+                        </td>
+                        <td className="px-4 py-2.5 text-slate-600">
+                          <div>{v.description}</div>
+                          {v.recommendation && (
+                            <div className="mt-0.5 text-[11px] font-medium text-[#0F766E]">
+                              {t("Öneri", "Mitigation")}: {v.recommendation}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </Card>
       )}
