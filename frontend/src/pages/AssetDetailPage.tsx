@@ -109,13 +109,17 @@ export default function AssetDetailPage() {
   const inboundFlows = asset.communications.filter((c) => c.direction === "inbound");
   const totalConnections = asset.communications.reduce((acc, c) => acc + c.connection_count, 0);
 
-  const activePorts = asset.communications
-    .filter((c) => c.target_port !== null)
-    .map((c) => ({
-      port: c.target_port!,
-      proto: c.protocol.replace(/\?+$/, "").toUpperCase(),
-      direction: c.direction,
-    }));
+  const portMap = new Map<string, { port: number; proto: string; direction: string }>();
+  for (const c of asset.communications) {
+    if (c.target_port !== null) {
+      const proto = c.protocol.replace(/\?+$/, "").toUpperCase();
+      const key = `${c.target_port}:${proto}`;
+      if (!portMap.has(key)) {
+        portMap.set(key, { port: c.target_port, proto, direction: c.direction });
+      }
+    }
+  }
+  const activePorts = Array.from(portMap.values());
 
   const openFindings = asset.risk_findings.filter(
     (f) => f.status === "open" || f.status === "investigating",

@@ -350,8 +350,8 @@ export function DeviceHardwareChassisCard({
 
               {/* Ön Tanı LCD Ekranı */}
               <rect x="118" y="70" width="165" height="54" rx="3" fill="url(#plc-lcd)" stroke="#2DD4BF" strokeWidth="1.2" />
-              <text x="126" y="85" className="fill-teal-200 font-mono text-[9px] font-bold">
-                {name.slice(0, 22)}
+              <text x="126" y="85" className="fill-teal-200 font-mono text-[8.5px] font-bold">
+                {name.length > 19 ? `${name.slice(0, 18)}…` : name}
               </text>
               <text x="126" y="100" className="fill-white font-mono text-[11px] font-bold">
                 IP: {ip ?? "0.0.0.0"}
