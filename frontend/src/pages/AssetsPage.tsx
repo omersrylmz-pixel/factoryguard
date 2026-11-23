@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router";
 import { DeviceHardwareThumb } from "../components/deviceVisuals";
+import { DecryptedText } from "../components/reactBits";
 import {
   ASSET_TYPE_LABEL,
   Badge,
@@ -640,7 +641,7 @@ export default function AssetsPage() {
                         {/* 2. IP & MAC Adresi */}
                         <td className="px-3 py-2.5 font-mono whitespace-nowrap">
                           <div className="flex items-center gap-1.5 font-semibold text-[#1C2434]">
-                            <span>{a.ip_address ?? "—"}</span>
+                            <DecryptedText text={a.ip_address ?? "—"} />
                             {a.is_external && <Badge variant="danger">{t("Dış Ağ", "External")}</Badge>}
                           </div>
                           <div className="text-[11px] text-[#64748B]">{a.mac_address ?? "—"}</div>

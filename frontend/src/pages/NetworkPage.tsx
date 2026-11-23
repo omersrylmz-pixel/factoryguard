@@ -653,6 +653,19 @@ export default function NetworkPage() {
                           strokeWidth={Math.min(1.4 + Math.log2(e.connection_count + 1) * 0.65, 3.2)}
                           markerEnd="url(#ot-arrow)"
                         />
+                        {/* Canlı Veri Paketi Akış Darbesi (Kaynaktan Hedefe Akan Işık Paketi) */}
+                        {isHighlighted && (
+                          <circle
+                            r="3.2"
+                            fill={e.cross_zone && !e.is_baseline_approved ? "#E11D48" : "#14B8A6"}
+                          >
+                            <animateMotion
+                              dur={`${2.2 + (edgeIdx % 4) * 0.45}s`}
+                              repeatCount="indefinite"
+                              path={geom.pathD}
+                            />
+                          </circle>
+                        )}
                         {showEdgeLabels && isHighlighted && (
                           <g>
                             <rect
@@ -714,6 +727,29 @@ export default function NetworkPage() {
                         className="cursor-pointer transition-opacity hover:opacity-95"
                       >
                         <title>{`${n.label} (${ipText}) — ${t("Seçmek için tıkla, detaya gitmek için çift tıkla", "Click to inspect, double-click for details")}`}</title>
+                        {/* Kritik veya Seçili Düğüm Sonar Radar Halkası */}
+                        {(isSelected || n.criticality === "critical") && (
+                          <circle
+                            r="26"
+                            fill="none"
+                            stroke={isSelected ? "#0D9488" : "#E11D48"}
+                            strokeWidth="1.5"
+                            opacity="0.55"
+                          >
+                            <animate
+                              attributeName="r"
+                              values="23;32;23"
+                              dur="2.4s"
+                              repeatCount="indefinite"
+                            />
+                            <animate
+                              attributeName="opacity"
+                              values="0.65;0.1;0.65"
+                              dur="2.4s"
+                              repeatCount="indefinite"
+                            />
+                          </circle>
+                        )}
                         {isSelected && (
                           <circle
                             r="29"

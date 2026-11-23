@@ -1,5 +1,6 @@
 import { useLang } from "../i18n";
 import type { AssetType, Criticality } from "../types/api";
+import { DecryptedText, InteractiveDotGrid, SpotlightCard } from "./reactBits";
 
 /**
  * Endüstriyel OT cihaz türlerine ve üreticilere (Siemens, Rockwell, Schneider, Wonderware, Omron vb.)
@@ -244,7 +245,11 @@ export function DeviceHardwareChassisCard({
         }));
 
   return (
-    <div className="overflow-hidden rounded-[6px] border border-[#1E293B] bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#0F172A] text-white shadow-lg">
+    <SpotlightCard
+      tone="teal"
+      className="overflow-hidden rounded-[6px] border border-[#1E293B] bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#0F172A] text-white shadow-lg"
+    >
+      <InteractiveDotGrid dotColor="rgba(45, 212, 191, 0.14)" />
       {/* Üst Endüstriyel Şasi Şeridi */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-700/80 bg-slate-900/70 px-5 py-2.5 text-xs">
         <div className="flex flex-wrap items-center gap-2.5">
@@ -569,10 +574,16 @@ export function DeviceHardwareChassisCard({
 
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-800 pt-2.5 font-mono text-[11px] text-slate-400">
             <span>
-              {t("Fiziksel MAC", "Physical MAC")}: <strong className="text-slate-200">{mac ?? "—"}</strong>
+              {t("Fiziksel MAC", "Physical MAC")}:{" "}
+              <strong className="text-slate-200">
+                <DecryptedText text={mac ?? "—"} />
+              </strong>
             </span>
             <span>
-              {t("Seri No", "Serial")}: <strong className="text-slate-200">{serial ?? t("Pasif Keşif", "Passive Discovery")}</strong>
+              {t("Seri No", "Serial")}:{" "}
+              <strong className="text-slate-200">
+                <DecryptedText text={serial ?? t("Pasif Keşif", "Passive Discovery")} />
+              </strong>
             </span>
           </div>
         </div>
@@ -644,6 +655,6 @@ export function DeviceHardwareChassisCard({
           </div>
         </div>
       </div>
-    </div>
+    </SpotlightCard>
   );
 }

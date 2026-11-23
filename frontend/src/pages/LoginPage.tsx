@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Navigate } from "react-router";
+import { InteractiveDotGrid, SpotlightCard } from "../components/reactBits";
 import { Button, ErrorBox, Field, Input } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { useLang } from "../i18n";
@@ -28,10 +29,15 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F1F5F9] p-4">
-      <div className="grid w-full max-w-4xl grid-cols-1 overflow-hidden rounded-[4px] border border-[#E2E8F0] bg-white shadow-[0px_8px_13px_-3px_rgba(0,0,0,0.07)] md:grid-cols-12">
+    <div className="relative flex min-h-screen items-center justify-center bg-[#F1F5F9] p-4">
+      <InteractiveDotGrid dotColor="rgba(13, 148, 136, 0.18)" />
+      <SpotlightCard
+        tone="teal"
+        className="relative z-10 grid w-full max-w-4xl grid-cols-1 overflow-hidden rounded-[6px] border border-[#CBD5E1] bg-white shadow-[0px_14px_28px_-6px_rgba(15,23,42,0.12)] md:grid-cols-12"
+      >
         {/* Sol: TailAdmin Koyu Lacivert Marka Paneli */}
-        <div className="flex flex-col justify-between bg-[#1C2434] p-8 text-white md:col-span-6">
+        <div className="relative flex flex-col justify-between overflow-hidden bg-[#1C2434] p-8 text-white md:col-span-6">
+          <InteractiveDotGrid dotColor="rgba(45, 212, 191, 0.16)" />
           <div>
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-[4px] bg-[#0D9488] text-white">
@@ -146,7 +152,7 @@ export default function LoginPage() {
             </Button>
           </form>
         </div>
-      </div>
+      </SpotlightCard>
     </div>
   );
 }

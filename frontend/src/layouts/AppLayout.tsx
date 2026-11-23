@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
+import { StaggerStage, useLenisSmoothScroll } from "../components/reactBits";
 import { CriticalityBadge, ROLE_LABEL, formatDate } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { useLang } from "../i18n";
@@ -93,6 +94,8 @@ export default function AppLayout() {
   const [globalSearch, setGlobalSearch] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const scrollWrapperRef = useRef<HTMLDivElement>(null);
+  useLenisSmoothScroll(scrollWrapperRef);
 
   const sitesQuery = useQuery({
     queryKey: ["sites", activeOrg?.id],
@@ -292,8 +295,12 @@ export default function AppLayout() {
         </div>
       </aside>
 
-      {/* Sağ İçerik Sütunu: TailAdmin Üst Beyaz Header + Ana İçerik Tuvali */}
-      <div className="relative flex flex-1 flex-col overflow-x-hidden overflow-y-auto">
+      {/* Sağ İçerik Sütunu: TailAdmin Üst Beyaz Header + Ana İçerik Tuvali (Lenis Smooth Scroll) */}
+      <div
+        ref={scrollWrapperRef}
+        className="relative flex flex-1 flex-col overflow-x-hidden overflow-y-auto"
+      >
+        <div className="flex min-h-full flex-col">
         {/* TailAdmin Üst Beyaz Başlık Çubuğu */}
         <header className="sticky top-0 z-30 flex w-full items-center justify-between border-b border-[#E2E8F0] bg-white px-6 py-3 shadow-[0px_2px_4px_rgba(0,0,0,0.03)]">
           {/* Sol: Mobil Menü + Küresel Arama Çubuğu */}
@@ -526,13 +533,12 @@ export default function AppLayout() {
           </div>
         </header>
 
-        {/* Ana İçerik Alanı */}
+        {/* Ana İçerik Alanı (GSAP StaggerStage Sahne Geçişi ile) */}
         <main className="mx-auto w-full max-w-screen-2xl flex-1 p-5 md:p-6">
           {activeOrg ? (
-            // key={lang}: dil değişince sayfa ağacı yeniden oluşturulur; tüm metinler güncellenir.
-            <div key={lang}>
+            <StaggerStage stageKey={`${location.pathname}:${lang}`}>
               <Outlet />
-            </div>
+            </StaggerStage>
           ) : (
             <div className="rounded-[4px] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
               {t(
@@ -542,6 +548,7 @@ export default function AppLayout() {
             </div>
           )}
         </main>
+        </div>
       </div>
     </div>
   );

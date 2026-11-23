@@ -7,6 +7,7 @@ import type {
 import { Link } from "react-router";
 import { bi, getLocale, tx } from "../i18n";
 import type { Criticality } from "../types/api";
+import { CountUp, SpotlightCard } from "./reactBits";
 
 /**
  * TailAdmin + shadcn/ui tasarım sistemi bileşenleri.
@@ -179,7 +180,10 @@ export function StatCard({
   const subTitle = typeof displaySub === "string" ? displaySub : undefined;
 
   const inner = (
-    <div className="relative flex h-full flex-col overflow-hidden rounded-[6px] border border-[#CBD5E1]/80 bg-white px-5 pt-4 pb-4 shadow-[0px_10px_18px_-4px_rgba(15,23,42,0.06)] transition-all duration-150 hover:-translate-y-0.5 hover:border-teal-600/50 hover:shadow-md">
+    <SpotlightCard
+      tone={tone}
+      className="flex h-full flex-col rounded-[6px] border border-[#CBD5E1]/80 bg-white px-5 pt-4 pb-4 shadow-[0px_10px_18px_-4px_rgba(15,23,42,0.06)] transition-all duration-150 hover:-translate-y-0.5 hover:border-teal-600/50 hover:shadow-md"
+    >
       <div className={`absolute top-0 right-0 left-0 h-1 ${topBarColor}`} />
       <div className="flex items-center justify-between gap-2">
         <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-[8px] ${iconStyle}`}>
@@ -196,7 +200,7 @@ export function StatCard({
       </div>
       <div className="mt-3.5 min-w-0">
         <h4 className="truncate text-2xl leading-tight font-extrabold tracking-tight text-[#1C2434] tabular-nums">
-          {value}
+          <CountUp value={value} />
         </h4>
         <div title={label} className="mt-1 truncate text-xs font-semibold text-[#334155]">
           {label}
@@ -207,7 +211,7 @@ export function StatCard({
           </div>
         )}
       </div>
-    </div>
+    </SpotlightCard>
   );
 
   return to ? (

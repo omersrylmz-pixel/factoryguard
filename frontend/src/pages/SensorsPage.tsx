@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router";
+import { DecryptedText } from "../components/reactBits";
 import {
   Badge,
   Button,
@@ -551,7 +552,7 @@ export default function SensorsPage() {
                       </td>
                       <td className="px-4 py-3 font-mono text-slate-500">
                         <div className="inline-flex items-center gap-1.5" title={s.credential_fingerprint}>
-                          <span>{s.credential_fingerprint.slice(0, 14)}…</span>
+                          <DecryptedText text={`${s.credential_fingerprint.slice(0, 14)}…`} />
                           <button
                             type="button"
                             onClick={() => handleCopyFingerprint(s.id, s.credential_fingerprint)}
