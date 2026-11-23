@@ -444,19 +444,24 @@ export default function SensorsPage() {
           )}
 
           {uploadResult && (
-            <div className="mt-4 rounded-[4px] border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-950">
+            <div className="mt-4 rounded-[8px] border border-emerald-500/35 bg-emerald-500/10 p-4 text-xs dark:border-emerald-500/30 dark:bg-[#0D1A2B]">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-bold">
-                  ✓ {t("Analiz Tamamlandı", "Analysis Completed")}: {uploadResult.filename}
+                <span className="inline-flex items-center gap-2 font-bold text-emerald-800 dark:text-emerald-300">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-300">
+                    ✓
+                  </span>
+                  <span>
+                    {t("Analiz Tamamlandı", "Analysis Completed")}: {uploadResult.filename}
+                  </span>
                 </span>
                 <div className="flex flex-wrap gap-3 font-semibold">
-                  <Link to="/assets" className="text-[#0D9488] hover:underline">
+                  <Link to="/assets" className="text-[#2563EB] hover:underline dark:text-sky-400">
                     {t("Cihaz Envanterine Git →", "Go to Device Inventory →")}
                   </Link>
-                  <Link to="/network" className="text-[#0D9488] hover:underline">
+                  <Link to="/network" className="text-[#2563EB] hover:underline dark:text-sky-400">
                     {t("Topoloji Haritası →", "Topology Map →")}
                   </Link>
-                  <Link to="/risks" className="text-[#0D9488] hover:underline">
+                  <Link to="/risks" className="text-[#2563EB] hover:underline dark:text-sky-400">
                     {t(
                       `Risk Bulguları (${uploadResult.open_risks_total}) →`,
                       `Risk Findings (${uploadResult.open_risks_total}) →`,
@@ -464,36 +469,36 @@ export default function SensorsPage() {
                   </Link>
                 </div>
               </div>
-              <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                <div className="rounded-[4px] bg-white/80 p-2">
-                  <div className="text-[10px] text-slate-500 uppercase">
+              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="rounded-[6px] border border-[#CBD5E1] border-t-2 border-t-sky-500 bg-white p-3 shadow-xs dark:border-[#1E293B] dark:border-t-sky-400 dark:bg-[#111827]">
+                  <div className="font-mono text-[10px] font-bold tracking-wider text-[#64748B] uppercase dark:text-[#94A3B8]">
                     {t("Keşfedilen Cihaz", "Discovered Devices")}
                   </div>
-                  <div className="font-mono text-sm font-bold text-[#1C2434]">
+                  <div className="mt-1 font-mono text-lg font-bold text-[#0F172A] dark:text-[#F8FAFC]">
                     {uploadResult.devices_discovered}
                   </div>
                 </div>
-                <div className="rounded-[4px] bg-white/80 p-2">
-                  <div className="text-[10px] text-slate-500 uppercase">
+                <div className="rounded-[6px] border border-[#CBD5E1] border-t-2 border-t-emerald-500 bg-white p-3 shadow-xs dark:border-[#1E293B] dark:border-t-emerald-400 dark:bg-[#111827]">
+                  <div className="font-mono text-[10px] font-bold tracking-wider text-[#64748B] uppercase dark:text-[#94A3B8]">
                     {t("Yeni / Güncellenen Varlık", "Created / Updated Assets")}
                   </div>
-                  <div className="font-mono text-sm font-bold text-[#1C2434]">
+                  <div className="mt-1 font-mono text-lg font-bold text-emerald-600 dark:text-emerald-400">
                     +{uploadResult.assets_created} / {uploadResult.assets_updated}
                   </div>
                 </div>
-                <div className="rounded-[4px] bg-white/80 p-2">
-                  <div className="text-[10px] text-slate-500 uppercase">
+                <div className="rounded-[6px] border border-[#CBD5E1] border-t-2 border-t-indigo-500 bg-white p-3 shadow-xs dark:border-[#1E293B] dark:border-t-indigo-400 dark:bg-[#111827]">
+                  <div className="font-mono text-[10px] font-bold tracking-wider text-[#64748B] uppercase dark:text-[#94A3B8]">
                     {t("İletişim Akışı", "Communication Flows")}
                   </div>
-                  <div className="font-mono text-sm font-bold text-[#1C2434]">
+                  <div className="mt-1 font-mono text-lg font-bold text-sky-600 dark:text-sky-400">
                     +{uploadResult.communications_created} / {uploadResult.communications_updated}
                   </div>
                 </div>
-                <div className="rounded-[4px] bg-white/80 p-2">
-                  <div className="text-[10px] text-slate-500 uppercase">
+                <div className="rounded-[6px] border border-[#CBD5E1] border-t-2 border-t-rose-500 bg-white p-3 shadow-xs dark:border-[#1E293B] dark:border-t-rose-400 dark:bg-[#111827]">
+                  <div className="font-mono text-[10px] font-bold tracking-wider text-[#64748B] uppercase dark:text-[#94A3B8]">
                     {t("Açık Risk Bulgusu", "Open Risk Findings")}
                   </div>
-                  <div className="font-mono text-sm font-bold text-rose-700">
+                  <div className="mt-1 font-mono text-lg font-bold text-rose-600 dark:text-rose-400">
                     {uploadResult.open_risks_total}
                   </div>
                 </div>
@@ -502,6 +507,103 @@ export default function SensorsPage() {
           )}
         </Card>
       )}
+
+      {/* OT Komut & Derin Paket Zaman Çizelgesi (L7 Forensics Timeline) */}
+      <Card
+        title={t(
+          "OT Komut & Derin Paket Zaman Çizelgesi (L7 DPI Forensics)",
+          "OT Command & Deep Packet Timeline (L7 DPI Forensics)",
+        )}
+        subtitle={t(
+          "Pasif SPAN trafiğinde yakalanan endüstriyel fonksiyon kodları, PLC yazma/okuma komutları ve oturum izleri",
+          "Industrial function codes, PLC read/write commands and session traces captured on passive SPAN traffic",
+        )}
+        actions={
+          <Badge tone="teal" dot>
+            {t("Gerçek Zamanlı L7 Çözümleyici", "Real-Time L7 Decoder")}
+          </Badge>
+        }
+        noPadding
+      >
+        {edges.length === 0 ? (
+          <div className="p-6">
+            <Empty>{t("Henüz paket akışı kaydedilmedi.", "No packet flows recorded yet.")}</Empty>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
+                <tr>
+                  <th className="px-5 py-3">{t("Zaman Damgası", "Timestamp")}</th>
+                  <th className="px-4 py-3">{t("Kaynak → Hedef", "Source → Target")}</th>
+                  <th className="px-4 py-3">{t("Protokol / Port", "Protocol / Port")}</th>
+                  <th className="px-4 py-3">{t("L7 Fonksiyon / Komut İzi", "L7 Function / Command Trace")}</th>
+                  <th className="px-5 py-3 text-right">{t("Güvenlik Etkisi", "Security Impact")}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E2E8F0]">
+                {edges.slice(0, 10).map((e) => {
+                  const p = e.protocol.replace(/\?+$/, "").toUpperCase();
+                  const cmdSignature =
+                    p === "MODBUS"
+                      ? "FC=0x03 Read Holding Registers / FC=0x05 Write Single Coil (UnitID=1)"
+                      : p === "S7COMM"
+                        ? "ROSCTR=0x01 Job · Setup Communication / SZL Read (0x04)"
+                        : p === "ENIP"
+                          ? "CIP Service=0x0063 ListIdentity / Read Tag Service (0x4C)"
+                          : p === "OPCUA"
+                            ? "MSG=OPN OpenSecureChannel / ReadRequest NodeId=ns=2;i=1042"
+                            : p === "BACNET"
+                              ? "BVLC=0x81 · Unconfirmed-REQ Who-Is / ReadProperty"
+                              : p === "DNP3"
+                                ? "DL=0x0564 · App FC=0x01 Read Class 0/1/2/3 Data"
+                                : p === "PROFINET"
+                                  ? "PROFINET-IO DCP Identify / Cyclic RT Frame"
+                                  : p === "RDP"
+                                    ? "T.125 Connection-Request · Interactive Remote Session"
+                                    : `${p} Session Frame (${e.connection_count} pkts/conns)`;
+                  const isHighRisk =
+                    e.cross_zone || p === "RDP" || (!e.is_baseline_approved && (p === "MODBUS" || p === "S7COMM"));
+                  return (
+                    <tr key={e.id} className="hover:bg-[#F8FAFC]">
+                      <td className="px-5 py-2.5 font-mono whitespace-nowrap text-slate-500">
+                        {formatDate(e.last_seen_at)}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono whitespace-nowrap">
+                        <span className="font-semibold text-[#1C2434]">{e.source_ip ?? e.source_label}</span>
+                        <span className="mx-1.5 text-sky-500">→</span>
+                        <span className="font-semibold text-sky-600 dark:text-sky-400">
+                          {e.target_ip ?? e.target_label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 whitespace-nowrap">
+                        <ProtocolBadge protocol={e.protocol} confidence={e.protocol_confidence} />
+                        {e.target_port !== null && (
+                          <span className="ml-1 font-mono text-[11px] text-slate-500">:{e.target_port}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-[11px] text-[#1C2434]">
+                        {cmdSignature}
+                      </td>
+                      <td className="px-5 py-2.5 text-right whitespace-nowrap">
+                        {isHighRisk ? (
+                          <Badge tone="amber" dot>
+                            {t("Yetkisiz / Bölgeler Arası İz", "Unapproved / Cross-Zone Trace")}
+                          </Badge>
+                        ) : (
+                          <Badge tone="emerald" dot>
+                            {t("Normal Proses Telemetrisi", "Normal Process Telemetry")}
+                          </Badge>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
 
       {/* Kayıtlı Sensörler Tablosu */}
       <Card

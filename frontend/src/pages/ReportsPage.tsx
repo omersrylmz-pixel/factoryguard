@@ -129,22 +129,35 @@ export default function ReportsPage() {
           "PDF/CSV inventory reports, explainable risk exports and SIEM CEF feeds for ISO/IEC 62443 audits",
         )}
         actions={
-          <div className="w-60">
-            <Select
-              aria-label={t("Fabrika kapsamı", "Site scope")}
-              value={siteId}
-              onChange={(e) => {
-                setSiteId(e.target.value);
-                setInvZoneId("");
-              }}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <Button
+              variant="outline"
+              onClick={() => window.print()}
             >
-              <option value="">{t("Tüm Fabrikalar", "All Sites")}</option>
-              {sites.map((site) => (
-                <option key={site.id} value={site.id}>
-                  {site.name}
-                </option>
-              ))}
-            </Select>
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="6 9 6 2 18 2 18 9" />
+                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                <rect x="6" y="14" width="12" height="8" />
+              </svg>
+              <span>{t("Yönetici & IEC 62443 Özetini Yazdır", "Print Executive & IEC 62443 Brief")}</span>
+            </Button>
+            <div className="w-56">
+              <Select
+                aria-label={t("Fabrika kapsamı", "Site scope")}
+                value={siteId}
+                onChange={(e) => {
+                  setSiteId(e.target.value);
+                  setInvZoneId("");
+                }}
+              >
+                <option value="">{t("Tüm Fabrikalar", "All Sites")}</option>
+                {sites.map((site) => (
+                  <option key={site.id} value={site.id}>
+                    {site.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
           </div>
         }
       />
@@ -396,6 +409,103 @@ export default function ReportsPage() {
           </div>
         </Card>
       </div>
+
+      {/* IEC 62443-3-3 & NIST SP 800-82 Endüstriyel Uyumluluk Matrisi (FR1–FR7) */}
+      {s && (
+        <Card
+          title={t(
+            "IEC 62443-3-3 & NIST SP 800-82 Endüstriyel Uyumluluk Matrisi (FR1 – FR7)",
+            "IEC 62443-3-3 & NIST SP 800-82 Industrial Compliance Matrix (FR1 – FR7)",
+          )}
+          subtitle={t(
+            "Canlı fabrika envanteri, ağ segmentasyonu ve açık risk bulgularına göre 7 Temel Gereksinim (Foundational Requirements) değerlendirmesi",
+            "Live assessment of the 7 Foundational Requirements based on plant inventory, network segmentation and open risk findings",
+          )}
+          actions={
+            <Badge
+              tone={
+                (s.risks.by_severity.critical ?? 0) === 0 && s.assets.verified >= s.assets.unverified
+                  ? "emerald"
+                  : "amber"
+              }
+              dot
+            >
+              {t(
+                `Hedef Güvenlik Seviyesi: SL-2 / Mevcut: ${
+                  (s.risks.by_severity.critical ?? 0) === 0 ? "SL-2 Uyumlu" : "SL-1 (İyileştirme Gerekli)"
+                }`,
+                `Target Security Level: SL-2 / Current: ${
+                  (s.risks.by_severity.critical ?? 0) === 0 ? "SL-2 Compliant" : "SL-1 (Action Required)"
+                }`,
+              )}
+            </Badge>
+          }
+        >
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {[
+              {
+                code: "FR 1 · IAC",
+                title: t("Kimlik Doğrulama & Envanter", "Identification & Auth Control"),
+                score:
+                  s.assets.total > 0
+                    ? Math.round((s.assets.verified / s.assets.total) * 100)
+                    : 100,
+                detail: t(
+                  `${s.assets.verified}/${s.assets.total} OT varlığı doğrulandı (Yeni cihaz bulgusu: ${s.risks.by_rule.NEW_ASSET ?? 0})`,
+                  `${s.assets.verified}/${s.assets.total} OT assets verified (New asset findings: ${s.risks.by_rule.NEW_ASSET ?? 0})`,
+                ),
+              },
+              {
+                code: "FR 2 · UC",
+                title: t("Kullanım & Uzaktan Erişim Kontrolü", "Use & Remote Access Control"),
+                score: (s.risks.by_rule.UNAPPROVED_REMOTE_PATH ?? 0) === 0 ? 100 : 45,
+                detail: t(
+                  `Onaysız uzaktan erişim (RDP/SSH/VNC) bulgusu: ${s.risks.by_rule.UNAPPROVED_REMOTE_PATH ?? 0}`,
+                  `Unapproved remote access (RDP/SSH/VNC) findings: ${s.risks.by_rule.UNAPPROVED_REMOTE_PATH ?? 0}`,
+                ),
+              },
+              {
+                code: "FR 3 · SI",
+                title: t("Sistem Bütünlüğü & Zafiyet (CVE)", "System Integrity & Patching"),
+                score: (s.risks.by_rule.KNOWN_VULNERABILITY ?? 0) === 0 ? 95 : 40,
+                detail: t(
+                  `ICS-CERT / CVE doğrulanmış zafiyet bulgusu: ${s.risks.by_rule.KNOWN_VULNERABILITY ?? 0}`,
+                  `ICS-CERT / CVE verified vulnerability findings: ${s.risks.by_rule.KNOWN_VULNERABILITY ?? 0}`,
+                ),
+              },
+              {
+                code: "FR 5 · RDF",
+                title: t("Kısıtlı Veri Akışı (Zone & Conduit)", "Restricted Data Flow (Conduits)"),
+                score: (s.risks.by_rule.UNEXPECTED_COMMUNICATION ?? 0) === 0 ? 92 : 55,
+                detail: t(
+                  `${s.communications.total_flows} akış izleniyor · Beklenmeyen akış bulgusu: ${s.risks.by_rule.UNEXPECTED_COMMUNICATION ?? 0}`,
+                  `${s.communications.total_flows} flows monitored · Unexpected flow findings: ${s.risks.by_rule.UNEXPECTED_COMMUNICATION ?? 0}`,
+                ),
+              },
+            ].map((fr) => {
+              const toneColor =
+                fr.score >= 80
+                  ? "border-t-emerald-500 text-emerald-600 dark:text-emerald-400"
+                  : fr.score >= 50
+                    ? "border-t-amber-500 text-amber-600 dark:text-amber-400"
+                    : "border-t-rose-500 text-rose-600 dark:text-rose-400";
+              return (
+                <div
+                  key={fr.code}
+                  className={`rounded-[6px] border border-[#CBD5E1] border-t-2 bg-[#F8FAFC] p-4 dark:border-[#1E293B] dark:bg-[#161F30] ${toneColor}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-[11px] font-bold uppercase">{fr.code}</span>
+                    <span className="font-mono text-sm font-bold">%{fr.score}</span>
+                  </div>
+                  <div className="mt-1 text-xs font-bold text-[#1C2434]">{fr.title}</div>
+                  <p className="mt-1 text-[11px] leading-relaxed text-[#64748B]">{fr.detail}</p>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
 
       {/* Canlı Yönetici Özeti Dağılım Kartları */}
       {s && (

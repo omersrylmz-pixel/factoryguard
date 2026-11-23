@@ -1,267 +1,319 @@
-import type {
-  ButtonHTMLAttributes,
-  InputHTMLAttributes,
-  ReactNode,
-  SelectHTMLAttributes,
+import {
+  Children,
+  isValidElement,
+  useEffect,
+  useRef,
+  useState,
+  type ButtonHTMLAttributes,
+  type ChangeEvent,
+  type InputHTMLAttributes,
+  type ReactElement,
+  type ReactNode,
+  type SelectHTMLAttributes,
 } from "react";
 import { Link } from "react-router";
-import { bi, getLocale, tx } from "../i18n";
-import type { Criticality } from "../types/api";
+import { bi, tx } from "../i18n";
+import { ApiError } from "../services/api";
+import type { AssetType, Criticality, RiskStatus, Role } from "../types/api";
 import { CountUp, SpotlightCard } from "./reactBits";
 
-/**
- * FactoryGuard Lite — Endüstriyel OT Komuta & Telemetri Tasarım Sistemi (Dark + Light Mode).
- * Renk Şeması:
- * - Birincil Komuta Rengi: Endüstriyel Kobalt & Elektrik Mavisi (#2563EB -> #0284C7 / #38BDF8)
- * - Koyu Mod Yüzeyler: Obsidyen (#0B0F19) & Çelik Antrasit (#111827 / #161F30)
- * - Açık Mod Yüzeyler: Teknik Gri (#EEF2F6) & Beyaz (#FFFFFF)
- * - Anlamlı Durum Renkleri: Zümrüt (Doğrulanmış/Güvenli), Kehribar (İnceleme/Uyarı), Kızıl (Kritik Risk)
- */
-
-export function Button({
-  variant = "primary",
-  size = "md",
-  className = "",
-  ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary" | "outline" | "ghost" | "danger" | "dark";
-  size?: "sm" | "md" | "lg";
-}) {
-  const variantStyles = {
-    primary:
-      "border border-[#1D4ED8] bg-gradient-to-b from-[#3B82F6] to-[#1D4ED8] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_2px_8px_rgba(37,99,235,0.32)] hover:from-[#60A5FA] hover:to-[#2563EB] active:translate-y-[0.5px] focus-visible:ring-2 focus-visible:ring-[#3B82F6]/40 disabled:border-slate-300 disabled:from-slate-200 disabled:to-slate-200 disabled:text-slate-500 disabled:shadow-none dark:disabled:border-slate-800 dark:disabled:from-slate-800 dark:disabled:to-slate-800 dark:disabled:text-slate-500",
-    secondary:
-      "border border-[#CBD5E1] bg-gradient-to-b from-white to-[#F1F5F9] text-[#0F172A] shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_1px_2px_rgba(15,23,42,0.06)] hover:border-[#2563EB] hover:text-[#2563EB] active:translate-y-[0.5px] disabled:opacity-50 dark:border-[#334155] dark:from-[#1E293B] dark:to-[#0F172A] dark:text-[#E2E8F0] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] dark:hover:border-[#38BDF8] dark:hover:text-[#38BDF8]",
-    outline:
-      "border border-[#2563EB]/70 bg-[#2563EB]/10 text-[#1D4ED8] shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] hover:bg-[#2563EB]/20 active:translate-y-[0.5px] disabled:opacity-45 dark:border-[#38BDF8]/50 dark:bg-[#0284C7]/15 dark:text-[#38BDF8] dark:hover:bg-[#0284C7]/25",
-    ghost:
-      "bg-transparent text-slate-600 hover:bg-slate-200/60 hover:text-[#0F172A] dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white",
-    danger:
-      "border border-rose-500/40 bg-gradient-to-b from-rose-500/15 to-rose-600/25 text-rose-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] hover:from-rose-500/25 hover:to-rose-600/35 active:translate-y-[0.5px] disabled:opacity-40 dark:text-rose-300",
-    dark:
-      "border border-[#334155] bg-gradient-to-b from-[#1E293B] to-[#0F172A] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_2px_6px_rgba(15,23,42,0.25)] hover:border-[#38BDF8]/60 hover:from-[#334155] hover:to-[#1E293B] active:translate-y-[0.5px] disabled:opacity-45",
-  }[variant];
-
-  const sizeStyles = {
-    sm: "h-7 px-2.5 text-[11px] gap-1.5 tracking-wide",
-    md: "h-9 px-3.5 text-xs gap-2 tracking-wide",
-    lg: "h-10 px-4 text-sm gap-2 tracking-wide",
-  }[size];
-
-  return (
-    <button
-      className={`inline-flex cursor-pointer items-center justify-center rounded-[5px] font-semibold whitespace-nowrap transition-all duration-150 disabled:cursor-not-allowed ${variantStyles} ${sizeStyles} ${className}`}
-      {...props}
-    />
-  );
-}
-
-export function Input({ className = "", ...props }: InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <input
-      className={`h-9 w-full rounded-[5px] border border-[#CBD5E1] bg-white px-3 py-1.5 text-xs text-[#0F172A] placeholder:text-slate-400 focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/20 focus:outline-none disabled:bg-slate-100 dark:border-[#334155] dark:bg-[#0F172A] dark:text-[#F1F5F9] dark:placeholder:text-slate-500 dark:focus:border-[#38BDF8] ${className}`}
-      {...props}
-    />
-  );
-}
-
-export function Select({ className = "", ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return (
-    <select
-      className={`h-9 w-full rounded-[5px] border border-[#CBD5E1] bg-white px-3 py-1.5 text-xs text-[#0F172A] focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/20 focus:outline-none disabled:bg-slate-100 dark:border-[#334155] dark:bg-[#0F172A] dark:text-[#F1F5F9] dark:focus:border-[#38BDF8] ${className}`}
-      {...props}
-    />
-  );
-}
-
-export function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="block space-y-1.5">
-      <span className="block text-xs font-semibold text-[#1E293B] dark:text-slate-300">{label}</span>
-      {children}
-    </label>
-  );
-}
+/* ============================================================================
+ * FactoryGuard — Endüstriyel OT Siber Güvenlik & Komuta Tasarım Sistemi
+ * ============================================================================ */
 
 export function Card({
   title,
   subtitle,
   actions,
-  noPadding = false,
-  className = "",
   children,
+  className = "",
+  noPadding = false,
 }: {
-  title?: string;
-  subtitle?: string;
+  title?: ReactNode;
+  subtitle?: ReactNode;
   actions?: ReactNode;
-  noPadding?: boolean;
-  className?: string;
   children: ReactNode;
+  className?: string;
+  noPadding?: boolean;
 }) {
   return (
     <section
-      className={`overflow-hidden rounded-[6px] border border-[#CBD5E1]/90 bg-white shadow-[0px_10px_22px_-6px_rgba(15,23,42,0.08)] dark:border-[#1E293B] dark:bg-[#111827] dark:shadow-[0px_12px_28px_-8px_rgba(0,0,0,0.45)] ${className}`}
+      className={`rounded-[8px] border border-[#CBD5E1]/90 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06)] dark:border-[#1E293B] dark:bg-[#111827] dark:shadow-[0_4px_20px_rgba(0,0,0,0.35)] ${className}`}
     >
-      {title && (
-        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E2E8F0] bg-gradient-to-r from-[#F8FAFC] via-white to-[#F8FAFC] px-5 py-3.5 dark:border-[#1E293B] dark:from-[#161F30] dark:via-[#111827] dark:to-[#161F30]">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="h-3.5 w-1 shrink-0 rounded-full bg-gradient-to-b from-[#3B82F6] to-[#06B6D4]" />
-              <h2 className="text-sm font-bold tracking-tight text-[#0F172A] dark:text-slate-100">{title}</h2>
-            </div>
-            {subtitle && <p className="mt-0.5 pl-3 text-xs text-[#64748B] dark:text-slate-400">{subtitle}</p>}
+      {(title || actions) && (
+        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E2E8F0] px-6 py-4 dark:border-[#1E293B]">
+          <div>
+            {title && (
+              <h2 className="font-display flex items-center gap-2.5 text-sm font-bold tracking-tight text-[#1C2434]">
+                <span className="inline-block h-3.5 w-1 rounded-full bg-gradient-to-b from-[#3B82F6] to-[#06B6D4]" />
+                <span>{title}</span>
+              </h2>
+            )}
+            {subtitle && <p className="mt-0.5 text-xs text-[#64748B]">{subtitle}</p>}
           </div>
           {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
         </header>
       )}
-      <div className={noPadding ? "" : "p-5"}>{children}</div>
+      <div className={noPadding ? "" : "p-6"}>{children}</div>
     </section>
   );
 }
 
-type Tone = "teal" | "amber" | "red" | "slate" | "emerald";
+export function PageHeader({
+  title,
+  subtitle,
+  actions,
+  breadcrumb,
+}: {
+  title: ReactNode;
+  subtitle?: ReactNode;
+  actions?: ReactNode;
+  breadcrumb?: string;
+}) {
+  return (
+    <div className="relative mb-6 overflow-hidden rounded-[8px] border border-[#CBD5E1] bg-white px-6 py-4 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:border-[#1E293B] dark:bg-[#111827]">
+      <div className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-[#2563EB] via-[#0284C7] to-[#06B6D4]" />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          {breadcrumb && (
+            <div className="mb-1 flex items-center gap-1.5 font-mono text-[11px] font-semibold tracking-wider text-[#64748B] uppercase">
+              <span>{tx("Genel Bakış", "Overview")}</span>
+              <span>/</span>
+              <span className="text-[#2563EB] dark:text-[#38BDF8]">{breadcrumb}</span>
+              <span className="ml-2 inline-flex items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[9px] font-bold text-emerald-600 dark:text-emerald-400">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+                {tx("SPAN TELEMETRİ · AKTİF", "SPAN TELEMETRY · LIVE")}
+              </span>
+            </div>
+          )}
+          <h1 className="font-display text-xl font-bold tracking-tight text-[#1C2434] sm:text-2xl">
+            {title}
+          </h1>
+          {subtitle && <p className="mt-0.5 text-xs text-[#64748B]">{subtitle}</p>}
+        </div>
+        {actions && <div className="flex flex-wrap items-center gap-2.5">{actions}</div>}
+      </div>
+    </div>
+  );
+}
 
-/**
- * Endüstriyel Telemetri KPI Kartı (StatCard):
- * - Her kart kendi durum tonuna (Kobalt Mavi, Zümrüt, Kehribar, Kızıl, Çelik İndigo) göre
- *   farklı üst lazer şeridi, ikon kutusu, sağ mikro sinyal barları ve alt durum LED şeridi alır.
- */
+export type Tone =
+  | "teal"
+  | "navy"
+  | "amber"
+  | "red"
+  | "emerald"
+  | "slate"
+  | "mono"
+  | "default"
+  | "success"
+  | "warning"
+  | "danger";
+
+const TONE_BADGE_CLASSES: Record<Tone, string> = {
+  teal: "bg-sky-500/10 text-sky-700 border border-sky-500/25 dark:bg-sky-500/15 dark:text-sky-300 dark:border-sky-500/30",
+  navy: "bg-[#1E293B] text-white border border-[#334155]",
+  amber:
+    "bg-amber-500/10 text-amber-800 border border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30",
+  warning:
+    "bg-amber-500/10 text-amber-800 border border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30",
+  red: "bg-rose-500/10 text-rose-700 border border-rose-500/30 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/30",
+  danger:
+    "bg-rose-500/10 text-rose-700 border border-rose-500/30 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/30",
+  emerald:
+    "bg-emerald-500/10 text-emerald-800 border border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30",
+  success:
+    "bg-emerald-500/10 text-emerald-800 border border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30",
+  slate:
+    "bg-slate-500/10 text-slate-700 border border-slate-500/25 dark:bg-slate-500/15 dark:text-slate-300 dark:border-slate-500/30",
+  default:
+    "bg-slate-500/10 text-slate-700 border border-slate-500/25 dark:bg-slate-500/15 dark:text-slate-300 dark:border-slate-500/30",
+  mono:
+    "bg-slate-500/10 text-[#1C2434] border border-slate-500/25 font-mono dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700",
+};
+
+const TONE_DOT_CLASSES: Record<Tone, string> = {
+  teal: "bg-sky-500",
+  navy: "bg-indigo-400",
+  amber: "bg-amber-500",
+  warning: "bg-amber-500",
+  red: "bg-rose-500",
+  danger: "bg-rose-500",
+  emerald: "bg-emerald-500",
+  success: "bg-emerald-500",
+  slate: "bg-slate-400",
+  default: "bg-slate-400",
+  mono: "bg-sky-500",
+};
+
+const STAT_TOP_BAR_GRADIENT: Record<Tone, string> = {
+  teal: "from-[#2563EB] via-[#0284C7] to-[#06B6D4]",
+  navy: "from-[#4F46E5] via-[#3B82F6] to-[#38BDF8]",
+  amber: "from-[#D97706] via-[#F59E0B] to-[#FBBF24]",
+  warning: "from-[#D97706] via-[#F59E0B] to-[#FBBF24]",
+  red: "from-[#E11D48] via-[#F43F5E] to-[#FB7185]",
+  danger: "from-[#E11D48] via-[#F43F5E] to-[#FB7185]",
+  emerald: "from-[#059669] via-[#10B981] to-[#34D399]",
+  success: "from-[#059669] via-[#10B981] to-[#34D399]",
+  slate: "from-[#475569] via-[#64748B] to-[#94A3B8]",
+  default: "from-[#475569] via-[#64748B] to-[#94A3B8]",
+  mono: "from-[#2563EB] to-[#06B6D4]",
+};
+
+const STAT_ICON_BOX: Record<Tone, string> = {
+  teal: "border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400",
+  navy: "border-indigo-500/30 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
+  amber: "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  warning: "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  red: "border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400",
+  danger: "border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400",
+  emerald: "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  success: "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  slate: "border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-slate-400",
+  default: "border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-slate-400",
+  mono: "border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400",
+};
+
+const STAT_SIGNAL_BAR: Record<Tone, string> = {
+  teal: "bg-sky-500/80 dark:bg-sky-400/80",
+  navy: "bg-indigo-500/80 dark:bg-indigo-400/80",
+  amber: "bg-amber-500/80 dark:bg-amber-400/80",
+  warning: "bg-amber-500/80 dark:bg-amber-400/80",
+  red: "bg-rose-500/85 dark:bg-rose-400/85",
+  danger: "bg-rose-500/85 dark:bg-rose-400/85",
+  emerald: "bg-emerald-500/80 dark:bg-emerald-400/80",
+  success: "bg-emerald-500/80 dark:bg-emerald-400/80",
+  slate: "bg-slate-500/70 dark:bg-slate-400/70",
+  default: "bg-slate-500/70 dark:bg-slate-400/70",
+  mono: "bg-sky-500/80 dark:bg-sky-400/80",
+};
+
 export function StatCard({
   label,
   value,
   subtext,
   hint,
-  tone,
-  badge,
-  badgeTone = "teal",
   icon,
+  badge,
+  badgeTone,
+  tone,
   to,
 }: {
   label: string;
   value: ReactNode;
   subtext?: ReactNode;
   hint?: ReactNode;
-  tone?: "teal" | "navy" | "emerald" | "amber" | "red" | "slate";
-  badge?: string | { text: string; tone?: Tone };
+  icon?: ReactNode;
+  badge?: ReactNode | { text: ReactNode; tone?: Tone };
   badgeTone?: Tone;
-  icon: ReactNode;
+  tone?: Tone;
   to?: string;
 }) {
-  const badgeText = typeof badge === "object" && badge !== null ? badge.text : badge;
+  const isBadgeObj =
+    badge !== null && typeof badge === "object" && "text" in (badge as Record<string, unknown>);
+  const resolvedBadgeText = isBadgeObj
+    ? (badge as { text: ReactNode; tone?: Tone }).text
+    : (badge as ReactNode);
   const effectiveBadgeTone: Tone =
-    typeof badge === "object" && badge !== null ? (badge.tone ?? badgeTone) : badgeTone;
+    (isBadgeObj ? (badge as { text: ReactNode; tone?: Tone }).tone : undefined) ??
+    badgeTone ??
+    tone ??
+    "teal";
+  const effectiveCardTone: Tone = tone ?? effectiveBadgeTone;
+  const resolvedSubtext = subtext ?? hint;
 
-  // Eğer tone açıkça verilmemişse badgeTone'dan türet; böylece 4 kart aynı renkte kalmaz!
-  const effectiveCardTone = tone ?? effectiveBadgeTone;
+  const animatedValue =
+    typeof value === "number" ||
+    (typeof value === "string" && /^\d+(\.\d+)?(\/100|%|\s*ms)?$/.test(value.trim())) ? (
+      <CountUp value={value} />
+    ) : (
+      value
+    );
 
-  const badgeToneMap = {
-    teal: "bg-sky-500/12 text-sky-700 border-sky-500/30 dark:bg-sky-500/15 dark:text-sky-300 dark:border-sky-400/30",
-    emerald:
-      "bg-emerald-500/12 text-emerald-700 border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-400/30",
-    amber:
-      "bg-amber-500/14 text-amber-800 border-amber-500/35 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-400/30",
-    red: "bg-rose-500/14 text-rose-700 border-rose-500/35 dark:bg-rose-500/18 dark:text-rose-300 dark:border-rose-400/35",
-    slate:
-      "bg-slate-500/12 text-slate-700 border-slate-500/25 dark:bg-slate-700/40 dark:text-slate-300 dark:border-slate-600",
-  }[effectiveBadgeTone];
+  const signalBars = [34, 58, 44, 78, 62, 95, 72];
 
-  const topBarColor = {
-    teal: "bg-gradient-to-r from-[#2563EB] via-[#0284C7] to-[#06B6D4]",
-    emerald: "bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-400",
-    amber: "bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-400",
-    red: "bg-gradient-to-r from-rose-600 via-red-500 to-orange-500",
-    navy: "bg-gradient-to-r from-indigo-600 via-blue-600 to-sky-400",
-    slate: "bg-gradient-to-r from-slate-600 to-slate-400",
-  }[effectiveCardTone];
-
-  const iconStyle = {
-    teal: "bg-blue-500/10 text-[#2563EB] ring-1 ring-blue-500/25 dark:bg-sky-500/15 dark:text-sky-400 dark:ring-sky-400/30",
-    emerald:
-      "bg-emerald-500/10 text-emerald-600 ring-1 ring-emerald-500/25 dark:bg-emerald-500/15 dark:text-emerald-400 dark:ring-emerald-400/30",
-    amber:
-      "bg-amber-500/12 text-amber-600 ring-1 ring-amber-500/30 dark:bg-amber-500/15 dark:text-amber-400 dark:ring-amber-400/30",
-    red: "bg-rose-500/12 text-rose-600 ring-1 ring-rose-500/30 dark:bg-rose-500/15 dark:text-rose-400 dark:ring-rose-400/30",
-    navy: "bg-indigo-500/10 text-indigo-600 ring-1 ring-indigo-500/25 dark:bg-indigo-500/15 dark:text-indigo-400 dark:ring-indigo-400/30",
-    slate:
-      "bg-slate-500/10 text-slate-600 ring-1 ring-slate-500/20 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700",
-  }[effectiveCardTone];
-
-  const barHex = {
-    teal: "#3B82F6",
-    emerald: "#10B981",
-    amber: "#F59E0B",
-    red: "#F43F5E",
-    navy: "#6366F1",
-    slate: "#64748B",
-  }[effectiveCardTone];
-
-  const displaySub = subtext ?? hint;
-  const subTitle = typeof displaySub === "string" ? displaySub : undefined;
+  const spotlightTone: "teal" | "navy" | "amber" | "red" | "emerald" | "slate" =
+    effectiveCardTone === "warning"
+      ? "amber"
+      : effectiveCardTone === "danger"
+        ? "red"
+        : effectiveCardTone === "success"
+          ? "emerald"
+          : effectiveCardTone === "default" || effectiveCardTone === "mono"
+            ? "teal"
+            : effectiveCardTone;
 
   const inner = (
     <SpotlightCard
-      tone={effectiveCardTone}
-      className="flex h-full flex-col justify-between rounded-[6px] border border-[#CBD5E1]/90 bg-white px-5 pt-4 pb-3.5 shadow-[0px_10px_20px_-6px_rgba(15,23,42,0.08)] transition-all duration-150 hover:-translate-y-0.5 hover:border-[#3B82F6]/60 hover:shadow-lg dark:border-[#1E293B] dark:bg-[#111827] dark:shadow-[0px_12px_26px_-8px_rgba(0,0,0,0.5)] dark:hover:border-sky-500/50"
+      tone={spotlightTone}
+      className="group relative flex h-full flex-col justify-between rounded-[8px] border border-[#CBD5E1]/90 bg-white p-5 shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[#3B82F6]/60 hover:shadow-[0_10px_24px_-8px_rgba(37,99,235,0.22)] dark:border-[#1E293B] dark:bg-[#111827] dark:hover:border-[#38BDF8]/50"
     >
-      <div className={`absolute top-0 right-0 left-0 h-1 ${topBarColor}`} />
-
-      {/* Üst Satır: İkon + Durum Rozeti */}
-      <div className="flex items-center justify-between gap-2">
-        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px] ${iconStyle}`}>
-          {icon}
+      <div
+        className={`mb-3.5 h-1 w-full rounded-full bg-gradient-to-r ${STAT_TOP_BAR_GRADIENT[effectiveCardTone]}`}
+      />
+      <div className="flex items-start justify-between gap-3">
+        <div
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px] border ${STAT_ICON_BOX[effectiveCardTone]}`}
+        >
+          {icon ?? (
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+            </svg>
+          )}
         </div>
-        {badgeText && (
+        {resolvedBadgeText && (
           <span
-            title={badgeText}
-            className={`max-w-[62%] truncate rounded-[4px] border px-2.5 py-0.5 font-mono text-[10.5px] font-bold ${badgeToneMap}`}
+            className={`inline-flex items-center rounded-[5px] px-2.5 py-0.5 font-mono text-[11px] font-semibold ${TONE_BADGE_CLASSES[effectiveBadgeTone]}`}
           >
-            {badgeText}
+            {resolvedBadgeText}
           </span>
         )}
       </div>
 
-      {/* Orta Satır: Büyük Sayısal Metrik + Sağ Mikro Telemetri Sinyal Çubukları */}
-      <div className="mt-3.5 flex items-end justify-between gap-3">
+      <div className="mt-4 flex items-end justify-between gap-3">
         <div className="min-w-0">
-          <h4 className="truncate font-mono text-2xl leading-tight font-extrabold tracking-tight text-[#0F172A] tabular-nums dark:text-white">
-            <CountUp value={value} />
-          </h4>
-          <div title={label} className="mt-1 truncate text-xs font-bold text-[#334155] dark:text-slate-200">
+          <div className="font-display font-mono text-2xl font-bold tracking-tight text-[#1C2434]">
+            {animatedValue}
+          </div>
+          <div
+            className="mt-1 truncate text-xs font-semibold text-[#1C2434]"
+            title={typeof label === "string" ? label : undefined}
+          >
             {label}
           </div>
         </div>
 
-        {/* Sağ Mikro Sinyal Barları (Kart içi boşluğu dolduran endüstriyel gösterge) */}
-        <div className="flex h-8 shrink-0 items-end gap-1 pb-0.5 opacity-80" aria-hidden="true">
-          {[35, 60, 45, 80, 65, 100, 75].map((h, i) => (
+        <div
+          aria-hidden="true"
+          className="flex h-8 shrink-0 items-end gap-[3px] pb-0.5 opacity-80 transition-opacity group-hover:opacity-100"
+        >
+          {signalBars.map((h, i) => (
             <span
               key={i}
-              className="w-1 rounded-t-[1px]"
-              style={{
-                height: `${h}%`,
-                backgroundColor: i >= 4 ? barHex : "rgba(148,163,184,0.28)",
-              }}
+              style={{ height: `${h}%` }}
+              className={`w-[3px] rounded-t-[1.5px] ${
+                i >= 4
+                  ? STAT_SIGNAL_BAR[effectiveCardTone]
+                  : "bg-slate-300 dark:bg-slate-700"
+              }`}
             />
           ))}
         </div>
       </div>
 
-      {/* Alt Telemetri Durum Şeridi */}
-      {displaySub && (
-        <div
-          title={subTitle}
-          className="mt-3 flex items-center gap-2 border-t border-[#E2E8F0] pt-2 text-[11px] font-medium text-[#64748B] dark:border-[#1E293B] dark:text-slate-400"
-        >
-          <span
-            className="h-1.5 w-1.5 shrink-0 rounded-full"
-            style={{ backgroundColor: barHex }}
-          />
-          <span className="truncate">{displaySub}</span>
-        </div>
-      )}
+      <div className="mt-3 flex items-center justify-between border-t border-[#E2E8F0] pt-2.5 text-[11px] text-[#64748B] dark:border-[#1E293B]">
+        <span className="inline-flex items-center gap-1.5 truncate">
+          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONE_DOT_CLASSES[effectiveCardTone]}`} />
+          <span className="truncate">{resolvedSubtext ?? "\u00A0"}</span>
+        </span>
+        {to && (
+          <span className="ml-2 shrink-0 font-mono text-[10px] font-bold text-[#2563EB] opacity-0 transition-opacity group-hover:opacity-100 dark:text-[#38BDF8]">
+            →
+          </span>
+        )}
+      </div>
     </SpotlightCard>
   );
-
   return to ? (
     <Link to={to} className="block h-full">
       {inner}
@@ -271,105 +323,299 @@ export function StatCard({
   );
 }
 
+/* ============================================================================
+ * Taktil Mühendislik Butonları (Matte Precision Engineering Style)
+ * ============================================================================ */
+
+const BTN_VARIANTS = {
+  primary:
+    "border border-[#3B82F6]/80 bg-[#2563EB] text-white shadow-[0_1px_2px_rgba(15,23,42,0.2),inset_0_1px_0_rgba(255,255,255,0.16)] hover:bg-[#1D4ED8] hover:border-[#60A5FA] active:translate-y-[0.5px] dark:border-[#3B82F6]/70 dark:bg-[#2563EB] dark:hover:bg-[#3B82F6]",
+  secondary:
+    "border border-[#CBD5E1] bg-white text-[#0F172A] shadow-[0_1px_2px_rgba(15,23,42,0.05)] hover:border-[#94A3B8] hover:bg-[#F8FAFC] active:translate-y-[0.5px] dark:border-[#2A364F] dark:bg-[#161F30] dark:text-[#E2E8F0] dark:hover:border-[#3B82F6]/60 dark:hover:bg-[#1E293B]",
+  outline:
+    "border border-[#3B82F6]/45 bg-[#EFF6FF] text-[#1D4ED8] shadow-[0_1px_2px_rgba(37,99,235,0.06)] hover:border-[#2563EB] hover:bg-[#DBEAFE]/70 active:translate-y-[0.5px] dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-300 dark:hover:border-sky-400 dark:hover:bg-sky-500/20",
+  dark:
+    "border border-[#334155] bg-[#0F172A] text-white shadow-[0_1px_2px_rgba(0,0,0,0.25)] hover:bg-[#1E293B] active:translate-y-[0.5px] dark:border-[#334155] dark:bg-[#1E293B] dark:hover:bg-[#283548]",
+  danger:
+    "border border-rose-500/40 bg-rose-50 text-rose-700 hover:bg-rose-100 active:translate-y-[0.5px] dark:border-rose-500/40 dark:bg-rose-500/15 dark:text-rose-300 dark:hover:bg-rose-500/25",
+  ghost:
+    "border border-transparent text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#1C2434] dark:text-[#94A3B8] dark:hover:bg-[#1E293B] dark:hover:text-white",
+};
+
+export function Button({
+  variant = "primary",
+  size = "md",
+  className = "",
+  children,
+  ...rest
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: keyof typeof BTN_VARIANTS;
+  size?: "sm" | "md" | "lg";
+}) {
+  const sz =
+    size === "sm"
+      ? "px-2.5 py-1 text-xs"
+      : size === "lg"
+        ? "px-4 py-2.5 text-sm"
+        : "px-3.5 py-2 text-xs";
+  return (
+    <button
+      className={`inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-[6px] font-semibold tracking-[-0.01em] transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-50 ${BTN_VARIANTS[variant]} ${sz} ${className}`}
+      {...rest}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function Input({
+  label,
+  className = "",
+  ...rest
+}: InputHTMLAttributes<HTMLInputElement> & { label?: string }) {
+  const el = (
+    <input
+      className={`h-9 w-full rounded-[6px] border border-[#CBD5E1] bg-white px-3 py-1.5 text-xs text-[#1C2434] placeholder:text-[#64748B] focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/15 focus:outline-none dark:border-[#2A364F] dark:bg-[#161F30] dark:text-[#F8FAFC] dark:focus:border-[#38BDF8] ${className}`}
+      {...rest}
+    />
+  );
+  if (!label) return el;
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs font-semibold text-[#1C2434]">{label}</span>
+      {el}
+    </label>
+  );
+}
+
+/* ============================================================================
+ * Özel Temalı Popover Açılır Menü (Custom Themed Select Dropdown)
+ * Siyah-beyaz ham işletim sistemi penceresi yerine koyu/açık komuta temalı menü açar.
+ * ============================================================================ */
+
+interface ParsedOption {
+  value: string;
+  label: ReactNode;
+  disabled?: boolean;
+}
+
+function extractOptions(children: ReactNode): ParsedOption[] {
+  const list: ParsedOption[] = [];
+  Children.forEach(children, (child) => {
+    if (!isValidElement(child)) return;
+    const el = child as ReactElement<{
+      value?: string | number;
+      disabled?: boolean;
+      children?: ReactNode;
+    }>;
+    if (el.type === "option") {
+      list.push({
+        value: String(el.props.value ?? ""),
+        label: el.props.children,
+        disabled: Boolean(el.props.disabled),
+      });
+    }
+  });
+  return list;
+}
+
+export function Select({
+  label,
+  className = "",
+  children,
+  value,
+  defaultValue,
+  onChange,
+  disabled,
+  "aria-label": ariaLabel,
+}: SelectHTMLAttributes<HTMLSelectElement> & { label?: string }) {
+  const options = extractOptions(children);
+  const [open, setOpen] = useState(false);
+  const [internalVal, setInternalVal] = useState(
+    String(value ?? defaultValue ?? options[0]?.value ?? ""),
+  );
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  const currentVal = value !== undefined ? String(value) : internalVal;
+  const activeOption = options.find((o) => o.value === currentVal) ?? options[0];
+
+  useEffect(() => {
+    if (!open) return;
+    function onDocPointerDown(e: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function onDocKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocPointerDown);
+    document.addEventListener("keydown", onDocKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onDocPointerDown);
+      document.removeEventListener("keydown", onDocKeyDown);
+    };
+  }, [open]);
+
+  function handleSelect(nextValue: string) {
+    setInternalVal(nextValue);
+    setOpen(false);
+    if (onChange) {
+      const syntheticEvent = {
+        target: { value: nextValue },
+        currentTarget: { value: nextValue },
+      } as unknown as ChangeEvent<HTMLSelectElement>;
+      onChange(syntheticEvent);
+    }
+  }
+
+  const dropdownEl = (
+    <div ref={rootRef} className={`relative w-full ${className}`}>
+      <button
+        type="button"
+        disabled={disabled}
+        aria-label={ariaLabel ?? label}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((prev) => !prev)}
+        className={`flex h-9 w-full cursor-pointer items-center justify-between gap-2 rounded-[6px] border px-3 py-1.5 text-left text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+          open
+            ? "border-[#2563EB] bg-white text-[#0F172A] ring-2 ring-[#2563EB]/20 dark:border-[#38BDF8] dark:bg-[#161F30] dark:text-[#F8FAFC]"
+            : "border-[#CBD5E1] bg-white text-[#0F172A] hover:border-[#94A3B8] dark:border-[#2A364F] dark:bg-[#161F30] dark:text-[#E2E8F0] dark:hover:border-[#3B82F6]/60"
+        }`}
+      >
+        <span className="truncate">{activeOption?.label ?? currentVal}</span>
+        <svg
+          className={`h-3.5 w-3.5 shrink-0 text-[#64748B] transition-transform duration-150 dark:text-[#94A3B8] ${
+            open ? "rotate-180 text-[#2563EB] dark:text-[#38BDF8]" : ""
+          }`}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+
+      {open && (
+        <div
+          role="listbox"
+          className="absolute right-0 left-0 z-50 mt-1.5 max-h-64 min-w-[200px] overflow-y-auto rounded-[8px] border border-[#CBD5E1] bg-white p-1 shadow-[0_12px_32px_rgba(15,23,42,0.16)] dark:border-[#2A364F] dark:bg-[#0F172A] dark:shadow-[0_16px_40px_rgba(0,0,0,0.75)]"
+        >
+          {options.map((opt) => {
+            const isSelected = opt.value === currentVal;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                disabled={opt.disabled}
+                onClick={() => handleSelect(opt.value)}
+                className={`flex w-full cursor-pointer items-center justify-between gap-2 rounded-[5px] px-2.5 py-2 text-left text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                  isSelected
+                    ? "bg-[#2563EB]/12 font-semibold text-[#1D4ED8] dark:bg-[#2563EB]/25 dark:text-[#38BDF8]"
+                    : "text-[#1E293B] hover:bg-[#F1F5F9] dark:text-[#E2E8F0] dark:hover:bg-[#1E293B]"
+                }`}
+              >
+                <span className="truncate">{opt.label}</span>
+                {isSelected && (
+                  <svg
+                    className="h-3.5 w-3.5 shrink-0 text-[#2563EB] dark:text-[#38BDF8]"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
+  if (!label) return dropdownEl;
+  return (
+    <div className="block">
+      <span className="mb-1 block text-xs font-semibold text-[#1C2434]">{label}</span>
+      {dropdownEl}
+    </div>
+  );
+}
+
+export function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="block">
+      <span className="mb-1 block text-xs font-semibold text-[#1C2434]">{label}</span>
+      {children}
+    </div>
+  );
+}
+
 export function Badge({
-  variant = "default",
+  children,
+  variant,
   tone,
   dot = false,
-  children,
   className = "",
 }: {
-  variant?: "default" | "teal" | "success" | "warning" | "danger" | "outline" | "mono";
-  tone?: "teal" | "emerald" | "amber" | "red" | "slate" | "navy";
-  dot?: boolean;
   children: ReactNode;
+  variant?: Tone;
+  tone?: Tone;
+  dot?: boolean;
   className?: string;
 }) {
-  const toneToVariant = {
-    teal: "teal",
-    emerald: "success",
-    amber: "warning",
-    red: "danger",
-    slate: "default",
-    navy: "mono",
-  } as const;
-
-  const effectiveVariant = tone ? toneToVariant[tone] : variant;
-
-  const styles = {
-    default:
-      "bg-slate-500/12 text-slate-700 border-slate-400/30 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700",
-    teal: "bg-sky-500/12 text-sky-700 border-sky-500/30 dark:bg-sky-500/15 dark:text-sky-300 dark:border-sky-400/30",
-    success:
-      "bg-emerald-500/12 text-emerald-700 border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-400/30",
-    warning:
-      "bg-amber-500/14 text-amber-800 border-amber-500/35 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-400/30",
-    danger:
-      "bg-rose-500/14 text-rose-700 border-rose-500/35 dark:bg-rose-500/18 dark:text-rose-300 dark:border-rose-400/35",
-    outline:
-      "bg-white text-slate-700 border-[#CBD5E1] dark:bg-[#0F172A] dark:text-slate-300 dark:border-[#334155]",
-    mono: "bg-[#F1F5F9] text-[#0F172A] border-[#CBD5E1] font-mono dark:bg-[#1E293B] dark:text-sky-300 dark:border-[#334155]",
-  }[effectiveVariant];
-
+  const effectiveTone: Tone = tone ?? variant ?? "slate";
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-[4px] border px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap ${styles} ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-[5px] px-2 py-0.5 text-[11px] font-semibold ${TONE_BADGE_CLASSES[effectiveTone]} ${className}`}
     >
-      {dot && <span className="h-1.5 w-1.5 rounded-full bg-current" />}
+      {dot && <span className={`h-1.5 w-1.5 rounded-full ${TONE_DOT_CLASSES[effectiveTone]}`} />}
       {children}
     </span>
   );
 }
 
-export function ErrorBox({ error }: { error: unknown }) {
-  if (!error) return null;
-  const msg = error instanceof Error ? error.message : String(error);
-  return (
-    <div className="rounded-[5px] border border-rose-500/40 bg-rose-500/10 px-4 py-2.5 text-xs font-medium text-rose-700 dark:text-rose-300">
-      {msg}
-    </div>
-  );
-}
-
-export function Empty({ children }: { children: ReactNode }) {
-  return <p className="py-8 text-center text-xs text-[#64748B] dark:text-slate-400">{children}</p>;
-}
-
-/** Endüstriyel Komuta Sayfa Başlığı (Framed Command Header) */
-export function PageHeader({
-  title,
-  subtitle,
-  breadcrumb,
-  actions,
+export function ProtocolBadge({
+  protocol,
+  confidence,
 }: {
-  title: string;
-  subtitle?: string;
-  breadcrumb?: string;
-  actions?: ReactNode;
+  protocol: string;
+  confidence?: "observed" | "port_hint" | "unknown" | "none";
 }) {
+  const clean = protocol.replace(/\?+$/, "").toUpperCase();
+  const isHint = confidence === "port_hint" || protocol.endsWith("?");
   return (
-    <div className="relative mb-5 flex flex-wrap items-center justify-between gap-4 overflow-hidden rounded-[6px] border border-[#CBD5E1]/90 bg-white px-5 py-4 shadow-[0px_8px_18px_-6px_rgba(15,23,42,0.06)] dark:border-[#1E293B] dark:bg-[#111827] dark:shadow-[0px_10px_24px_-8px_rgba(0,0,0,0.45)]">
-      <div className="absolute top-0 bottom-0 left-0 w-1 bg-gradient-to-b from-[#3B82F6] via-[#0284C7] to-[#06B6D4]" />
-      <div className="min-w-0 pl-1">
-        <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-[#64748B] dark:text-slate-400">
-          {breadcrumb && (
-            <nav className="flex items-center gap-1.5">
-              <Link to="/" className="hover:text-[#2563EB] dark:hover:text-sky-400">
-                {tx("Genel Bakış", "Overview")}
-              </Link>
-              <span>/</span>
-              <span className="text-[#2563EB] dark:text-sky-400">{breadcrumb}</span>
-            </nav>
-          )}
-          <span className="inline-flex items-center gap-1.5 rounded-[3px] border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.2 font-mono text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-            {tx("SPAN TELEMETRİ · AKTİF", "SPAN TELEMETRY · LIVE")}
-          </span>
-        </div>
-        <h1 className="text-xl font-extrabold tracking-tight text-[#0F172A] dark:text-white">{title}</h1>
-        {subtitle && <p className="mt-0.5 max-w-3xl text-xs text-[#64748B] dark:text-slate-400">{subtitle}</p>}
-      </div>
-      {actions && <div className="flex flex-wrap items-center gap-2.5">{actions}</div>}
-    </div>
+    <span
+      title={
+        isHint
+          ? tx(
+              `${clean} — Port numarasına dayalı olası protokol tahmini`,
+              `${clean} — Port-based protocol inference`,
+            )
+          : tx(
+              `${clean} — Pasif paket analiziyle doğrulandı`,
+              `${clean} — Verified via passive deep packet inspection`,
+            )
+      }
+      className={`inline-flex items-center gap-1 rounded-[5px] px-2 py-0.5 font-mono text-[11px] font-semibold ${
+        isHint
+          ? "border border-amber-500/35 bg-amber-500/10 text-amber-800 dark:text-amber-300"
+          : "border border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300"
+      }`}
+    >
+      <span>{clean}</span>
+      {isHint && (
+        <span className="font-sans text-[10px] font-normal text-amber-700 dark:text-amber-400">
+          {tx("(port tahmini)", "(port hint)")}
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -381,115 +627,130 @@ export const CRITICALITY_LABEL: Record<Criticality, string> = bi({
 });
 
 export function CriticalityBadge({ value }: { value: Criticality }) {
-  const style = {
-    low: "border-slate-400/30 bg-slate-500/12 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300",
-    medium:
-      "border-amber-500/35 bg-amber-500/14 text-amber-800 dark:border-amber-400/30 dark:bg-amber-500/15 dark:text-amber-300",
-    high: "border-orange-500/35 bg-orange-500/15 text-orange-800 dark:border-orange-400/35 dark:bg-orange-500/18 dark:text-orange-300",
-    critical:
-      "border-rose-500/40 bg-rose-500/15 text-rose-700 dark:border-rose-400/40 dark:bg-rose-500/20 dark:text-rose-300",
-  }[value];
+  const map: Record<Criticality, Tone> = {
+    low: "slate",
+    medium: "amber",
+    high: "amber",
+    critical: "red",
+  };
   return (
-    <span
-      className={`inline-flex items-center rounded-[4px] border px-2 py-0.5 text-[11px] font-bold whitespace-nowrap ${style}`}
-    >
-      {CRITICALITY_LABEL[value]}
-    </span>
+    <Badge variant={map[value]} dot>
+      {CRITICALITY_LABEL[value] ?? value}
+    </Badge>
   );
 }
 
-export function ProtocolBadge({ protocol, confidence }: { protocol: string; confidence?: string }) {
-  const isHint = confidence === "port_hint" || protocol.endsWith("?");
-  const clean = protocol.replace(/\?+$/, "");
-  return (
-    <span
-      title={isHint ? tx("Yalnızca port numarasından tahmin edildi", "Inferred from port number only") : undefined}
-      className={`inline-flex items-center gap-1 rounded-[4px] border px-1.5 py-0.5 font-mono text-[10px] font-bold whitespace-nowrap uppercase ${
-        isHint
-          ? "border-amber-500/35 bg-amber-500/14 text-amber-800 dark:border-amber-400/30 dark:bg-amber-500/15 dark:text-amber-300"
-          : "border-sky-500/30 bg-sky-500/12 text-sky-700 dark:border-sky-400/30 dark:bg-sky-500/15 dark:text-sky-300"
-      }`}
-    >
-      {clean}
-      {isHint && (
-        <span className="font-sans text-[9px] font-normal normal-case">{tx("port tahmini", "port hint")}</span>
-      )}
-    </span>
-  );
-}
-
-export const ROLE_LABEL: Record<string, string> = bi({
-  owner: ["Sahip", "Owner"],
-  admin: ["Yönetici", "Admin"],
-  analyst: ["Analist", "Analyst"],
-  viewer: ["İzleyici", "Viewer"],
+export const STATUS_LABEL: Record<RiskStatus, string> = bi({
+  open: ["Açık", "Open"],
+  investigating: ["İnceleniyor", "Investigating"],
+  accepted: ["Risk Kabul Edildi", "Risk Accepted"],
+  resolved: ["Çözüldü", "Resolved"],
+  false_positive: ["Yanlış Pozitif", "False Positive"],
 });
 
-export const ASSET_TYPE_LABEL: Record<string, string> = bi({
-  plc: ["PLC / Kontrolcü", "PLC / Controller"],
-  hmi: ["HMI Paneli", "HMI Panel"],
+export function StatusBadge({ value }: { value: RiskStatus }) {
+  const map: Record<RiskStatus, Tone> = {
+    open: "red",
+    investigating: "amber",
+    accepted: "slate",
+    resolved: "emerald",
+    false_positive: "slate",
+  };
+  return (
+    <Badge variant={map[value]} dot>
+      {STATUS_LABEL[value] ?? value}
+    </Badge>
+  );
+}
+
+export const ASSET_TYPE_LABEL: Record<AssetType, string> = bi({
+  plc: ["PLC Kontrolcü", "PLC Controller"],
+  hmi: ["Operatör Paneli (HMI)", "Operator Panel (HMI)"],
   scada_server: ["SCADA Sunucusu", "SCADA Server"],
-  industrial_pc: ["Endüstriyel PC", "Industrial PC"],
-  network_device: ["Ağ Cihazı", "Network Device"],
   engineering_workstation: ["Mühendislik İstasyonu", "Engineering Workstation"],
-  server: ["Sunucu", "Server"],
-  computer: ["İş İstasyonu", "Workstation"],
-  unknown_device: ["Bilinmeyen Cihaz", "Unknown Device"],
+  industrial_pc: ["Endüstriyel PC", "Industrial PC"],
+  network_device: ["Endüstriyel Ağ Cihazı", "Industrial Network Device"],
+  server: ["Endüstriyel Sunucu", "Industrial Server"],
+  computer: ["İstemci / İş İstasyonu", "Client / Workstation"],
+  unknown_device: ["Sınıflandırılmamış Cihaz", "Unclassified Device"],
 });
 
-export function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString(getLocale(), { dateStyle: "short", timeStyle: "short" });
-}
+export const ROLE_LABEL: Record<Role, string> = bi({
+  owner: ["Sahip", "Owner"],
+  admin: ["Yönetici", "Administrator"],
+  analyst: ["OT Güvenlik Analisti", "OT Security Analyst"],
+  viewer: ["Gözlemci", "Viewer"],
+});
 
-const AUDIT_ACTION_LABEL: Record<string, readonly [string, string]> = {
-  "auth.login": ["Oturum açıldı", "Signed in"],
-  "auth.logout": ["Oturum kapatıldı", "Signed out"],
-  "auth.register": ["Kullanıcı kaydı", "User registered"],
-  "asset.create": ["Cihaz eklendi", "Asset created"],
-  "asset.update": ["Cihaz güncellendi", "Asset updated"],
-  "asset.verify": ["Cihaz doğrulandı", "Asset verified"],
-  "asset.bulk_verify": ["Cihazlar toplu doğrulandı", "Assets bulk-verified"],
-  "asset.csv_import": ["CSV envanter içe aktarıldı", "CSV inventory imported"],
-  "sensor.enroll": ["Sensör kaydedildi", "Sensor enrolled"],
-  "sensor.analyze_upload": ["PCAP / log analizi yüklendi", "PCAP / log analysis uploaded"],
-  "site.create": ["Fabrika eklendi", "Site created"],
-  "site.delete": ["Fabrika silindi", "Site deleted"],
-  "zone.create": ["Bölge eklendi", "Zone created"],
-  "zone.delete": ["Bölge silindi", "Zone deleted"],
-  "risk.status_change": ["Risk durumu değişti", "Risk status changed"],
-  "risk.bulk_status": ["Risk durumları toplu değişti", "Risk statuses bulk-changed"],
-  "risk.evaluate": ["Risk motoru çalıştırıldı", "Risk engine run"],
-  "communication.approve_baseline": ["İletişim baseline'a alındı", "Flow approved to baseline"],
-  "communication.approve_all_baseline": ["Tüm akışlar baseline'a alındı", "All flows approved to baseline"],
-  "organization.update": ["Organizasyon güncellendi", "Organization updated"],
-  "vulnerability_catalog.create": ["Zafiyet kataloğuna CVE eklendi", "CVE added to vulnerability catalog"],
-  "member.add": ["Yeni kullanıcı eklendi", "New member added"],
-  "member.update": ["Kullanıcı yetkisi güncellendi", "Member role updated"],
-  "cli.seed_demo": ["Demo verisi yüklendi", "Demo data seeded"],
-};
+const AUDIT_ACTION_LABEL: Record<string, string> = bi({
+  "sensor.enrolled": ["Sensör Kaydedildi", "Sensor Enrolled"],
+  "sensor.ingest": ["Pasif Keşif Paketi Alındı", "Passive Discovery Ingested"],
+  "sensor.upload_analyzed": ["PCAP / Zeek Dosyası Analiz Edildi", "PCAP / Zeek File Analyzed"],
+  "site.created": ["Fabrika Oluşturuldu", "Site Created"],
+  "zone.created": ["Ağ Bölgesi Oluşturuldu", "Network Zone Created"],
+  "asset.updated": ["Cihaz Kaydı Güncellendi", "Asset Record Updated"],
+  "asset.bulk_updated": ["Toplu Cihaz Doğrulaması", "Bulk Asset Verification"],
+  "communication.baseline_approved": ["İletişim Baseline Onaylandı", "Flow Baseline Approved"],
+  "communication.baseline_approved_all": ["Tüm İletişim Baseline Onaylandı", "All Flows Baseline Approved"],
+  "risk.status_changed": ["Risk Durumu Değiştirildi", "Risk Status Changed"],
+  "risk.bulk_status_changed": ["Toplu Risk Durumu Güncellendi", "Bulk Risk Status Updated"],
+  "organization.created": ["Organizasyon Oluşturuldu", "Organization Created"],
+  "organization.member_added": ["Yeni Üye Eklendi", "New Member Added"],
+  "organization.member_updated": ["Üye Yetkisi Güncellendi", "Member Role Updated"],
+});
 
-export function formatAuditAction(action: string): string {
-  const key = action.toLowerCase();
-  const hit = AUDIT_ACTION_LABEL[key];
-  if (hit) return tx(hit[0], hit[1]);
-  const [entity, verb] = key.split(".");
-  const pretty = (s: string) => s.replace(/_/g, " ");
-  return verb ? `${pretty(entity).replace(/^./, (c) => c.toUpperCase())} · ${pretty(verb)}` : pretty(key);
-}
-
-const TARGET_TYPE_LABEL = bi({
-  asset: ["Cihaz", "Asset"],
+const AUDIT_TARGET_LABEL: Record<string, string> = bi({
   sensor: ["Sensör", "Sensor"],
+  discovery_run: ["Keşif Çalışması", "Discovery Run"],
   site: ["Fabrika", "Site"],
-  zone: ["Bölge", "Zone"],
-  risk: ["Risk", "Risk"],
-  risk_finding: ["Risk bulgusu", "Risk finding"],
-  communication: ["İletişim", "Flow"],
+  zone: ["Ağ Bölgesi", "Network Zone"],
+  asset: ["Cihaz", "Asset"],
+  communication: ["İletişim Akışı", "Communication Flow"],
+  risk_finding: ["Risk Bulgusu", "Risk Finding"],
   organization: ["Organizasyon", "Organization"],
   user: ["Kullanıcı", "User"],
 });
 
+export function formatAuditAction(action: string): string {
+  return AUDIT_ACTION_LABEL[action] ?? action;
+}
+
 export function formatAuditTarget(targetType: string | null): string {
   if (!targetType) return "—";
-  return (TARGET_TYPE_LABEL as Record<string, string>)[targetType] ?? targetType;
+  return AUDIT_TARGET_LABEL[targetType] ?? targetType;
+}
+
+export function ErrorBox({ error }: { error: unknown }) {
+  if (!error) return null;
+  const msg =
+    error instanceof ApiError
+      ? `${error.message} (HTTP ${error.status})`
+      : error instanceof Error
+        ? error.message
+        : String(error);
+  return (
+    <div className="rounded-[6px] border border-rose-500/30 bg-rose-500/10 px-3.5 py-2.5 text-xs text-rose-700 dark:text-rose-300">
+      {msg}
+    </div>
+  );
+}
+
+export function Empty({ children }: { children: ReactNode }) {
+  return (
+    <div className="rounded-[6px] border border-dashed border-[#CBD5E1] bg-[#F8FAFC] p-8 text-center text-xs text-[#64748B] dark:border-[#1E293B] dark:bg-[#161F30]">
+      {children}
+    </div>
+  );
+}
+
+export function formatDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString("tr-TR", {
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+  } catch {
+    return iso;
+  }
 }
