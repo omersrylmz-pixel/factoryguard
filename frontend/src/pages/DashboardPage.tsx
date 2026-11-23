@@ -28,7 +28,7 @@ import type {
   Zone,
 } from "../types/api";
 
-const CHART_PALETTE = ["#0D9488", "#1C2434", "#0284C7", "#D97706", "#64748B", "#E11D48"];
+const CHART_PALETTE = ["#3B82F6", "#10B981", "#F59E0B", "#F43F5E", "#6366F1", "#06B6D4"];
 
 export default function DashboardPage() {
   const { activeOrg, canAdmin } = useAuth();
@@ -174,14 +174,15 @@ export default function DashboardPage() {
 
       {(sitesQuery.error || zonesQuery.error) && <ErrorBox error={sitesQuery.error ?? zonesQuery.error} />}
 
-      {/* 1. Satır: TailAdmin 4 Sütunlu KPI StatCard Izgarası */}
+      {/* 1. Satır: 4 Sütunlu Endüstriyel Telemetri KPI Izgarası */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           to="/assets"
+          tone="teal"
           label={t("Keşfedilen Toplam Cihaz", "Total Discovered Devices")}
           value={assetsQuery.isLoading ? "…" : totalAssets}
           badge={t(`${verifiedCount} Doğrulandı`, `${verifiedCount} Verified`)}
-          badgeTone={unverifiedCount > 0 ? "amber" : "teal"}
+          badgeTone={unverifiedCount > 0 ? "amber" : "emerald"}
           subtext={t(`${unverifiedCount} doğrulama bekliyor`, `${unverifiedCount} pending verification`)}
           icon={
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -195,6 +196,7 @@ export default function DashboardPage() {
 
         <StatCard
           to="/risks"
+          tone={postureTone}
           label={t("Güvenlik Duruş Skoru", "Security Posture Score")}
           value={postureQuery.isLoading ? "…" : `${postureScore}/100`}
           badge={t(`Derece ${postureGrade}`, `Grade ${postureGrade}`)}
@@ -212,6 +214,7 @@ export default function DashboardPage() {
 
         <StatCard
           to="/risks"
+          tone={highCritRisks > 0 ? "red" : "emerald"}
           label={t("Açık Risk Bulguları", "Open Risk Findings")}
           value={risksQuery.isLoading ? "…" : totalOpenRisks}
           badge={
@@ -219,7 +222,7 @@ export default function DashboardPage() {
               ? t(`${highCritRisks} Yüksek / Kritik`, `${highCritRisks} High / Critical`)
               : t("Kritik Bulgu Yok", "No Critical Risks")
           }
-          badgeTone={highCritRisks > 0 ? "red" : "teal"}
+          badgeTone={highCritRisks > 0 ? "red" : "emerald"}
           subtext={t("6 deterministik kural aktif", "6 deterministic rules active")}
           icon={
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -232,6 +235,7 @@ export default function DashboardPage() {
 
         <StatCard
           to="/network"
+          tone="navy"
           label={t("Gözlemlenen İletişim Akışı", "Observed Network Flows")}
           value={graphQuery.isLoading ? "…" : edges.length}
           badge={t(`${connectedSensors}/${sensors.length} Sensör Aktif`, `${connectedSensors}/${sensors.length} Sensors Online`)}
@@ -263,42 +267,42 @@ export default function DashboardPage() {
         >
           {/* 4 Purdue / Cihaz Sınıfı Alt Kartı */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-[4px] border border-teal-200/80 bg-teal-50/40 p-3.5">
-              <div className="font-mono text-[10px] font-semibold text-[#0F766E] uppercase">
+            <div className="rounded-[6px] border border-[#E2E8F0] border-t-2 border-t-sky-500 bg-[#F8FAFC] p-3.5 dark:border-[#1E293B] dark:border-t-sky-400 dark:bg-[#161F30]">
+              <div className="font-mono text-[10px] font-bold tracking-wider text-sky-600 uppercase dark:text-sky-400">
                 {t("PURDUE L1 · KONTROL", "PURDUE L1 · CONTROL")}
               </div>
-              <div className="mt-1.5 text-2xl font-bold text-[#1C2434]">{plcCount}</div>
+              <div className="mt-1.5 font-mono text-2xl font-bold text-[#1C2434]">{plcCount}</div>
               <div className="mt-0.5 text-xs text-[#64748B]">
                 {t("PLC & Saha Kontrolcü", "PLC & Field Controllers")}
               </div>
             </div>
 
-            <div className="rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] p-3.5">
-              <div className="font-mono text-[10px] font-semibold text-[#64748B] uppercase">
+            <div className="rounded-[6px] border border-[#E2E8F0] border-t-2 border-t-indigo-500 bg-[#F8FAFC] p-3.5 dark:border-[#1E293B] dark:border-t-indigo-400 dark:bg-[#161F30]">
+              <div className="font-mono text-[10px] font-bold tracking-wider text-indigo-600 uppercase dark:text-indigo-400">
                 {t("PURDUE L2 · SÜPERVİZÖR", "PURDUE L2 · SUPERVISORY")}
               </div>
-              <div className="mt-1.5 text-2xl font-bold text-[#1C2434]">{hmiScadaCount}</div>
+              <div className="mt-1.5 font-mono text-2xl font-bold text-[#1C2434]">{hmiScadaCount}</div>
               <div className="mt-0.5 text-xs text-[#64748B]">
                 {t("HMI, SCADA & Mühendislik", "HMI, SCADA & Engineering")}
               </div>
             </div>
 
-            <div className="rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] p-3.5">
-              <div className="font-mono text-[10px] font-semibold text-[#64748B] uppercase">
+            <div className="rounded-[6px] border border-[#E2E8F0] border-t-2 border-t-emerald-500 bg-[#F8FAFC] p-3.5 dark:border-[#1E293B] dark:border-t-emerald-400 dark:bg-[#161F30]">
+              <div className="font-mono text-[10px] font-bold tracking-wider text-emerald-600 uppercase dark:text-emerald-400">
                 {t("PURDUE L3 · OPERASYON", "PURDUE L3 · OPERATIONS")}
               </div>
-              <div className="mt-1.5 text-2xl font-bold text-[#1C2434]">{infraCount}</div>
+              <div className="mt-1.5 font-mono text-2xl font-bold text-[#1C2434]">{infraCount}</div>
               <div className="mt-0.5 text-xs text-[#64748B]">
                 {t("Sunucu, Ağ & İstemci", "Servers, Network & Clients")}
               </div>
             </div>
 
-            <div className="rounded-[4px] border border-amber-200/80 bg-amber-50/40 p-3.5">
-              <div className="font-mono text-[10px] font-semibold text-amber-800 uppercase">
+            <div className="rounded-[6px] border border-[#E2E8F0] border-t-2 border-t-amber-500 bg-[#F8FAFC] p-3.5 dark:border-[#1E293B] dark:border-t-amber-400 dark:bg-[#161F30]">
+              <div className="font-mono text-[10px] font-bold tracking-wider text-amber-600 uppercase dark:text-amber-400">
                 {t("DOĞRULANMAMIŞ VARLIK", "UNVERIFIED ASSETS")}
               </div>
-              <div className="mt-1.5 text-2xl font-bold text-amber-900">{unverifiedCount}</div>
-              <div className="mt-0.5 text-xs text-amber-800">
+              <div className="mt-1.5 font-mono text-2xl font-bold text-[#1C2434]">{unverifiedCount}</div>
+              <div className="mt-0.5 text-xs text-[#64748B]">
                 {t("Doğrulama Bekleyen", "Pending Verification")}
               </div>
             </div>
@@ -330,7 +334,11 @@ export default function DashboardPage() {
                       </div>
                       <div className="mt-1 h-2 w-full rounded-full bg-[#F1F5F9]">
                         <div
-                          className={`h-2 rounded-full ${meta.unverified ? "bg-amber-500" : "bg-[#0D9488]"}`}
+                          className={`h-2 rounded-full ${
+                            meta.unverified
+                              ? "bg-gradient-to-r from-amber-500 to-amber-400"
+                              : "bg-gradient-to-r from-[#2563EB] to-[#06B6D4]"
+                          }`}
                           style={{ width: `${pct}%` }}
                         />
                       </div>

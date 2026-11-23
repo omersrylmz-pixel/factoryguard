@@ -24,12 +24,12 @@ const SPOTLIGHT_COLORS: Record<
   "teal" | "emerald" | "amber" | "red" | "navy" | "slate",
   string
 > = {
-  teal: "rgba(13, 148, 136, 0.14)",
-  emerald: "rgba(16, 185, 129, 0.14)",
-  amber: "rgba(245, 158, 11, 0.15)",
-  red: "rgba(225, 29, 72, 0.15)",
-  navy: "rgba(30, 41, 59, 0.12)",
-  slate: "rgba(100, 116, 139, 0.12)",
+  teal: "rgba(37, 99, 235, 0.18)",
+  emerald: "rgba(16, 185, 129, 0.18)",
+  amber: "rgba(245, 158, 11, 0.18)",
+  red: "rgba(225, 29, 72, 0.18)",
+  navy: "rgba(56, 189, 248, 0.16)",
+  slate: "rgba(148, 163, 184, 0.15)",
 };
 
 /** React Bits SpotlightCard: Fareyi takip eden radyal spot ışığı */

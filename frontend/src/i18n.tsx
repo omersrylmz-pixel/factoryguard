@@ -1,18 +1,22 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 
 /**
- * Hafif iki dilli (TR / EN) arayüz altyapısı — harici bağımlılık yok.
- *
- * Kullanım (bileşen içinde):
- *   const { t } = useLang();
- *   <h1>{t("Cihaz Envanteri", "Device Inventory")}</h1>
- *
- * Paylaşılan etiket sözlükleri için `bi({...})` kullanılır; değerler okunduğu anda
- * aktif dile göre çözülür (CRITICALITY_LABEL[c] gibi mevcut erişim şekli korunur).
+ * İki dilli (TR / EN) + Çift Temalı (Endüstriyel Koyu Komuta Modu "dark" / Açık Mühendislik Modu "light")
+ * arayüz altyapısı.
  */
 export type Lang = "tr" | "en";
+export type ThemeMode = "dark" | "light";
 
 const STORAGE_KEY = "fg.lang";
+const THEME_STORAGE_KEY = "fg.theme";
 
 function initialLang(): Lang {
   try {
@@ -24,9 +28,18 @@ function initialLang(): Lang {
   return "tr";
 }
 
+function initialTheme(): ThemeMode {
+  try {
+    const stored = localStorage.getItem(THEME_STORAGE_KEY);
+    if (stored === "dark" || stored === "light") return stored;
+  } catch {
+    /* localStorage erişilemez */
+  }
+  return "dark";
+}
+
 let currentLang: Lang = initialLang();
 
-/** Hook dışı yardımcılar (formatDate, bi()) için aktif dil. */
 export function getLang(): Lang {
   return currentLang;
 }
@@ -35,12 +48,10 @@ export function getLocale(): string {
   return currentLang === "en" ? "en-GB" : "tr-TR";
 }
 
-/** Hook dışı çeviri: tr(...) / en(...) çiftinden aktif dile göre seçer. */
 export function tx(tr: string, en: string): string {
   return currentLang === "en" ? en : tr;
 }
 
-/** İki dilli etiket sözlüğü: değer = [Türkçe, English]. */
 export function bi<K extends string>(map: Record<K, readonly [string, string]>): Record<K, string> {
   const out = {} as Record<K, string>;
   for (const k of Object.keys(map) as K[]) {
@@ -55,12 +66,34 @@ export function bi<K extends string>(map: Record<K, readonly [string, string]>):
 interface LangContextValue {
   lang: Lang;
   setLang: (l: Lang) => void;
+  theme: ThemeMode;
+  setTheme: (m: ThemeMode) => void;
+  toggleTheme: () => void;
 }
 
 const LangContext = createContext<LangContextValue | null>(null);
 
+function applyThemeClass(mode: ThemeMode) {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  if (mode === "dark") {
+    root.classList.add("dark");
+  } else {
+    root.classList.remove("dark");
+  }
+}
+
 export function LangProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(currentLang);
+  const [theme, setThemeState] = useState<ThemeMode>(() => {
+    const init = initialTheme();
+    applyThemeClass(init);
+    return init;
+  });
+
+  useEffect(() => {
+    applyThemeClass(theme);
+  }, [theme]);
 
   const setLang = useCallback((l: Lang) => {
     currentLang = l;
@@ -73,14 +106,39 @@ export function LangProvider({ children }: { children: ReactNode }) {
     setLangState(l);
   }, []);
 
-  const value = useMemo(() => ({ lang, setLang }), [lang, setLang]);
+  const setTheme = useCallback((m: ThemeMode) => {
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, m);
+    } catch {
+      /* yoksay */
+    }
+    applyThemeClass(m);
+    setThemeState(m);
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    setTheme(theme === "dark" ? "light" : "dark");
+  }, [theme, setTheme]);
+
+  const value = useMemo(
+    () => ({ lang, setLang, theme, setTheme, toggleTheme }),
+    [lang, setLang, theme, setTheme, toggleTheme],
+  );
   return <LangContext.Provider value={value}>{children}</LangContext.Provider>;
 }
 
 export function useLang() {
   const ctx = useContext(LangContext);
   if (!ctx) throw new Error("useLang must be used inside <LangProvider>");
-  const { lang, setLang } = ctx;
+  const { lang, setLang, theme, setTheme, toggleTheme } = ctx;
   const t = useCallback((tr: string, en: string) => (lang === "en" ? en : tr), [lang]);
-  return { lang, setLang, t, locale: lang === "en" ? "en-GB" : "tr-TR" };
+  return {
+    lang,
+    setLang,
+    theme,
+    setTheme,
+    toggleTheme,
+    t,
+    locale: lang === "en" ? "en-GB" : "tr-TR",
+  };
 }

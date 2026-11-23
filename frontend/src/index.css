@@ -2,17 +2,27 @@
 
 @layer base {
   :root {
-    --fg-sidebar: #1c2434;
-    --fg-sidebar-hover: #333a48;
-    --fg-canvas: #f1f5f9;
-    --fg-stroke: #e2e8f0;
-    --fg-teal: #0d9488;
-    --fg-teal-dark: #0f766e;
+    --fg-sidebar: #0b1120;
+    --fg-sidebar-hover: #1e293b;
+    --fg-canvas: #eef2f6;
+    --fg-stroke: #cbd5e1;
+    --fg-accent: #2563eb;
+    --fg-accent-dark: #1d4ed8;
+  }
+
+  html.dark {
+    --fg-sidebar: #070b14;
+    --fg-sidebar-hover: #162032;
+    --fg-canvas: #0b0f19;
+    --fg-stroke: #1e293b;
+    --fg-accent: #3b82f6;
+    --fg-accent-dark: #2563eb;
+    color-scheme: dark;
   }
 
   body {
-    background-color: #f1f5f9;
-    color: #1c2434;
+    background-color: var(--fg-canvas);
+    color: #0f172a;
     font-family:
       "Inter",
       -apple-system,
@@ -23,9 +33,140 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  html.dark body {
+    background-color: #0b0f19;
+    color: #e2e8f0;
+  }
+
   code,
   pre,
   .font-mono {
     font-variant-numeric: tabular-nums;
   }
+}
+
+/*
+ * Endüstriyel Koyu Komuta Modu (html.dark) Otomatik Yüzey, Kenarlık ve Tipografi Dönüşümü
+ * Sayfalardaki açık mod yüzey sınıflarını (#FFFFFF, #F1F5F9, #F8FAFC, #F7F9FC, #E2E8F0, #1C2434)
+ * SCADA / SOC kontrol odası standardında koyu çelik ve obsidyen yüzeylere dönüştürür.
+ */
+html.dark .bg-\[\#F1F5F9\] {
+  background-color: #0b0f19 !important;
+}
+
+html.dark .bg-white {
+  background-color: #111827 !important;
+}
+
+html.dark .bg-\[\#F8FAFC\],
+html.dark .bg-\[\#F7F9FC\],
+html.dark .hover\:bg-\[\#F8FAFC\]:hover {
+  background-color: #161f30 !important;
+}
+
+html.dark .bg-slate-50,
+html.dark .bg-slate-100 {
+  background-color: #1e293b !important;
+}
+
+html.dark .border-\[\#E2E8F0\],
+html.dark .border-\[\#CBD5E1\],
+html.dark .border-\[\#CBD5E1\]\/80,
+html.dark .border-slate-200,
+html.dark .border-slate-300 {
+  border-color: #1e293b !important;
+}
+
+html.dark .divide-\[\#E2E8F0\] > :not([hidden]) ~ :not([hidden]) {
+  border-color: #1e293b !important;
+}
+
+html.dark .text-\[\#1C2434\],
+html.dark .text-slate-900,
+html.dark .text-slate-800 {
+  color: #f1f5f9 !important;
+}
+
+html.dark .text-\[\#334155\],
+html.dark .text-slate-700,
+html.dark .text-slate-600 {
+  color: #cbd5e1 !important;
+}
+
+html.dark .text-\[\#64748B\],
+html.dark .text-slate-500,
+html.dark .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+/* Koyu modda rozet ve uyarı kutularının yüksek kontrastlı görünümü */
+html.dark .bg-teal-50,
+html.dark .bg-teal-50\/40,
+html.dark .bg-teal-50\/60,
+html.dark .bg-teal-50\/70,
+html.dark .bg-teal-50\/80 {
+  background-color: rgba(14, 165, 233, 0.14) !important;
+  color: #38bdf8 !important;
+  border-color: rgba(56, 189, 248, 0.3) !important;
+}
+
+html.dark .text-\[\#0D9488\],
+html.dark .text-\[\#0F766E\] {
+  color: #38bdf8 !important;
+}
+
+html.dark .bg-emerald-50 {
+  background-color: rgba(16, 185, 129, 0.14) !important;
+  color: #34d399 !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+}
+
+html.dark .text-emerald-700,
+html.dark .text-emerald-800,
+html.dark .text-emerald-900,
+html.dark .text-emerald-950 {
+  color: #6ee7b7 !important;
+}
+
+html.dark .bg-amber-50,
+html.dark .bg-amber-50\/40,
+html.dark .bg-amber-50\/70 {
+  background-color: rgba(245, 158, 11, 0.14) !important;
+  color: #fbbf24 !important;
+  border-color: rgba(245, 158, 11, 0.32) !important;
+}
+
+html.dark .text-amber-800,
+html.dark .text-amber-900,
+html.dark .text-amber-950 {
+  color: #fcd34d !important;
+}
+
+html.dark .bg-orange-50 {
+  background-color: rgba(249, 115, 22, 0.15) !important;
+  color: #fb923c !important;
+  border-color: rgba(249, 115, 22, 0.35) !important;
+}
+
+html.dark .bg-red-50,
+html.dark .bg-rose-50 {
+  background-color: rgba(244, 63, 94, 0.16) !important;
+  color: #fda4af !important;
+  border-color: rgba(244, 63, 94, 0.35) !important;
+}
+
+html.dark .text-red-700,
+html.dark .text-red-800,
+html.dark .text-rose-700 {
+  color: #fda4af !important;
+}
+
+/* Koyu modda SVG topoloji tuvali */
+html.dark svg rect[fill="#FFFFFF"] {
+  fill: #1e293b;
+}
+
+html.dark svg text.fill-\[\#1C2434\],
+html.dark svg text.fill-slate-600 {
+  fill: #e2e8f0;
 }

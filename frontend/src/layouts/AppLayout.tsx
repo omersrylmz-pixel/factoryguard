@@ -88,7 +88,7 @@ function SidebarIcon({ name }: { name: SidebarItem["icon"] }) {
 
 export default function AppLayout() {
   const { user, organizations, activeOrg, setActiveOrg, logout } = useAuth();
-  const { lang, setLang, t } = useLang();
+  const { lang, setLang, theme, toggleTheme, t } = useLang();
   const navigate = useNavigate();
   const location = useLocation();
   const [globalSearch, setGlobalSearch] = useState("");
@@ -168,24 +168,24 @@ export default function AppLayout() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#F1F5F9] text-[#1C2434]">
-      {/* TailAdmin Koyu Lacivert Sol Kenar Çubuğu (#1C2434) */}
+      {/* Endüstriyel Komuta Sol Kenar Çubuğu */}
       <aside
         className={`${
           mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
-        } fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col bg-[#1C2434] text-[#DEE4EE] transition-transform duration-200 lg:static lg:translate-x-0`}
+        } fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col border-r border-[#1E293B] bg-[#0B1120] text-[#DEE4EE] transition-transform duration-200 lg:static lg:translate-x-0`}
       >
         {/* Marka Başlığı */}
-        <div className="flex items-center justify-between border-b border-[#2E3A47] px-6 py-4">
+        <div className="flex items-center justify-between border-b border-[#1E293B] px-6 py-4">
           <Link to="/" className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-[4px] bg-[#0D9488] text-white shadow-sm">
+            <div className="flex h-9 w-9 items-center justify-center rounded-[5px] border border-blue-400/30 bg-gradient-to-br from-[#2563EB] to-[#0284C7] text-white shadow-[0_2px_10px_rgba(37,99,235,0.35)]">
               <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
               </svg>
             </div>
             <div>
               <div className="text-base font-bold tracking-tight text-white">FactoryGuard</div>
-              <div className="text-[11px] font-medium text-[#8A99AF]">
-                {t("OT Varlık & Risk Konsolu", "OT Asset & Risk Console")}
+              <div className="font-mono text-[10px] font-semibold tracking-wider text-sky-400 uppercase">
+                {t("OT KOMUTA & RİSK", "OT COMMAND & RISK")}
               </div>
             </div>
           </Link>
@@ -203,7 +203,7 @@ export default function AppLayout() {
           <nav className="space-y-6">
             {MENU_GROUPS.map((group) => (
               <div key={group.title}>
-                <h3 className="mb-2.5 px-3 text-[10px] font-semibold tracking-wider text-[#8A99AF] uppercase">
+                <h3 className="mb-2.5 px-3 font-mono text-[10px] font-bold tracking-wider text-[#64748B] uppercase">
                   {group.title}
                 </h3>
                 <ul className="space-y-1">
@@ -218,10 +218,10 @@ export default function AppLayout() {
                           onClick={() => setMobileMenuOpen(false)}
                           className={({ isActive }) => {
                             const active = isActive || isAssetDetail;
-                            return `group relative flex items-center justify-between rounded-[4px] px-3.5 py-2.5 text-xs font-medium transition-colors ${
+                            return `group relative flex items-center justify-between rounded-[5px] px-3.5 py-2.5 text-xs font-medium transition-all ${
                               active
-                                ? "bg-[#333A48] text-white"
-                                : "text-[#DEE4EE] hover:bg-[#333A48]/70 hover:text-white"
+                                ? "border border-blue-500/30 bg-[#17223B] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+                                : "border border-transparent text-[#94A3B8] hover:bg-[#151F33] hover:text-white"
                             }`;
                           }}
                         >
@@ -230,20 +230,20 @@ export default function AppLayout() {
                             return (
                               <>
                                 {active && (
-                                  <span className="absolute top-1.5 bottom-1.5 left-0 w-1 rounded-r bg-[#0D9488]" />
+                                  <span className="absolute top-1.5 bottom-1.5 left-0 w-1 rounded-r bg-gradient-to-b from-sky-400 to-blue-600" />
                                 )}
                                 <span className="flex items-center gap-3">
-                                  <span className={active ? "text-[#14B8A6]" : "text-[#8A99AF] group-hover:text-white"}>
+                                  <span className={active ? "text-sky-400" : "text-[#64748B] group-hover:text-sky-300"}>
                                     <SidebarIcon name={item.icon} />
                                   </span>
                                   <span>{item.label}</span>
                                 </span>
                                 {item.badge !== undefined && item.badge > 0 && (
                                   <span
-                                    className={`rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold ${
+                                    className={`rounded-full px-2 py-0.5 font-mono text-[10px] font-bold ${
                                       item.badgeTone === "amber"
-                                        ? "bg-amber-500/20 text-amber-300"
-                                        : "bg-teal-500/20 text-teal-300"
+                                        ? "border border-amber-500/30 bg-amber-500/15 text-amber-300"
+                                        : "border border-sky-500/30 bg-sky-500/15 text-sky-300"
                                     }`}
                                   >
                                     {item.badge}
@@ -263,31 +263,31 @@ export default function AppLayout() {
         </div>
 
         {/* Alt Pasif Gözlem Güvenlik Garantisi Kartı */}
-        <div className="border-t border-[#2E3A47] p-4">
-          <div className="rounded-[4px] border border-[#333A48] bg-[#24303F] p-3">
+        <div className="border-t border-[#1E293B] p-4">
+          <div className="rounded-[5px] border border-[#1E293B] bg-[#111A2E] p-3">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-semibold text-white">
                 {t("Yalnızca Pasif Gözlem", "Passive Observation Only")}
               </span>
-              <span className="inline-flex items-center gap-1 rounded bg-teal-500/20 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-teal-300">
-                <span className="h-1.5 w-1.5 rounded-full bg-teal-400" />
+              <span className="inline-flex items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-emerald-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
                 {t("GÜVENLİ", "SAFE")}
               </span>
             </div>
-            <p className="mt-1 text-[11px] leading-relaxed text-[#8A99AF]">
+            <p className="mt-1 text-[11px] leading-relaxed text-[#94A3B8]">
               {t(
                 "Aktif tarama yok · Saha ekipmanına paket gönderilmez.",
                 "No active scanning · No packets sent to field devices.",
               )}
             </p>
-            <div className="mt-2 space-y-1 border-t border-[#333A48] pt-2 text-[10px] text-[#DEE4EE]">
+            <div className="mt-2 space-y-1 border-t border-[#1E293B] pt-2 text-[10px] text-[#DEE4EE]">
               <div className="flex items-center justify-between">
-                <span className="text-[#8A99AF]">{t("Aktif sensör", "Active sensors")}</span>
-                <span className="font-mono">
+                <span className="text-[#94A3B8]">{t("Aktif sensör", "Active sensors")}</span>
+                <span className="font-mono font-bold text-sky-400">
                   {activeSensorCount}/{totalSensorCount}
                 </span>
               </div>
-              <div className="truncate" title={primarySite?.name}>
+              <div className="truncate text-[#CBD5E1]" title={primarySite?.name}>
                 {primarySite?.name ?? t("Ana Tesis", "Main Site")}
               </div>
             </div>
@@ -377,11 +377,40 @@ export default function AppLayout() {
               )}
             </div>
 
+            {/* Koyu / Açık Tema Değiştirici (Mühendislik Komuta Modu) */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              title={
+                theme === "dark"
+                  ? t("Açık Mühendislik Moduna Geç", "Switch to Light Engineering Mode")
+                  : t("Koyu Komuta Moduna Geç", "Switch to Dark Command Mode")
+              }
+              className="inline-flex h-9 items-center gap-1.5 rounded-[5px] border border-[#CBD5E1] bg-[#F8FAFC] px-2.5 text-[11px] font-semibold text-[#1C2434] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] transition hover:border-blue-500 hover:text-blue-600 dark:border-[#334155] dark:bg-[#1E293B] dark:text-[#F8FAFC] dark:hover:border-sky-400 dark:hover:text-sky-300"
+            >
+              {theme === "dark" ? (
+                <>
+                  <svg className="h-3.5 w-3.5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <circle cx="12" cy="12" r="5" />
+                    <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+                  </svg>
+                  <span className="hidden sm:inline">{t("Açık Mod", "Light")}</span>
+                </>
+              ) : (
+                <>
+                  <svg className="h-3.5 w-3.5 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                  </svg>
+                  <span className="hidden sm:inline">{t("Koyu Mod", "Dark")}</span>
+                </>
+              )}
+            </button>
+
             {/* Dil Seçici (TR / EN) */}
             <div
               role="group"
               aria-label={t("Arayüz dili", "Interface language")}
-              className="flex h-9 items-center rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] p-0.5"
+              className="flex h-9 items-center rounded-[5px] border border-[#CBD5E1] bg-[#F8FAFC] p-0.5 dark:border-[#334155] dark:bg-[#161F30]"
             >
               {(["tr", "en"] as const).map((l) => (
                 <button
@@ -389,8 +418,10 @@ export default function AppLayout() {
                   type="button"
                   onClick={() => setLang(l)}
                   aria-pressed={lang === l}
-                  className={`h-full rounded-[3px] px-2.5 text-[11px] font-semibold uppercase transition-colors ${
-                    lang === l ? "bg-[#1C2434] text-white" : "text-[#64748B] hover:text-[#1C2434]"
+                  className={`h-full rounded-[4px] px-2.5 text-[11px] font-bold uppercase transition-colors ${
+                    lang === l
+                      ? "bg-gradient-to-b from-[#2563EB] to-[#1D4ED8] text-white shadow-xs"
+                      : "text-[#64748B] hover:text-[#1C2434] dark:text-[#94A3B8] dark:hover:text-white"
                   }`}
                 >
                   {l}
