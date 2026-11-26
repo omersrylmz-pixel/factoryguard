@@ -32,7 +32,7 @@ const CHART_PALETTE = ["#3B82F6", "#10B981", "#F59E0B", "#F43F5E", "#6366F1", "#
 
 export default function DashboardPage() {
   const { activeOrg, canAdmin } = useAuth();
-  const { t } = useLang();
+  const { t, theme } = useLang();
 
   const sitesQuery = useQuery({
     queryKey: ["sites", activeOrg?.id],
@@ -363,7 +363,14 @@ export default function DashboardPage() {
             <div className="flex flex-col items-center">
               <div className="relative my-2 flex h-40 w-40 items-center justify-center">
                 <svg viewBox="0 0 140 140" className="h-40 w-40 -rotate-90">
-                  <circle cx="70" cy="70" r={radius} fill="none" stroke="#F1F5F9" strokeWidth="16" />
+                  <circle
+                    cx="70"
+                    cy="70"
+                    r={radius}
+                    fill="none"
+                    stroke={theme === "dark" ? "#1E293B" : "#F1F5F9"}
+                    strokeWidth="16"
+                  />
                   {protoList.slice(0, 6).map(([proto, stat], idx) => {
                     const frac = stat.flows / totalProtoFlows;
                     const dash = frac * circumference;

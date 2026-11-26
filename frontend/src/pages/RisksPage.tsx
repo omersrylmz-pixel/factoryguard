@@ -705,7 +705,9 @@ export default function RisksPage() {
                           key={f.id}
                           onClick={() => setSelectedId(f.id)}
                           className={`cursor-pointer transition-colors ${
-                            active ? "bg-teal-50/60" : "hover:bg-[#F8FAFC]"
+                            active
+                              ? "border-l-2 border-l-[#2563EB] bg-blue-50/90 dark:border-l-[#38BDF8] dark:bg-[#1E293B]"
+                              : "hover:bg-[#F8FAFC]"
                           }`}
                         >
                           {canEditAssets && (
@@ -809,11 +811,11 @@ export default function RisksPage() {
                 </div>
 
                 {/* 3. Ne yapılmalı? */}
-                <div className="rounded-[4px] border border-teal-200 bg-teal-50/70 p-3.5">
-                  <div className="text-[11px] font-bold tracking-wider text-[#0F766E] uppercase">
+                <div className="rounded-[6px] border border-sky-500/35 bg-sky-500/10 p-3.5">
+                  <div className="text-[11px] font-bold tracking-wider text-[#2563EB] uppercase dark:text-sky-400">
                     {t("3. Önerilen Müdahale", "3. Recommended Action")}
                   </div>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-800">
+                  <p className="mt-1 text-xs leading-relaxed text-[#0F172A] dark:text-[#E2E8F0]">
                     {selected.recommendation}
                   </p>
                 </div>
@@ -824,12 +826,12 @@ export default function RisksPage() {
                     <span>
                       {t(`4. Puan Kırılımı (${selected.score}/100)`, `4. Score Breakdown (${selected.score}/100)`)}
                     </span>
-                    <span className="text-[#0D9488]">
+                    <span className="text-[#2563EB] dark:text-sky-400">
                       {t("Güven", "Confidence")}: %{Math.round(selected.confidence * 100)}
                     </span>
                   </div>
                   {selected.evidence.score_breakdown && (
-                    <div className="mt-2 space-y-2 rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] p-3 text-xs">
+                    <div className="mt-2 space-y-2 rounded-[6px] border border-[#E2E8F0] bg-[#F8FAFC] p-3 text-xs">
                       {Object.entries(breakdownLabels).map(([k, meta]) => {
                         const val = selected.evidence.score_breakdown?.[k] ?? 0;
                         const pct = Math.min(100, Math.round((val / meta.max) * 100));
@@ -841,9 +843,9 @@ export default function RisksPage() {
                               </span>
                               <span className="font-mono font-bold text-[#1C2434]">+{val}</span>
                             </div>
-                            <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
+                            <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-[#E2E8F0] dark:bg-[#1E293B]">
                               <div
-                                className="h-full rounded-full bg-[#0D9488]"
+                                className="h-full rounded-full bg-gradient-to-r from-[#2563EB] to-[#06B6D4]"
                                 style={{ width: `${pct}%` }}
                               />
                             </div>

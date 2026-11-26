@@ -664,21 +664,22 @@ export default function SettingsPage() {
                             </span>
                           ) : (
                             <div className="inline-flex items-center gap-2">
-                              <select
-                                value={m.role}
-                                disabled={updateMemberMut.isPending}
-                                onChange={(e) =>
-                                  updateMemberMut.mutate({
-                                    user_id: m.user_id,
-                                    role: e.target.value as "admin" | "analyst" | "viewer",
-                                  })
-                                }
-                                className="h-7 rounded-[4px] border border-[#E2E8F0] bg-white px-2 text-xs text-[#1C2434]"
-                              >
-                                <option value="admin">{ROLE_LABEL.admin}</option>
-                                <option value="analyst">{ROLE_LABEL.analyst}</option>
-                                <option value="viewer">{ROLE_LABEL.viewer}</option>
-                              </select>
+                              <div className="w-44 text-left">
+                                <Select
+                                  value={m.role}
+                                  disabled={updateMemberMut.isPending}
+                                  onChange={(e) =>
+                                    updateMemberMut.mutate({
+                                      user_id: m.user_id,
+                                      role: e.target.value as "admin" | "analyst" | "viewer",
+                                    })
+                                  }
+                                >
+                                  <option value="admin">{ROLE_LABEL.admin}</option>
+                                  <option value="analyst">{ROLE_LABEL.analyst}</option>
+                                  <option value="viewer">{ROLE_LABEL.viewer}</option>
+                                </Select>
+                              </div>
                               <Button
                                 size="sm"
                                 variant="secondary"

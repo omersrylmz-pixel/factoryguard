@@ -339,7 +339,7 @@ export default function AssetsPage() {
             <Field label={t("CSV İçeriği", "CSV Content")}>
               <textarea
                 rows={4}
-                className="w-full rounded-[4px] border border-[#E2E8F0] p-2.5 font-mono text-xs focus:border-[#0D9488] focus:outline-none"
+                className="w-full rounded-[6px] border border-[#CBD5E1] bg-white p-2.5 font-mono text-xs text-[#1C2434] focus:border-[#2563EB] focus:outline-none dark:border-[#2A364F] dark:bg-[#161F30] dark:text-[#F8FAFC] dark:focus:border-[#38BDF8]"
                 placeholder={
                   "name,ip_address,mac_address,hostname,asset_type,vendor,model,firmware_version,zone,criticality,is_verified\nPLC-01,192.168.10.20,00:11:22:33:44:20,plc01,plc,Siemens,S7-1500,V2.9,Line-1,high,true"
                 }
@@ -369,14 +369,14 @@ export default function AssetsPage() {
       <Card noPadding>
         {/* Üst Sekme ve Filtre Araç Çubuğu */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E2E8F0] px-5 py-3.5">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 rounded-[6px] border border-[#CBD5E1] bg-[#F8FAFC] p-0.5 dark:border-[#2A364F] dark:bg-[#161F30]">
             <button
               type="button"
               onClick={() => setActiveTab("inventory")}
-              className={`rounded-[4px] px-3 py-1.5 text-xs font-semibold transition ${
+              className={`cursor-pointer rounded-[4px] px-3 py-1.5 text-xs font-semibold transition ${
                 activeTab === "inventory"
-                  ? "bg-[#1C2434] text-white"
-                  : "text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#1C2434]"
+                  ? "bg-[#2563EB] text-white shadow-xs"
+                  : "text-[#64748B] hover:text-[#1C2434] dark:text-[#94A3B8] dark:hover:text-white"
               }`}
             >
               {t(`Cihaz Listesi (${total})`, `Device List (${total})`)}
@@ -384,10 +384,10 @@ export default function AssetsPage() {
             <button
               type="button"
               onClick={() => setActiveTab("zones")}
-              className={`rounded-[4px] px-3 py-1.5 text-xs font-semibold transition ${
+              className={`cursor-pointer rounded-[4px] px-3 py-1.5 text-xs font-semibold transition ${
                 activeTab === "zones"
-                  ? "bg-[#1C2434] text-white"
-                  : "text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#1C2434]"
+                  ? "bg-[#2563EB] text-white shadow-xs"
+                  : "text-[#64748B] hover:text-[#1C2434] dark:text-[#94A3B8] dark:hover:text-white"
               }`}
             >
               {t(`Bölgeler & Purdue (${zones.length})`, `Zones & Purdue (${zones.length})`)}
@@ -706,11 +706,23 @@ export default function AssetsPage() {
 
                         {/* 7. İşlem */}
                         <td className="px-3 py-2.5 text-right whitespace-nowrap">
-                          <Link to={`/assets/${a.id}`}>
-                            <Button variant="secondary" size="sm">
-                              {t("Detay", "Detail")}
-                            </Button>
-                          </Link>
+                          <div className="inline-flex items-center gap-1.5">
+                            {canEditAssets && !a.is_verified && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={bulkVerifyMut.isPending}
+                                onClick={() => bulkVerifyMut.mutate([a.id])}
+                              >
+                                {t("✓ Doğrula", "✓ Verify")}
+                              </Button>
+                            )}
+                            <Link to={`/assets/${a.id}`}>
+                              <Button variant="secondary" size="sm">
+                                {t("Detay", "Detail")}
+                              </Button>
+                            </Link>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -719,22 +731,24 @@ export default function AssetsPage() {
               </table>
             </div>
 
-            {/* TailAdmin Sayfalama Alt Çubuğu */}
+            {/* Sayfalama Alt Çubuğu */}
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#E2E8F0] bg-white px-5 py-3 text-xs text-[#64748B]">
               <div className="flex items-center gap-2">
                 <span>{t("Sayfa başına satır:", "Rows per page:")}</span>
-                <select
-                  value={rowsPerPage}
-                  onChange={(e) => {
-                    setRowsPerPage(Number(e.target.value));
-                    setPageIdx(1);
-                  }}
-                  className="rounded-[4px] border border-[#E2E8F0] px-2 py-1 text-xs text-[#1C2434]"
-                >
-                  <option value={10}>10</option>
-                  <option value={15}>15</option>
-                  <option value={50}>50</option>
-                </select>
+                <div className="w-20">
+                  <Select
+                    aria-label={t("Sayfa başına satır", "Rows per page")}
+                    value={String(rowsPerPage)}
+                    onChange={(e) => {
+                      setRowsPerPage(Number(e.target.value));
+                      setPageIdx(1);
+                    }}
+                  >
+                    <option value="10">10</option>
+                    <option value="15">15</option>
+                    <option value="50">50</option>
+                  </Select>
+                </div>
               </div>
 
               <div>

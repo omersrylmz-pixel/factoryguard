@@ -80,7 +80,8 @@ html.dark .bg-white\/70 {
 html.dark .bg-\[\#F8FAFC\],
 html.dark .bg-\[\#F7F9FC\],
 html.dark .bg-slate-50,
-html.dark .bg-slate-100 {
+html.dark .bg-slate-100,
+html.dark .bg-slate-200 {
   background-color: #161F30;
 }
 

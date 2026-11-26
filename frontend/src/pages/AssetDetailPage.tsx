@@ -142,7 +142,7 @@ export default function AssetDetailPage() {
       key: "network_exposure",
       label: t("Ağ Maruziyeti (Maks 25)", "Network Exposure (Max 25)"),
       max: 25,
-      color: "#0D9488",
+      color: "#3B82F6",
     },
     {
       key: "verified_vulnerability",
@@ -205,6 +205,15 @@ export default function AssetDetailPage() {
             <Link to="/assets">
               <Button variant="secondary">{t("← Envantere Dön", "← Back to Inventory")}</Button>
             </Link>
+            {canEditAssets && !asset.is_verified && (
+              <Button
+                variant="outline"
+                disabled={updateMut.isPending}
+                onClick={() => updateMut.mutate({ is_verified: true })}
+              >
+                {t("✓ Cihazı Hemen Doğrula", "✓ Quick Verify Asset")}
+              </Button>
+            )}
             <Button
               variant={activeTab === "edit" ? "dark" : "primary"}
               onClick={() => setActiveTab(activeTab === "edit" ? "overview" : "edit")}
@@ -440,10 +449,10 @@ export default function AssetDetailPage() {
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`rounded-t-[4px] border-b-2 px-3.5 py-2.5 font-semibold transition ${
+              className={`cursor-pointer rounded-t-[6px] border-b-2 px-3.5 py-2.5 font-semibold transition ${
                 activeTab === tab.id
-                  ? "border-[#0D9488] bg-white text-[#0D9488]"
-                  : "border-transparent text-[#64748B] hover:text-[#1C2434]"
+                  ? "border-[#2563EB] bg-white text-[#2563EB] dark:border-[#38BDF8] dark:bg-[#111827] dark:text-[#38BDF8]"
+                  : "border-transparent text-[#64748B] hover:text-[#1C2434] dark:text-[#94A3B8] dark:hover:text-white"
               }`}
             >
               {tab.label}
@@ -523,7 +532,9 @@ export default function AssetDetailPage() {
                           {cnt > 0 && (
                             <div
                               className={`w-full rounded-[1px] ${
-                                cnt === maxHourlyCount ? "bg-[#0D9488]" : "bg-teal-400/80"
+                                cnt === maxHourlyCount
+                                  ? "bg-gradient-to-t from-[#2563EB] to-[#38BDF8]"
+                                  : "bg-sky-500/75"
                               }`}
                               style={{ height: `${heightPct}%` }}
                             />
