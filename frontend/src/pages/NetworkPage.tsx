@@ -1,6 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from "react";
+import {
+  Background,
+  BackgroundVariant,
+  Controls,
+  Handle,
+  MarkerType,
+  MiniMap,
+  Position,
+  ReactFlow,
+  type Edge,
+  type Node,
+  type NodeProps,
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
+import { DeviceHardwareThumb, vendorAccentColor } from "../components/deviceVisuals";
 import {
   ASSET_TYPE_LABEL,
   Badge,
@@ -13,6 +28,7 @@ import {
   PageHeader,
   ProtocolBadge,
   Select,
+  SlideOverDrawer,
   StatCard,
   formatDate,
 } from "../components/ui";
@@ -26,18 +42,6 @@ import type {
   GraphNode,
   Site,
 } from "../types/api";
-
-function hexPoints(r: number): string {
-  const pts: string[] = [];
-  for (let i = 0; i < 6; i++) {
-    const angle = (Math.PI / 3) * i - Math.PI / 2;
-    pts.push(`${(r * Math.cos(angle)).toFixed(1)},${(r * Math.sin(angle)).toFixed(1)}`);
-  }
-  return pts.join(" ");
-}
-
-const OUTER_HEX = hexPoints(22);
-const INNER_HEX = hexPoints(18);
 
 type LayoutMode = "purdue" | "hub" | "ring";
 type PurdueTier = "L3" | "L2" | "L1";
@@ -56,6 +60,187 @@ function inferPurdueTier(node: GraphNode): PurdueTier {
   }
   return "L1";
 }
+
+/* ============================================================================
+ * React Flow Özel Purdue Katmanı Arka Plan Kutusu (Sub-Flow Swimlane Node)
+ * ============================================================================ */
+interface PurdueLaneData extends Record<string, unknown> {
+  code: string;
+  title: string;
+  subtitle: string;
+  width: number;
+  height: number;
+  borderCol: string;
+  bgCol: string;
+  badgeBg: string;
+  countLabel: string;
+}
+
+function PurdueLaneNode({ data }: NodeProps<Node<PurdueLaneData>>) {
+  return (
+    <div
+      style={{
+        width: data.width,
+        height: data.height,
+        borderColor: data.borderCol,
+        backgroundColor: data.bgCol,
+      }}
+      className="pointer-events-none relative rounded-[10px] border border-dashed px-4 py-3 transition-colors"
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <span
+            style={{ backgroundColor: data.badgeBg }}
+            className="rounded-[4px] px-2.5 py-0.5 font-mono text-[10px] font-bold tracking-wider text-white uppercase shadow-xs"
+          >
+            {data.code}
+          </span>
+          <span className="text-xs font-bold text-[#0F172A] dark:text-[#F1F5F9]">
+            {data.title}
+          </span>
+          <span className="hidden text-[11px] text-[#64748B] sm:inline dark:text-[#94A3B8]">
+            · {data.subtitle}
+          </span>
+        </div>
+        <span className="rounded-[4px] border border-[#CBD5E1] bg-white/80 px-2 py-0.5 font-mono text-[10px] font-semibold text-[#64748B] dark:border-[#1E293B] dark:bg-[#0F172A]/80 dark:text-sky-300">
+          {data.countLabel}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================================
+ * React Flow Özel Endüstriyel Cihaz Düğüm Kartı (PLC / HMI / SCADA Node Card)
+ * - Canlı durum LED'i, 3B donanım şasi ikonu, üretici etiketi, protokol rozetleri
+ * - Blast Radius (Etki Alanı) odaklanma modunda komşu olmayanları %20 opaklığa düşürür
+ * ============================================================================ */
+interface IndustrialDeviceNodeData extends Record<string, unknown> {
+  node: GraphNode;
+  tier: PurdueTier;
+  protocols: string[];
+  flowCount: number;
+  crossZoneCount: number;
+  isSelected: boolean;
+  isBlastNeighbor: boolean;
+  dimmed: boolean;
+}
+
+function IndustrialDeviceNode({ data }: NodeProps<Node<IndustrialDeviceNodeData>>) {
+  const { node, tier, protocols, flowCount, crossZoneCount, isSelected, isBlastNeighbor, dimmed } =
+    data;
+  const vStyle = vendorAccentColor(node.vendor ?? node.classification_label);
+
+  const statusColor =
+    node.criticality === "critical" || node.criticality === "high"
+      ? "#EF4444"
+      : node.is_verified
+        ? "#10B981"
+        : "#F59E0B";
+
+  const borderClass = isSelected
+    ? "border-[#38BDF8] ring-2 ring-[#38BDF8]/40 shadow-[0_0_24px_rgba(56,189,248,0.35)]"
+    : isBlastNeighbor
+      ? "border-amber-400/80 shadow-[0_0_16px_rgba(245,158,11,0.22)]"
+      : node.criticality === "critical" || node.criticality === "high"
+        ? "border-rose-500/60"
+        : node.is_verified
+          ? "border-emerald-500/45"
+          : "border-amber-500/50";
+
+  return (
+    <div
+      style={{ opacity: dimmed ? 0.18 : 1 }}
+      className={`group relative w-[206px] cursor-pointer rounded-[8px] border bg-white p-2.5 text-left transition-all duration-200 hover:-translate-y-0.5 dark:bg-[#0F172A] ${borderClass}`}
+    >
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="!h-2 !w-2 !border-none !bg-sky-400"
+      />
+
+      {/* Üst Anlamsal Durum Şeridi */}
+      <div
+        className="mb-2 h-1 w-full rounded-full"
+        style={{ backgroundColor: statusColor }}
+      />
+
+      {/* Üst Satır: Üretici Rozeti + Purdue Katmanı + Canlı Durum LED'i */}
+      <div className="mb-1.5 flex items-center justify-between gap-1">
+        <div className="flex items-center gap-1.5">
+          <span
+            style={{ backgroundColor: vStyle.bg, color: vStyle.text }}
+            className="rounded-[3px] px-1.5 py-0.5 font-mono text-[8.5px] font-bold tracking-wider"
+          >
+            {vStyle.brand.slice(0, 12)}
+          </span>
+          <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[8.5px] font-bold text-[#64748B] dark:bg-[#1E293B] dark:text-sky-300">
+            {tier}
+          </span>
+        </div>
+
+        <span className="inline-flex items-center gap-1 font-mono text-[9px] font-bold">
+          <span
+            className="h-2 w-2 rounded-full shadow-[0_0_6px_currentColor]"
+            style={{ backgroundColor: statusColor, color: statusColor }}
+          />
+          <span className="text-[#64748B] dark:text-[#94A3B8]">{flowCount}f</span>
+        </span>
+      </div>
+
+      {/* Orta Satır: 3B Donanım Şasisi + IP ve Cihaz Adı */}
+      <div className="flex items-center gap-2.5">
+        <DeviceHardwareThumb
+          assetType={node.asset_type}
+          vendor={node.vendor}
+          isVerified={node.is_verified}
+          criticality={node.criticality}
+        />
+        <div className="min-w-0 flex-1">
+          <div className="truncate font-mono text-xs font-bold text-[#0F172A] tabular-nums dark:text-white">
+            {node.ip_address || node.label}
+          </div>
+          <div
+            className="truncate text-[10.5px] font-semibold text-[#64748B] dark:text-[#CBD5E1]"
+            title={node.label}
+          >
+            {node.label !== node.ip_address ? node.label : ASSET_TYPE_LABEL[node.asset_type]}
+          </div>
+        </div>
+      </div>
+
+      {/* Alt Satır: Protokol Rozetleri ve Çapraz Bölge Uyarısı */}
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-1 border-t border-[#E2E8F0] pt-1.5 dark:border-[#1E293B]">
+        <div className="flex flex-wrap gap-1">
+          {protocols.slice(0, 2).map((p) => (
+            <span
+              key={p}
+              className="rounded border border-sky-500/30 bg-sky-500/10 px-1.5 py-0.2 font-mono text-[8.5px] font-bold text-sky-700 dark:text-sky-300"
+            >
+              {p}
+            </span>
+          ))}
+        </div>
+        {crossZoneCount > 0 && (
+          <span className="rounded border border-rose-500/40 bg-rose-500/15 px-1.5 py-0.2 font-mono text-[8.5px] font-bold text-rose-600 dark:text-rose-300">
+            ! {crossZoneCount} X-ZONE
+          </span>
+        )}
+      </div>
+
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="!h-2 !w-2 !border-none !bg-sky-400"
+      />
+    </div>
+  );
+}
+
+const NODE_TYPES = {
+  purdueLane: PurdueLaneNode,
+  industrialDevice: IndustrialDeviceNode,
+};
 
 function buildFirewallRules(edges: CommunicationEdge[], vendor: FirewallVendor): string {
   const approved = edges.filter((e) => e.is_baseline_approved);
@@ -142,7 +327,6 @@ function buildFirewallRules(edges: CommunicationEdge[], vendor: FirewallVendor):
     return lines.join("\n");
   }
 
-  // nftables
   const lines = [
     "# FactoryGuard Lite — IEC 62443 Conduit Ruleset (Linux nftables)",
     "table inet factoryguard_ot_conduit {",
@@ -177,36 +361,16 @@ export default function NetworkPage() {
   const [siteId, setSiteId] = useState("");
   const [protocolFilter, setProtocolFilter] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
   const [showEdgeLabels, setShowEdgeLabels] = useState(true);
   const [layoutMode, setLayoutMode] = useState<LayoutMode>("purdue");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [baselineNotice, setBaselineNotice] = useState<string | null>(null);
 
   // Otomatik Güvenlik Duvarı (Conduit) Kural Üretici durumu
   const [fwOpen, setFwOpen] = useState(false);
   const [fwVendor, setFwVendor] = useState<FirewallVendor>("fortigate");
   const [fwCopied, setFwCopied] = useState(false);
-
-  const dragStateRef = useRef<{
-    active: boolean;
-    pointerId: number;
-    startX: number;
-    startY: number;
-    originX: number;
-    originY: number;
-    moved: boolean;
-  }>({
-    active: false,
-    pointerId: -1,
-    startX: 0,
-    startY: 0,
-    originX: 0,
-    originY: 0,
-    moved: false,
-  });
 
   const sitesQuery = useQuery({
     queryKey: ["sites", activeOrg?.id],
@@ -287,241 +451,254 @@ export default function NetworkPage() {
   const approvedCount = edges.filter((e) => e.is_baseline_approved).length;
   const crossZoneCount = edges.filter((e) => e.cross_zone).length;
 
-  // Genişletilmiş yüksek çözünürlüklü topoloji tuvali (düğümlerin sıkışmaması için)
-  const width = 1180;
-  const height = 610;
-  const cx = width / 2;
-  const cy = height / 2;
+  // Blast Radius (Etki Alanı) komşuluk kümesi
+  const blastNeighborIds = useMemo(() => {
+    const s = new Set<string>();
+    if (!selectedNodeId) return s;
+    s.add(selectedNodeId);
+    for (const e of edges) {
+      if (e.source_asset_id === selectedNodeId) s.add(e.target_asset_id);
+      if (e.target_asset_id === selectedNodeId) s.add(e.source_asset_id);
+    }
+    return s;
+  }, [selectedNodeId, edges]);
 
-  const degreeMap = new Map<string, number>();
-  for (const e of edges) {
-    degreeMap.set(e.source_asset_id, (degreeMap.get(e.source_asset_id) ?? 0) + 1);
-    degreeMap.set(e.target_asset_id, (degreeMap.get(e.target_asset_id) ?? 0) + 1);
-  }
-  const sortedNodes = [...nodes].sort(
-    (a, b) => (degreeMap.get(b.id) ?? 0) - (degreeMap.get(a.id) ?? 0),
-  );
+  // React Flow Düğümleri ve Animasyonlu Kenarları
+  const { rfNodes, rfEdges } = useMemo(() => {
+    const degreeMap = new Map<string, number>();
+    const nodeProtos = new Map<string, Set<string>>();
+    const nodeCrossZone = new Map<string, number>();
 
-  const coords = new Map<string, { x: number; y: number; tier: PurdueTier }>();
+    for (const e of edges) {
+      degreeMap.set(e.source_asset_id, (degreeMap.get(e.source_asset_id) ?? 0) + 1);
+      degreeMap.set(e.target_asset_id, (degreeMap.get(e.target_asset_id) ?? 0) + 1);
+      const cleanP = e.protocol.replace(/\?+$/, "").toUpperCase();
+      for (const id of [e.source_asset_id, e.target_asset_id]) {
+        const set = nodeProtos.get(id) ?? new Set<string>();
+        set.add(cleanP);
+        nodeProtos.set(id, set);
+        if (e.cross_zone) {
+          nodeCrossZone.set(id, (nodeCrossZone.get(id) ?? 0) + 1);
+        }
+      }
+    }
 
-  const purdueBands: {
-    tier: PurdueTier;
-    yCenter: number;
-    yTop: number;
-    height: number;
-    code: string;
-    title: string;
-    subtitle: string;
-    bg: string;
-    stroke: string;
-    badgeBg: string;
-    titleColor: string;
-    subColor: string;
-  }[] = [
-    {
-      tier: "L3",
-      yCenter: 105,
-      yTop: 22,
-      height: 165,
-      code: "PURDUE L3 / IT",
-      title: t("Operasyon & Kurumsal Ağ", "Operations & Enterprise IT"),
-      subtitle: t("Sunucu, Ağ Cihazı, İstemci", "Servers, Switches, Workstations"),
-      bg: isDark ? "#0F172A" : "#F8FAFC",
-      stroke: isDark ? "#334155" : "#CBD5E1",
-      badgeBg: isDark ? "#334155" : "#475569",
-      titleColor: isDark ? "#F1F5F9" : "#0F172A",
-      subColor: isDark ? "#94A3B8" : "#64748B",
-    },
-    {
-      tier: "L2",
-      yCenter: 300,
-      yTop: 206,
-      height: 185,
-      code: "PURDUE L2",
-      title: t("Süpervizör, SCADA & HMI", "Supervisory, SCADA & HMI"),
-      subtitle: t("SCADA Sunucusu, HMI, Mühendislik", "SCADA Servers, HMIs, Engineering"),
-      bg: isDark ? "#0B192C" : "#EFF6FF",
-      stroke: isDark ? "#1D4ED8" : "#93C5FD",
-      badgeBg: "#2563EB",
-      titleColor: isDark ? "#E0F2FE" : "#0F172A",
-      subColor: isDark ? "#7DD3FC" : "#475569",
-    },
-    {
-      tier: "L1",
-      yCenter: 498,
-      yTop: 410,
-      height: 180,
-      code: "PURDUE L1 / L0",
-      title: t("PLC & Saha Kontrol Katmanı", "PLC & Field Control Layer"),
-      subtitle: t("PLC, RTU, Saha Ekipmanı", "PLCs, RTUs, Field Controllers"),
-      bg: isDark ? "#151324" : "#FFFBEB",
-      stroke: isDark ? "#B45309" : "#FCD34D",
-      badgeBg: "#D97706",
-      titleColor: isDark ? "#FEF3C7" : "#0F172A",
-      subColor: isDark ? "#FCD34D" : "#78350F",
-    },
-  ];
-
-  if (layoutMode === "purdue") {
     const byTier: Record<PurdueTier, GraphNode[]> = { L3: [], L2: [], L1: [] };
     for (const n of nodes) {
       byTier[inferPurdueTier(n)].push(n);
     }
-    for (const band of purdueBands) {
-      const list = byTier[band.tier].sort((a, b) =>
-        (a.ip_address ?? a.label).localeCompare(b.ip_address ?? b.label),
-      );
-      const count = list.length;
-      if (count === 0) continue;
-      const xStart = 250;
-      const xEnd = width - 75;
-      const span = xEnd - xStart;
-      list.forEach((n, idx) => {
-        const x = count === 1 ? (xStart + xEnd) / 2 : xStart + (span * idx) / (count - 1);
-        const staggerY = count >= 5 ? (idx % 2 === 0 ? -24 : 24) : 0;
-        coords.set(n.id, { x, y: band.yCenter + staggerY, tier: band.tier });
-      });
-    }
-  } else if (layoutMode === "hub" && sortedNodes.length > 2) {
-    const hub = sortedNodes[0];
-    coords.set(hub.id, { x: cx, y: cy, tier: inferPurdueTier(hub) });
-    const rest = sortedNodes.slice(1);
-    const innerRing = rest.slice(0, 6);
-    const outerRing = rest.slice(6);
 
-    innerRing.forEach((n, idx) => {
-      const angle = (2 * Math.PI * idx) / Math.max(innerRing.length, 1) - Math.PI / 3;
-      const rx = outerRing.length > 0 ? 210 : 290;
-      const ry = outerRing.length > 0 ? 140 : 195;
-      coords.set(n.id, {
-        x: cx + rx * Math.cos(angle),
-        y: cy + ry * Math.sin(angle),
-        tier: inferPurdueTier(n),
-      });
-    });
+    const maxInTier = Math.max(4, byTier.L3.length, byTier.L2.length, byTier.L1.length);
+    const colsPerRow = Math.min(5, Math.max(4, Math.ceil(maxInTier / 2)));
+    const laneWidth = Math.max(1160, colsPerRow * 245 + 90);
 
-    outerRing.forEach((n, idx) => {
-      const angle = (2 * Math.PI * idx) / Math.max(outerRing.length, 1) - Math.PI / 6;
-      coords.set(n.id, {
-        x: cx + 430 * Math.cos(angle),
-        y: cy + 225 * Math.sin(angle),
-        tier: inferPurdueTier(n),
-      });
-    });
-  } else {
-    sortedNodes.forEach((n, idx) => {
-      const angle = (2 * Math.PI * idx) / Math.max(sortedNodes.length, 1) - Math.PI / 2;
-      coords.set(n.id, {
-        x: cx + 390 * Math.cos(angle),
-        y: cy + 210 * Math.sin(angle),
-        tier: inferPurdueTier(n),
-      });
-    });
-  }
+    const outNodes: Node[] = [];
 
-  // Çakışmasız (Anti-Collision) Kenar ve Etiket Yerleşimi
-  const placedLabels: { x: number; y: number }[] = [];
-  for (const [, c] of coords) {
-    placedLabels.push({ x: c.x, y: c.y });
-    placedLabels.push({ x: c.x, y: c.y + 38 });
-  }
+    if (layoutMode === "purdue") {
+      const lanes: {
+        tier: PurdueTier;
+        code: string;
+        title: string;
+        subtitle: string;
+        yTop: number;
+        height: number;
+        borderCol: string;
+        bgCol: string;
+        badgeBg: string;
+      }[] = [
+        {
+          tier: "L3",
+          code: "PURDUE L3 / IT",
+          title: t("Operasyon & Kurumsal Ağ", "Operations & Enterprise IT"),
+          subtitle: t("Historian, Sunucu, Endüstriyel Switch & İş İstasyonu", "Historian, Servers, Switches & Workstations"),
+          yTop: 16,
+          height: byTier.L3.length > colsPerRow ? 290 : 185,
+          borderCol: isDark ? "#334155" : "#CBD5E1",
+          bgCol: isDark ? "rgba(15, 23, 42, 0.72)" : "rgba(248, 250, 252, 0.9)",
+          badgeBg: "#475569",
+        },
+        {
+          tier: "L2",
+          code: "PURDUE L2 · SCADA / HMI",
+          title: t("Süpervizör Kontrol & Operatör HMI", "Supervisory Control, SCADA & Operator HMI"),
+          subtitle: t("SCADA Sunucusu, Dokunmatik HMI Paneli, Mühendislik İstasyonu", "SCADA Servers, Touch HMIs, Engineering Workstations"),
+          yTop: 0,
+          height: byTier.L2.length > colsPerRow ? 290 : 195,
+          borderCol: isDark ? "#1D4ED8" : "#93C5FD",
+          bgCol: isDark ? "rgba(11, 25, 44, 0.78)" : "rgba(239, 246, 255, 0.88)",
+          badgeBg: "#2563EB",
+        },
+        {
+          tier: "L1",
+          code: "PURDUE L1 / L0 · SAHA KONTROL",
+          title: t("PLC, RTU & Saha Kontrol Katmanı", "PLC, RTU & Field Control Layer"),
+          subtitle: t("Programlanabilir Kontrolcüler (PLC), RTU, I/O ve Aktüatörler", "Programmable Logic Controllers (PLCs), RTUs & Field I/O"),
+          yTop: 0,
+          height: byTier.L1.length > colsPerRow ? 310 : 200,
+          borderCol: isDark ? "#B45309" : "#FCD34D",
+          bgCol: isDark ? "rgba(21, 19, 36, 0.82)" : "rgba(255, 251, 235, 0.9)",
+          badgeBg: "#D97706",
+        },
+      ];
 
-  function computeEdgeGeometry(e: CommunicationEdge, idx: number) {
-    const s = coords.get(e.source_asset_id);
-    const tCoord = coords.get(e.target_asset_id);
-    if (!s || !tCoord) return null;
+      lanes[1].yTop = lanes[0].yTop + lanes[0].height + 24;
+      lanes[2].yTop = lanes[1].yTop + lanes[1].height + 24;
 
-    const sameRow = Math.abs(s.y - tCoord.y) < 36;
-    const dx = tCoord.x - s.x;
-    const dy = tCoord.y - s.y;
+      for (const lane of lanes) {
+        const tierList = byTier[lane.tier].sort((a, b) =>
+          (a.ip_address ?? a.label).localeCompare(b.ip_address ?? b.label),
+        );
+        outNodes.push({
+          id: `lane-${lane.tier}`,
+          type: "purdueLane",
+          position: { x: 16, y: lane.yTop },
+          draggable: false,
+          selectable: false,
+          focusable: false,
+          zIndex: -1,
+          data: {
+            code: lane.code,
+            title: lane.title,
+            subtitle: lane.subtitle,
+            width: laneWidth,
+            height: lane.height,
+            borderCol: lane.borderCol,
+            bgCol: lane.bgCol,
+            badgeBg: lane.badgeBg,
+            countLabel: t(`${tierList.length} Düğüm`, `${tierList.length} Nodes`),
+          },
+        });
 
-    const curveOffset = sameRow ? (idx % 2 === 0 ? -48 : 48) : (idx % 3 - 1) * 22;
-    const ctrlX = (s.x + tCoord.x) / 2 + (!sameRow ? curveOffset : 0);
-    const ctrlY = (s.y + tCoord.y) / 2 + (sameRow ? curveOffset : 0);
+        tierList.forEach((n, idx) => {
+          const row = Math.floor(idx / colsPerRow);
+          const col = idx % colsPerRow;
+          const rowCount = Math.min(colsPerRow, tierList.length - row * colsPerRow);
+          const totalRowW = rowCount * 235;
+          const startX = 16 + Math.max(36, (laneWidth - totalRowW) / 2);
 
-    let lx = 0.25 * s.x + 0.5 * ctrlX + 0.25 * tCoord.x;
-    let ly = 0.25 * s.y + 0.5 * ctrlY + 0.25 * tCoord.y;
+          const x = startX + col * 238;
+          const y = lane.yTop + 52 + row * 124;
 
-    const candidates = [
-      { x: lx, y: ly },
-      { x: lx, y: ly - 24 },
-      { x: lx, y: ly + 24 },
-      { x: lx - 44, y: ly - 18 },
-      { x: lx + 44, y: ly + 18 },
-      { x: lx, y: ly - 44 },
-      { x: lx, y: ly + 44 },
-    ];
-    for (const cand of candidates) {
-      const collides = placedLabels.some(
-        (p) => Math.abs(p.x - cand.x) < 78 && Math.abs(p.y - cand.y) < 22,
-      );
-      if (!collides) {
-        lx = cand.x;
-        ly = cand.y;
-        break;
+          const isSel = selectedNodeId === n.id;
+          const isNeighbor = !isSel && blastNeighborIds.has(n.id);
+          const dimmed = Boolean(selectedNodeId && !blastNeighborIds.has(n.id));
+
+          outNodes.push({
+            id: n.id,
+            type: "industrialDevice",
+            position: { x, y },
+            zIndex: isSel ? 20 : isNeighbor ? 15 : 10,
+            data: {
+              node: n,
+              tier: lane.tier,
+              protocols: Array.from(nodeProtos.get(n.id) ?? []),
+              flowCount: degreeMap.get(n.id) ?? 0,
+              crossZoneCount: nodeCrossZone.get(n.id) ?? 0,
+              isSelected: isSel,
+              isBlastNeighbor: isNeighbor,
+              dimmed,
+            },
+          });
+        });
       }
+    } else {
+      // Hub veya Halka (Ring) Yerleşimi
+      const sorted = [...nodes].sort(
+        (a, b) => (degreeMap.get(b.id) ?? 0) - (degreeMap.get(a.id) ?? 0),
+      );
+      const centerX = 520;
+      const centerY = 300;
+      sorted.forEach((n, idx) => {
+        let x = centerX;
+        let y = centerY;
+        if (layoutMode === "hub" && idx === 0) {
+          x = centerX;
+          y = centerY;
+        } else {
+          const ringIdx = layoutMode === "hub" ? idx - 1 : idx;
+          const totalRing = Math.max(1, layoutMode === "hub" ? sorted.length - 1 : sorted.length);
+          const angle = (2 * Math.PI * ringIdx) / totalRing - Math.PI / 2;
+          const rx = 430;
+          const ry = 235;
+          x = centerX + rx * Math.cos(angle);
+          y = centerY + ry * Math.sin(angle);
+        }
+        const isSel = selectedNodeId === n.id;
+        const isNeighbor = !isSel && blastNeighborIds.has(n.id);
+        const dimmed = Boolean(selectedNodeId && !blastNeighborIds.has(n.id));
+
+        outNodes.push({
+          id: n.id,
+          type: "industrialDevice",
+          position: { x, y },
+          zIndex: isSel ? 20 : 10,
+          data: {
+            node: n,
+            tier: inferPurdueTier(n),
+            protocols: Array.from(nodeProtos.get(n.id) ?? []),
+            flowCount: degreeMap.get(n.id) ?? 0,
+            crossZoneCount: nodeCrossZone.get(n.id) ?? 0,
+            isSelected: isSel,
+            isBlastNeighbor: isNeighbor,
+            dimmed,
+          },
+        });
+      });
     }
-    placedLabels.push({ x: lx, y: ly });
 
-    const pathD =
-      Math.abs(dx) > 10 || Math.abs(dy) > 10
-        ? `M ${s.x.toFixed(1)} ${s.y.toFixed(1)} Q ${ctrlX.toFixed(1)} ${ctrlY.toFixed(1)} ${tCoord.x.toFixed(1)} ${tCoord.y.toFixed(1)}`
-        : `M ${s.x} ${s.y} L ${tCoord.x} ${tCoord.y}`;
+    const outEdges: Edge[] = edges.map((e) => {
+      const inBlast =
+        !selectedNodeId ||
+        e.source_asset_id === selectedNodeId ||
+        e.target_asset_id === selectedNodeId;
+      const isUnauthorizedOrCross = e.cross_zone && !e.is_baseline_approved;
+      const strokeColor = isUnauthorizedOrCross
+        ? "#EF4444"
+        : e.is_baseline_approved
+          ? "#10B981"
+          : "#38BDF8";
+      const cleanProto = e.protocol.replace(/\?+$/, "").toUpperCase();
+      const labelText = showEdgeLabels
+        ? `${cleanProto}${e.target_port ? `:${e.target_port}` : ""}`
+        : undefined;
 
-    return { s, tCoord, pathD, lx, ly };
-  }
-
-  function nodeHexStroke(n: GraphNode): string {
-    if (n.criticality === "critical" || n.criticality === "high") return "#F43F5E";
-    if (n.is_verified) return "#38BDF8";
-    return "#F59E0B";
-  }
-
-  // Fare tekerleği ile yakınlaştırma ve fareyle tutup sürükleme (Pan & Zoom)
-  function handleWheel(e: ReactWheelEvent<HTMLDivElement>) {
-    e.preventDefault();
-    const delta = e.deltaY < 0 ? 0.12 : -0.12;
-    setZoom((z) => Math.min(2.4, Math.max(0.55, +(z + delta).toFixed(2))));
-  }
-
-  function handlePointerDown(e: ReactPointerEvent<SVGSVGElement>) {
-    // Yalnızca sol tık ile tuval sürükleme
-    if (e.button !== 0) return;
-    dragStateRef.current = {
-      active: true,
-      pointerId: e.pointerId,
-      startX: e.clientX,
-      startY: e.clientY,
-      originX: pan.x,
-      originY: pan.y,
-      moved: false,
-    };
-    setIsDragging(true);
-  }
-
-  function handlePointerMove(e: ReactPointerEvent<SVGSVGElement>) {
-    const st = dragStateRef.current;
-    if (!st.active) return;
-    const dx = e.clientX - st.startX;
-    const dy = e.clientY - st.startY;
-    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
-      st.moved = true;
-    }
-    setPan({
-      x: st.originX + dx,
-      y: st.originY + dy,
+      return {
+        id: e.id,
+        source: e.source_asset_id,
+        target: e.target_asset_id,
+        animated: inBlast,
+        label: inBlast ? labelText : undefined,
+        labelStyle: {
+          fill: isDark ? "#F8FAFC" : "#0F172A",
+          fontFamily: "var(--font-mono)",
+          fontSize: 10,
+          fontWeight: 700,
+        },
+        labelBgStyle: {
+          fill: isDark ? "#0F172A" : "#FFFFFF",
+          stroke: strokeColor,
+          strokeWidth: 1,
+          fillOpacity: 0.94,
+        },
+        labelBgPadding: [5, 3] as [number, number],
+        labelBgBorderRadius: 4,
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: strokeColor,
+          width: 16,
+          height: 16,
+        },
+        style: {
+          stroke: strokeColor,
+          strokeWidth: inBlast ? 2.2 : 1.2,
+          strokeDasharray: isUnauthorizedOrCross ? "6 4" : undefined,
+          opacity: inBlast ? 1 : 0.14,
+        },
+      };
     });
-  }
 
-  function handlePointerUp() {
-    dragStateRef.current.active = false;
-    setIsDragging(false);
-  }
-
-  function resetViewport() {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
-  }
+    return { rfNodes: outNodes, rfEdges: outEdges };
+  }, [nodes, edges, layoutMode, isDark, selectedNodeId, blastNeighborIds, showEdgeLabels, t]);
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) ?? null;
   const selectedNodeEdges = selectedNode
@@ -542,17 +719,14 @@ export default function NetworkPage() {
     <div className="space-y-6">
       <PageHeader
         breadcrumb={t("Ağ Topolojisi", "Network Topology")}
-        title={t("Ağ Topolojisi & Purdue Katman Haritası", "Network Topology & Purdue Layer Map")}
+        title={t("İnteraktif OT Ağ Topolojisi & Blast Radius Analizi", "Interactive OT Network Topology & Blast Radius Analysis")}
         subtitle={t(
-          "ISA-95 / Purdue katmanlarına göre interaktif iletişim grafiği, baseline onayı ve Conduit güvenlik duvarı kural üretici",
-          "Interactive communication graph structured by ISA-95 / Purdue layers, baseline approval and Conduit firewall rule generator",
+          "React Flow tabanlı ISA-95 / Purdue katman haritası, canlı trafik akışları, etki alanı (Blast Radius) odaklanması ve Conduit kural üretici",
+          "React Flow powered ISA-95 / Purdue layer map, animated traffic flows, Blast Radius focus mode and Conduit policy generator",
         )}
         actions={
           <>
-            <Button
-              variant="secondary"
-              onClick={() => setFwOpen((prev) => !prev)}
-            >
+            <Button variant="secondary" onClick={() => setFwOpen((prev) => !prev)}>
               <svg className="h-3.5 w-3.5 text-sky-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
@@ -721,12 +895,15 @@ export default function NetworkPage() {
 
       <ErrorBox error={graphQuery.error || approveAllMut.error || approveSingleMut.error} />
 
-      {/* Topoloji Kartı + Yerleşim Modu & Filtre Araç Çubuğu */}
+      {/* React Flow (@xyflow/react) İnteraktif Topoloji Haritası */}
       <Card
-        title={t("ISA-95 / Purdue Katmanlı OT Ağ Topolojisi", "ISA-95 / Purdue Layered OT Network Topology")}
+        title={t(
+          "ISA-95 / Purdue Katmanlı İnteraktif Topoloji Motoru (React Flow)",
+          "ISA-95 / Purdue Layered Interactive Topology Engine (React Flow)",
+        )}
         subtitle={t(
-          "Tuvali fareyle tutup sürükleyerek gezinin, tekerlekle yakınlaştırın; bir düğüme tıklayarak bağlı akışlarını inceleyin",
-          "Click and drag to pan the canvas, scroll wheel to zoom; click any node to inspect its connected flows",
+          "Bir PLC/SCADA düğümüne tıklayarak Etki Alanı (Blast Radius) odaklanma modunu ve sağdan kayan inceleme çekmecesini açın",
+          "Click any PLC/SCADA node card to trigger Blast Radius focus mode and open the slide-over inspection drawer",
         )}
         noPadding
         actions={
@@ -743,10 +920,7 @@ export default function NetworkPage() {
                 <button
                   key={m.id}
                   type="button"
-                  onClick={() => {
-                    setLayoutMode(m.id);
-                    resetViewport();
-                  }}
+                  onClick={() => setLayoutMode(m.id)}
                   className={`h-full cursor-pointer rounded-[4px] px-2.5 text-xs font-semibold transition ${
                     layoutMode === m.id
                       ? "bg-[#2563EB] text-white shadow-xs"
@@ -758,6 +932,14 @@ export default function NetworkPage() {
               ))}
             </div>
 
+            <Button
+              size="sm"
+              variant={showEdgeLabels ? "outline" : "secondary"}
+              onClick={() => setShowEdgeLabels((v) => !v)}
+            >
+              {showEdgeLabels ? t("Etiketler: Açık", "Labels: On") : t("Etiketler: Kapalı", "Labels: Off")}
+            </Button>
+
             <div className="w-44">
               <Input
                 value={searchTerm}
@@ -765,7 +947,7 @@ export default function NetworkPage() {
                 placeholder={t("IP, cihaz, protokol...", "IP, device, protocol...")}
               />
             </div>
-            <div className="w-44">
+            <div className="w-40">
               <Select value={siteId} onChange={(e) => setSiteId(e.target.value)}>
                 <option value="">{t("Tüm Fabrikalar", "All Sites")}</option>
                 {sites.map((s) => (
@@ -775,7 +957,7 @@ export default function NetworkPage() {
                 ))}
               </Select>
             </div>
-            <div className="w-40">
+            <div className="w-38">
               <Select value={protocolFilter} onChange={(e) => setProtocolFilter(e.target.value)}>
                 <option value="">{t("Tüm Protokoller", "All Protocols")}</option>
                 {protocols.map((p) => (
@@ -788,10 +970,37 @@ export default function NetworkPage() {
           </div>
         }
       >
-        <div
-          onWheel={handleWheel}
-          className="relative overflow-hidden bg-[#F1F5F9] dark:bg-[#080C16]"
-        >
+        {/* Blast Radius (Etki Alanı Odaklanma Modu) Aktif Banner'ı */}
+        {selectedNode && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-sky-500/30 bg-sky-500/10 px-6 py-2.5 text-xs">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <Badge tone="teal" dot>
+                {t("🎯 BLAST RADIUS (ETKİ ALANI) ODAKLANMA MODU", "🎯 BLAST RADIUS FOCUS MODE")}
+              </Badge>
+              <span className="font-bold text-[#1C2434]">{selectedNode.label}</span>
+              <span className="font-mono font-bold text-sky-500 tabular-nums">
+                ({selectedNode.ip_address ?? "—"})
+              </span>
+              <span className="text-[#64748B]">
+                ·{" "}
+                {t(
+                  `${Math.max(0, blastNeighborIds.size - 1)} doğrudan bağlı komşu cihaz · ${selectedNodeEdges.length} aktif akış`,
+                  `${Math.max(0, blastNeighborIds.size - 1)} directly connected neighbor nodes · ${selectedNodeEdges.length} active flows`,
+                )}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => setDrawerOpen(true)}>
+                {t("Yan Çekmecede İncele (Sheet)", "Inspect in Slide-Over Sheet")}
+              </Button>
+              <Button size="sm" variant="secondary" onClick={() => setSelectedNodeId(null)}>
+                {t("Odaklanmayı Kapat (Tüm Ağ)", "Exit Focus (Show All)")}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <div className="relative h-[620px] w-full bg-[#F1F5F9] dark:bg-[#070B14]">
           {graphQuery.isLoading ? (
             <div className="p-6">
               <Empty>{t("Topoloji haritası yükleniyor…", "Loading topology map…")}</Empty>
@@ -806,550 +1015,216 @@ export default function NetworkPage() {
               </Empty>
             </div>
           ) : (
-            <div className="relative">
-              {/* Üst Yüzen Harita Kontrol Çubuğu (Sağ alttaki düğümleri kapatmaması için sağ üstte) */}
-              <div className="pointer-events-auto absolute top-3 right-3 z-20 flex items-center gap-1.5 rounded-[6px] border border-[#CBD5E1] bg-white/95 p-1 shadow-md backdrop-blur-xs dark:border-[#2A364F] dark:bg-[#0F172A]/95">
-                <span className="hidden px-2 font-mono text-[10px] text-[#64748B] sm:inline dark:text-[#94A3B8]">
-                  {t("🖱️ Sürükle: Gezin · Tekerlek: Zoom", "🖱️ Drag: Pan · Wheel: Zoom")}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setShowEdgeLabels((v) => !v)}
-                  className={`cursor-pointer rounded-[4px] px-2.5 py-1 text-xs font-semibold transition ${
-                    showEdgeLabels
-                      ? "bg-[#2563EB]/15 text-[#2563EB] dark:bg-sky-500/20 dark:text-sky-300"
-                      : "text-[#64748B] hover:bg-slate-100 dark:text-[#94A3B8] dark:hover:bg-[#1E293B]"
-                  }`}
-                >
-                  {t("Etiketler", "Labels")}
-                </button>
-                <div className="h-4 w-[1px] bg-[#E2E8F0] dark:bg-[#1E293B]" />
-                <button
-                  type="button"
-                  title={t("Yakınlaştır (+)", "Zoom In (+)")}
-                  onClick={() => setZoom((z) => Math.min(2.4, +(z + 0.15).toFixed(2)))}
-                  className="cursor-pointer rounded-[4px] px-2 py-1 font-mono text-xs font-bold text-[#1C2434] hover:bg-slate-100 dark:text-white dark:hover:bg-[#1E293B]"
-                >
-                  ＋
-                </button>
-                <span className="min-w-[42px] text-center font-mono text-[11px] font-semibold text-[#1C2434] dark:text-sky-300">
-                  {Math.round(zoom * 100)}%
-                </span>
-                <button
-                  type="button"
-                  title={t("Uzaklaştır (-)", "Zoom Out (-)")}
-                  onClick={() => setZoom((z) => Math.max(0.55, +(z - 0.15).toFixed(2)))}
-                  className="cursor-pointer rounded-[4px] px-2 py-1 font-mono text-xs font-bold text-[#1C2434] hover:bg-slate-100 dark:text-white dark:hover:bg-[#1E293B]"
-                >
-                  －
-                </button>
-                <button
-                  type="button"
-                  title={t("Görünümü Sıfırla (1:1)", "Reset View (1:1)")}
-                  onClick={resetViewport}
-                  className="cursor-pointer rounded-[4px] border border-[#CBD5E1] px-2 py-0.5 font-mono text-[11px] font-semibold text-[#64748B] hover:text-[#1C2434] dark:border-[#2A364F] dark:text-[#94A3B8] dark:hover:text-white"
-                >
-                  1:1
-                </button>
-                {selectedNodeId && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedNodeId(null)}
-                    className="cursor-pointer rounded-[4px] bg-rose-500/15 px-2 py-1 text-xs font-semibold text-rose-600 dark:text-rose-300"
-                  >
-                    {t("Seçimi Kaldır", "Clear")}
-                  </button>
-                )}
-              </div>
-
-              <svg
-                viewBox={`0 0 ${width} ${height}`}
-                onPointerDown={handlePointerDown}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-                onPointerLeave={handlePointerUp}
-                className={`mx-auto h-[575px] w-full select-none ${
-                  isDragging ? "cursor-grabbing" : "cursor-grab"
-                }`}
-              >
-                <defs>
-                  <pattern id="ot-command-grid" width="24" height="24" patternUnits="userSpaceOnUse">
-                    <path
-                      d="M 24 0 L 0 0 0 24"
-                      fill="none"
-                      stroke={isDark ? "#151F32" : "#E2E8F0"}
-                      strokeWidth="0.8"
-                    />
-                  </pattern>
-                  <linearGradient id="node-hex-dark" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#1E293B" />
-                    <stop offset="100%" stopColor="#0B1120" />
-                  </linearGradient>
-                  <linearGradient id="node-hex-light" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#FFFFFF" />
-                    <stop offset="100%" stopColor="#F1F5F9" />
-                  </linearGradient>
-                  <marker
-                    id="ot-arrow"
-                    viewBox="0 0 10 10"
-                    refX="28"
-                    refY="5"
-                    markerWidth="5"
-                    markerHeight="5"
-                    orient="auto-start-reverse"
-                  >
-                    <path d="M 0 0 L 10 5 L 0 10 z" fill={isDark ? "#64748B" : "#334155"} />
-                  </marker>
-                </defs>
-
-                <rect width={width} height={height} fill="url(#ot-command-grid)" />
-
-                <g
-                  transform={`translate(${cx + pan.x},${cy + pan.y}) scale(${zoom}) translate(${-cx},${-cy})`}
-                >
-                  {/* Purdue Yatay Şeritleri (Swimlanes) */}
-                  {layoutMode === "purdue" &&
-                    purdueBands.map((band) => (
-                      <g key={band.tier}>
-                        <rect
-                          x={16}
-                          y={band.yTop}
-                          width={width - 32}
-                          height={band.height}
-                          rx={8}
-                          fill={band.bg}
-                          fillOpacity={isDark ? "0.86" : "0.82"}
-                          stroke={band.stroke}
-                          strokeWidth="1.3"
-                          strokeDasharray="6,4"
-                        />
-                        {/* Sol Şerit Başlığı */}
-                        <rect
-                          x={28}
-                          y={band.yTop + 14}
-                          width={162}
-                          height={22}
-                          rx={4}
-                          fill={band.badgeBg}
-                        />
-                        <text
-                          x={38}
-                          y={band.yTop + 29}
-                          fill="#FFFFFF"
-                          className="font-mono text-[10px] font-bold"
-                        >
-                          {band.code}
-                        </text>
-                        <text
-                          x={28}
-                          y={band.yTop + 54}
-                          fill={band.titleColor}
-                          className="text-[11.5px] font-bold"
-                        >
-                          {band.title}
-                        </text>
-                        <text
-                          x={28}
-                          y={band.yTop + 71}
-                          fill={band.subColor}
-                          className="text-[10px]"
-                        >
-                          {band.subtitle}
-                        </text>
-                      </g>
-                    ))}
-
-                  {/* İletişim Kenarları */}
-                  {edges.map((e, edgeIdx) => {
-                    const geom = computeEdgeGeometry(e, edgeIdx);
-                    if (!geom) return null;
-                    const isHighlighted =
-                      !selectedNodeId ||
-                      e.source_asset_id === selectedNodeId ||
-                      e.target_asset_id === selectedNodeId;
-                    const strokeColor = e.is_baseline_approved
-                      ? "#0EA5E9"
-                      : e.cross_zone
-                        ? "#F43F5E"
-                        : isDark
-                          ? "#64748B"
-                          : "#334155";
-                    const cleanProto = e.protocol.replace(/\?+$/, "").toUpperCase();
-                    return (
-                      <g
-                        key={e.id}
-                        opacity={isHighlighted ? 1 : 0.2}
-                        className="transition-opacity"
-                      >
-                        <path
-                          d={geom.pathD}
-                          fill="none"
-                          stroke={strokeColor}
-                          strokeDasharray={
-                            e.protocol_confidence === "port_hint" || (e.cross_zone && !e.is_baseline_approved)
-                              ? "5,3.5"
-                              : undefined
-                          }
-                          strokeWidth={Math.min(1.5 + Math.log2(e.connection_count + 1) * 0.65, 3.2)}
-                          markerEnd="url(#ot-arrow)"
-                        />
-                        {isHighlighted && (
-                          <circle
-                            r="3.2"
-                            fill={e.cross_zone && !e.is_baseline_approved ? "#F43F5E" : "#38BDF8"}
-                          >
-                            <animateMotion
-                              dur={`${2.2 + (edgeIdx % 4) * 0.45}s`}
-                              repeatCount="indefinite"
-                              path={geom.pathD}
-                            />
-                          </circle>
-                        )}
-                        {showEdgeLabels && isHighlighted && (
-                          <g>
-                            <rect
-                              x={geom.lx - 40}
-                              y={geom.ly - 8.5}
-                              width={80}
-                              height={17}
-                              rx={4}
-                              fill={isDark ? "#0F172A" : "#FFFFFF"}
-                              stroke={strokeColor}
-                              strokeWidth="1"
-                            />
-                            <text
-                              x={geom.lx}
-                              y={geom.ly + 3}
-                              textAnchor="middle"
-                              fill={isDark ? "#E2E8F0" : "#0F172A"}
-                              className="font-mono text-[8.8px] font-bold"
-                            >
-                              {cleanProto}
-                              {e.target_port ? `:${e.target_port}` : ""}
-                            </text>
-                          </g>
-                        )}
-                      </g>
-                    );
-                  })}
-
-                  {/* Altıgen Cihaz Düğümleri */}
-                  {nodes.map((n) => {
-                    const c = coords.get(n.id);
-                    if (!c) return null;
-                    const borderCol = nodeHexStroke(n);
-                    const ipText = n.ip_address || n.label;
-                    const shortLabel =
-                      n.label !== ipText
-                        ? n.label.length > 20
-                          ? `${n.label.slice(0, 18)}…`
-                          : n.label
-                        : null;
-                    const isSelected = selectedNodeId === n.id;
-                    const isConnectedToSelected =
-                      !selectedNodeId ||
-                      isSelected ||
-                      edges.some(
-                        (e) =>
-                          (e.source_asset_id === selectedNodeId && e.target_asset_id === n.id) ||
-                          (e.target_asset_id === selectedNodeId && e.source_asset_id === n.id),
-                      );
-
-                    const hexFill = isDark ? "#0F172A" : "#FFFFFF";
-                    const chassisFill = isDark ? "#1E293B" : "#F8FAFC";
-                    const chassisStroke = isDark ? "#94A3B8" : "#1C2434";
-
-                    return (
-                      <g
-                        key={n.id}
-                        transform={`translate(${c.x},${c.y})`}
-                        opacity={isConnectedToSelected ? 1 : 0.3}
-                        onClick={() => {
-                          if (dragStateRef.current.moved) return;
-                          setSelectedNodeId((prev) => (prev === n.id ? null : n.id));
-                        }}
-                        onDoubleClick={() => navigate(`/assets/${n.id}`)}
-                        className="cursor-pointer transition-opacity hover:opacity-100"
-                      >
-                        <title>{`${n.label} (${ipText}) — ${t("Seçmek için tıkla, detaya gitmek için çift tıkla", "Click to inspect, double-click for details")}`}</title>
-                        {(isSelected || n.criticality === "critical") && (
-                          <circle
-                            r="26"
-                            fill="none"
-                            stroke={isSelected ? "#38BDF8" : "#F43F5E"}
-                            strokeWidth="1.6"
-                            opacity="0.6"
-                          >
-                            <animate
-                              attributeName="r"
-                              values="23;33;23"
-                              dur="2.4s"
-                              repeatCount="indefinite"
-                            />
-                            <animate
-                              attributeName="opacity"
-                              values="0.7;0.1;0.7"
-                              dur="2.4s"
-                              repeatCount="indefinite"
-                            />
-                          </circle>
-                        )}
-                        {isSelected && (
-                          <circle
-                            r="29"
-                            fill="none"
-                            stroke="#38BDF8"
-                            strokeWidth="2"
-                            strokeDasharray="3,2"
-                          />
-                        )}
-                        <polygon
-                          points={OUTER_HEX}
-                          fill={isDark ? "url(#node-hex-dark)" : "url(#node-hex-light)"}
-                          stroke={borderCol}
-                          strokeWidth={isSelected ? "3.2" : "2.4"}
-                        />
-                        <polygon
-                          points={INNER_HEX}
-                          fill={hexFill}
-                          stroke={borderCol}
-                          strokeWidth="0.9"
-                          strokeOpacity="0.55"
-                        />
-                        {/* Sağ Üst Canlı Durum LED Noktası */}
-                        <circle
-                          cx="14"
-                          cy="-14"
-                          r="2.6"
-                          fill={borderCol}
-                          stroke={hexFill}
-                          strokeWidth="0.8"
-                        />
-                        {/* Cihaz Türüne Özel Donanım Çizimi */}
-                        {n.asset_type === "plc" ? (
-                          <g stroke={chassisStroke} strokeWidth="1.2" fill="none">
-                            <rect x="-9" y="-9" width="11" height="18" rx="1" fill={chassisFill} />
-                            <rect x="2" y="-9" width="7" height="18" rx="1" fill={chassisFill} />
-                            <rect x="-7" y="-4" width="7" height="5" rx="0.5" fill="#0284C7" fillOpacity="0.25" stroke="#38BDF8" strokeWidth="0.9" />
-                            <circle cx="-6" cy="-6.8" r="0.9" fill="#10B981" stroke="none" />
-                            <circle cx="-3" cy="-6.8" r="0.9" fill={borderCol} stroke="none" />
-                            <circle cx="5.5" cy="-5" r="0.8" fill="#10B981" stroke="none" />
-                            <circle cx="5.5" cy="-1" r="0.8" fill="#10B981" stroke="none" />
-                            <circle cx="5.5" cy="3" r="0.8" fill="#F59E0B" stroke="none" />
-                          </g>
-                        ) : n.asset_type === "hmi" ? (
-                          <g stroke={chassisStroke} strokeWidth="1.2" fill="none">
-                            <rect x="-10" y="-8" width="20" height="15" rx="1.5" fill={chassisFill} />
-                            <rect x="-8" y="-6" width="14" height="11" rx="0.8" fill="#0284C7" fillOpacity="0.2" stroke="#38BDF8" strokeWidth="0.9" />
-                            <polyline points="-6,2 -3,-2 0,1 3,-4 5,-2" stroke="#38BDF8" strokeWidth="1.2" />
-                            <circle cx="8" cy="-4" r="0.8" fill="#10B981" stroke="none" />
-                            <circle cx="8" cy="0" r="0.8" fill="#38BDF8" stroke="none" />
-                          </g>
-                        ) : n.asset_type === "scada_server" || n.asset_type === "server" ? (
-                          <g stroke={chassisStroke} strokeWidth="1.2" fill="none">
-                            <rect x="-10" y="-8" width="20" height="7" rx="1" fill={chassisFill} />
-                            <rect x="-10" y="1" width="20" height="7" rx="1" fill={chassisFill} />
-                            <line x1="-6" y1="-6" x2="-6" y2="-3" stroke="#38BDF8" strokeWidth="1.2" />
-                            <line x1="-3" y1="-6" x2="-3" y2="-3" stroke="#38BDF8" strokeWidth="1.2" />
-                            <line x1="-6" y1="3" x2="-6" y2="6" stroke="#38BDF8" strokeWidth="1.2" />
-                            <line x1="-3" y1="3" x2="-3" y2="6" stroke="#38BDF8" strokeWidth="1.2" />
-                            <circle cx="6" cy="-4.5" r="1" fill="#10B981" stroke="none" />
-                            <circle cx="6" cy="4.5" r="1" fill="#10B981" stroke="none" />
-                          </g>
-                        ) : n.asset_type === "network_device" ? (
-                          <g stroke={chassisStroke} strokeWidth="1.2" fill="none">
-                            <rect x="-10" y="-5" width="20" height="10" rx="1.2" fill={chassisFill} />
-                            {[-7, -3, 1, 5].map((px) => (
-                              <rect key={px} x={px} y="-2" width="2.5" height="4" fill="#38BDF8" stroke="none" />
-                            ))}
-                          </g>
-                        ) : (
-                          <g stroke={chassisStroke} strokeWidth="1.2" fill="none">
-                            <rect x="-9" y="-8" width="18" height="12" rx="1.2" fill={chassisFill} />
-                            <line x1="-6" y1="-4" x2="5" y2="-4" stroke="#38BDF8" strokeWidth="1.1" />
-                            <line x1="-6" y1="-1" x2="2" y2="-1" stroke="#60A5FA" strokeWidth="1.1" />
-                            <line x1="0" y1="4" x2="0" y2="8" />
-                            <line x1="-5" y1="8" x2="5" y2="8" />
-                          </g>
-                        )}
-
-                        {/* Alt IP Adresi Rozeti */}
-                        <rect
-                          x={-45}
-                          y={25}
-                          width={90}
-                          height={15}
-                          rx={3}
-                          fill={isSelected ? "#2563EB" : "#0F172A"}
-                          stroke={isSelected ? "#60A5FA" : "#334155"}
-                          strokeWidth="0.8"
-                        />
-                        <text
-                          y={35.5}
-                          textAnchor="middle"
-                          fill="#FFFFFF"
-                          className="font-mono text-[9.2px] font-bold"
-                        >
-                          {ipText}
-                        </text>
-                        {shortLabel && (
-                          <text
-                            y={48}
-                            textAnchor="middle"
-                            fill={isDark ? "#CBD5E1" : "#1E293B"}
-                            className="text-[9.2px] font-semibold"
-                          >
-                            {shortLabel}
-                          </text>
-                        )}
-                      </g>
-                    );
-                  })}
-                </g>
-              </svg>
-
-              {/* Sol Alt Canlı Radar Mini-Harita (Nozomi Vantage / Cyber Vision Viewport Minimap) */}
-              <div className="pointer-events-none absolute bottom-3 left-3 z-20 hidden overflow-hidden rounded-[6px] border border-[#CBD5E1] bg-white/90 p-1.5 shadow-md backdrop-blur-xs sm:block dark:border-[#1E293B] dark:bg-[#0B1120]/90">
-                <div className="mb-1 flex items-center justify-between px-1 font-mono text-[8.5px] font-bold tracking-wider text-sky-500 uppercase">
-                  <span>{t("RADAR MİNİ-HARİTA", "RADAR MINIMAP")}</span>
-                  <span>{Math.round(zoom * 100)}%</span>
-                </div>
-                <svg viewBox={`0 0 ${width} ${height}`} className="h-18 w-36 rounded-[4px] bg-[#060A12]">
-                  {layoutMode === "purdue" &&
-                    purdueBands.map((b) => (
-                      <rect
-                        key={b.tier}
-                        x={16}
-                        y={b.yTop}
-                        width={width - 32}
-                        height={b.height}
-                        rx={6}
-                        fill="#111C30"
-                        stroke="#1E293B"
-                        strokeWidth="8"
-                      />
-                    ))}
-                  {edges.map((e) => {
-                    const s = coords.get(e.source_asset_id);
-                    const tCoord = coords.get(e.target_asset_id);
-                    if (!s || !tCoord) return null;
-                    return (
-                      <line
-                        key={e.id}
-                        x1={s.x}
-                        y1={s.y}
-                        x2={tCoord.x}
-                        y2={tCoord.y}
-                        stroke={e.cross_zone ? "#F43F5E" : "#38BDF8"}
-                        strokeWidth="7"
-                        strokeOpacity="0.55"
-                      />
-                    );
-                  })}
-                  {nodes.map((n) => {
-                    const c = coords.get(n.id);
-                    if (!c) return null;
-                    return (
-                      <circle
-                        key={n.id}
-                        cx={c.x}
-                        cy={c.y}
-                        r="18"
-                        fill={nodeHexStroke(n)}
-                      />
-                    );
-                  })}
-                  {/* Kamera Viewport Çerçevesi */}
-                  <rect
-                    x={Math.max(0, cx - cx / zoom - pan.x / zoom)}
-                    y={Math.max(0, cy - cy / zoom - pan.y / zoom)}
-                    width={Math.min(width, width / zoom)}
-                    height={Math.min(height, height / zoom)}
-                    fill="none"
-                    stroke="#38BDF8"
-                    strokeWidth="12"
-                  />
-                </svg>
-              </div>
-            </div>
+            <ReactFlow
+              nodes={rfNodes}
+              edges={rfEdges}
+              nodeTypes={NODE_TYPES}
+              fitView
+              fitViewOptions={{ padding: 0.14 }}
+              minZoom={0.35}
+              maxZoom={2.2}
+              onNodeClick={(_, clickedNode) => {
+                if (clickedNode.id.startsWith("lane-")) return;
+                setSelectedNodeId((prev) => {
+                  const next = prev === clickedNode.id ? null : clickedNode.id;
+                  if (next) setDrawerOpen(true);
+                  return next;
+                });
+              }}
+              onPaneClick={() => setSelectedNodeId(null)}
+            >
+              <Background
+                variant={BackgroundVariant.Dots}
+                gap={20}
+                size={1.2}
+                color={isDark ? "#1E293B" : "#CBD5E1"}
+              />
+              <Controls position="top-right" showInteractive={false} />
+              <MiniMap
+                position="bottom-left"
+                pannable
+                zoomable
+                style={{
+                  backgroundColor: isDark ? "#0B1120" : "#FFFFFF",
+                  border: isDark ? "1px solid #1E293B" : "1px solid #CBD5E1",
+                  borderRadius: 6,
+                }}
+                maskColor={isDark ? "rgba(7, 11, 20, 0.72)" : "rgba(241, 245, 249, 0.72)"}
+                nodeColor={(n) => {
+                  if (n.id.startsWith("lane-")) return "transparent";
+                  const d = n.data as unknown as IndustrialDeviceNodeData | undefined;
+                  const g = d?.node;
+                  if (!g) return "#38BDF8";
+                  if (g.criticality === "critical" || g.criticality === "high") return "#EF4444";
+                  return g.is_verified ? "#10B981" : "#F59E0B";
+                }}
+              />
+            </ReactFlow>
           )}
+        </div>
 
-          {/* Seçili Düğüm Hızlı İnceleme Çekmecesi */}
-          {selectedNode && (
-            <div className="flex flex-wrap items-center justify-between gap-4 border-t border-sky-500/30 bg-sky-500/10 px-6 py-3.5 text-xs">
-              <div className="flex flex-wrap items-center gap-3">
-                <Badge tone="teal" dot>
-                  {t("Seçili Düğüm", "Selected Node")}
-                </Badge>
-                <span className="font-bold text-[#1C2434]">{selectedNode.label}</span>
-                <span className="font-mono font-semibold text-sky-600 dark:text-sky-400">
-                  {selectedNode.ip_address ?? "—"}
-                </span>
-                <Badge tone="navy">
-                  {ASSET_TYPE_LABEL[selectedNode.asset_type]} · Purdue {inferPurdueTier(selectedNode)}
-                </Badge>
-                <CriticalityBadge value={selectedNode.criticality} />
-                <span className="text-[#64748B]">
-                  {t(
-                    `${selectedNodeEdges.length} bağlı iletişim akışı`,
-                    `${selectedNodeEdges.length} connected flows`,
-                  )}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => setSelectedNodeId(null)}
-                >
-                  {t("Tüm Ağ", "Show All")}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="primary"
-                  onClick={() => navigate(`/assets/${selectedNode.id}`)}
-                >
-                  {t("Cihaz Detay Konsolunu Aç →", "Open Device Console →")}
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* Alt Lejant Çubuğu */}
-          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-[#E2E8F0] bg-white px-6 py-3 text-xs text-[#64748B] dark:border-[#1E293B] dark:bg-[#111827]">
-            <div className="flex flex-wrap items-center gap-5">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded-xs border-2 border-sky-400 bg-transparent" />{" "}
-                {t("Doğrulanmış Düğüm", "Verified Node")}
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded-xs border-2 border-amber-500 bg-transparent" />{" "}
-                {t("Doğrulanmamış Düğüm", "Unverified Node")}
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded-xs border-2 border-rose-500 bg-transparent" />{" "}
-                {t("Yüksek/Kritik Düğüm", "High/Critical Node")}
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-0.5 w-4 bg-sky-500" />{" "}
-                {t("Onaylı Baseline Akışı", "Approved Baseline Flow")}
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-0.5 w-4 border-b border-dashed border-rose-500" />{" "}
-                {t("Bölgeler Arası / Port Tahmini", "Cross-Zone / Port Hint")}
-              </span>
-            </div>
-            <span className="font-mono text-[11px] text-[#64748B]">
-              {t("Yakınlaştırma", "Zoom")}: %{Math.round(zoom * 100)} · {t("Yerleşim", "Layout")}:{" "}
-              {layoutMode === "purdue"
-                ? t("Purdue Katmanları (L3 → L1)", "Purdue Layers (L3 → L1)")
-                : layoutMode === "hub"
-                  ? t("Merkez Hub", "Center Hub")
-                  : t("Çevre Halka", "Outer Ring")}
+        {/* Alt Anlamsal Lejant Çubuğu */}
+        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-[#E2E8F0] bg-white px-6 py-3 text-xs text-[#64748B] dark:border-[#1E293B] dark:bg-[#111827]">
+          <div className="flex flex-wrap items-center gap-5">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-[#10B981]" />
+              {t("Doğrulanmış / Baseline Akışı (#10B981)", "Verified / Baseline Flow (#10B981)")}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-[#F59E0B]" />
+              {t("Doğrulanmamış Yeni Varlık (#F59E0B)", "Unverified New Asset (#F59E0B)")}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-0.5 w-5 border-b-2 border-dashed border-[#EF4444]" />
+              {t("Kritik / Bölgeler Arası Yetkisiz Trafik (#EF4444)", "Critical / Unauthorized Cross-Zone (#EF4444)")}
             </span>
           </div>
+          <span className="font-mono text-[11px] text-[#64748B]">
+            {t(
+              "İpucu: Düğümleri fareyle sürükleyebilir, tekerlekle yakınlaştırabilir ve tıklayarak Blast Radius modunu açabilirsiniz.",
+              "Tip: Drag node cards, scroll to zoom, and click any device to activate Blast Radius focus mode.",
+            )}
+          </span>
         </div>
       </Card>
+
+      {/* Sağdan Kayarak Açılan Düğüm & Blast Radius İnceleme Çekmecesi (SlideOverDrawer) */}
+      <SlideOverDrawer
+        open={Boolean(selectedNode && drawerOpen)}
+        onClose={() => setDrawerOpen(false)}
+        title={selectedNode?.label ?? t("Düğüm Detayı", "Node Detail")}
+        subtitle={`${selectedNode ? ASSET_TYPE_LABEL[selectedNode.asset_type] : ""} · Purdue ${
+          selectedNode ? inferPurdueTier(selectedNode) : "L1"
+        } · ${selectedNode?.ip_address ?? "—"}`}
+        badge={
+          selectedNode ? <CriticalityBadge value={selectedNode.criticality} /> : undefined
+        }
+        footer={
+          selectedNode && (
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setDrawerOpen(false);
+                  setSelectedNodeId(null);
+                }}
+              >
+                {t("Blast Radius Modundan Çık", "Clear Blast Radius")}
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => navigate(`/assets/${selectedNode.id}`)}
+              >
+                {t("Tam Cihaz & CAD Konsoluna Git →", "Open Full Device & CAD Console →")}
+              </Button>
+            </>
+          )
+        }
+      >
+        {selectedNode && (
+          <div className="space-y-4 text-xs">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-[6px] border border-[#E2E8F0] bg-[#F8FAFC] p-3 dark:border-[#1E293B] dark:bg-[#161F30]">
+                <div className="font-mono text-[10px] text-[#64748B] uppercase">
+                  {t("IP ADRESİ", "IP ADDRESS")}
+                </div>
+                <div className="mt-1 font-mono text-sm font-bold text-[#1C2434] tabular-nums">
+                  {selectedNode.ip_address ?? "—"}
+                </div>
+              </div>
+              <div className="rounded-[6px] border border-[#E2E8F0] bg-[#F8FAFC] p-3 dark:border-[#1E293B] dark:bg-[#161F30]">
+                <div className="font-mono text-[10px] text-[#64748B] uppercase">
+                  {t("KOMŞU DÜĞÜM (BLAST)", "BLAST NEIGHBORS")}
+                </div>
+                <div className="mt-1 font-mono text-sm font-bold text-sky-500 tabular-nums">
+                  {Math.max(0, blastNeighborIds.size - 1)} {t("cihaz", "nodes")}
+                </div>
+              </div>
+              <div className="rounded-[6px] border border-[#E2E8F0] bg-[#F8FAFC] p-3 dark:border-[#1E293B] dark:bg-[#161F30]">
+                <div className="font-mono text-[10px] text-[#64748B] uppercase">
+                  {t("BAĞLI AKIŞLAR", "CONNECTED FLOWS")}
+                </div>
+                <div className="mt-1 font-mono text-sm font-bold text-[#1C2434] tabular-nums">
+                  {selectedNodeEdges.length}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-[8px] border border-[#E2E8F0] bg-white dark:border-[#1E293B] dark:bg-[#111827]">
+              <div className="border-b border-[#E2E8F0] px-4 py-2.5 font-semibold text-[#1C2434] dark:border-[#1E293B]">
+                {t(
+                  "Doğrudan İletişim Akışları (Etki Alanı Bağlantıları)",
+                  "Direct Communication Flows (Blast Radius Links)",
+                )}
+              </div>
+              <div className="divide-y divide-[#E2E8F0] dark:divide-[#1E293B]">
+                {selectedNodeEdges.map((e) => {
+                  const isOutbound = e.source_asset_id === selectedNode.id;
+                  const peerLabel = isOutbound ? e.target_label : e.source_label;
+                  const peerIp = isOutbound ? e.target_ip : e.source_ip;
+                  const peerId = isOutbound ? e.target_asset_id : e.source_asset_id;
+                  return (
+                    <div
+                      key={e.id}
+                      className="flex flex-wrap items-center justify-between gap-2 px-4 py-3"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-[11px] font-bold text-sky-500">
+                            {isOutbound ? "→ GİDEN" : "← GELEN"}
+                          </span>
+                          <Link
+                            to={`/assets/${peerId}`}
+                            className="font-semibold text-[#1C2434] hover:underline"
+                          >
+                            {peerLabel}
+                          </Link>
+                          <span className="font-mono text-[11px] text-[#64748B] tabular-nums">
+                            ({peerIp ?? "—"})
+                          </span>
+                        </div>
+                        <div className="mt-1 flex items-center gap-2">
+                          <ProtocolBadge
+                            protocol={e.protocol}
+                            confidence={e.protocol_confidence}
+                          />
+                          {e.target_port !== null && (
+                            <span className="font-mono text-[11px] text-[#64748B] tabular-nums">
+                              :{e.target_port}
+                            </span>
+                          )}
+                          {e.cross_zone && (
+                            <Badge tone="red">{t("Bölgeler Arası", "Cross-Zone")}</Badge>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {e.is_baseline_approved ? (
+                          <Badge tone="emerald" dot>
+                            {t("Baseline Onaylı", "Baseline Approved")}
+                          </Badge>
+                        ) : canEditAssets ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={approveSingleMut.isPending}
+                            onClick={() => approveSingleMut.mutate(e.id)}
+                          >
+                            {t("✓ Baseline Onayla", "✓ Approve Baseline")}
+                          </Button>
+                        ) : (
+                          <Badge tone="amber">{t("Onaysız", "Unapproved")}</Badge>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+      </SlideOverDrawer>
 
       {/* İletişim Akışları Tablosu */}
       <Card
@@ -1364,8 +1239,8 @@ export default function NetworkPage() {
         subtitle={
           selectedNode
             ? t(
-                `Yalnızca "${selectedNode.label}" cihazına bağlı iletişim akışları gösteriliyor`,
-                `Showing communication flows connected to "${selectedNode.label}"`,
+                `Yalnızca "${selectedNode.label}" cihazının etki alanındaki (Blast Radius) iletişim akışları gösteriliyor`,
+                `Showing communication flows within the Blast Radius of "${selectedNode.label}"`,
               )
             : t(
                 "Kaynak ve hedef cihazlar arasındaki protokol, port, güven düzeyi ve baseline onay durumu",
@@ -1405,7 +1280,7 @@ export default function NetworkPage() {
                         >
                           {e.source_label}
                         </Link>
-                        <div className="font-mono text-[11px] text-slate-500">
+                        <div className="font-mono text-[11px] text-slate-500 tabular-nums">
                           {e.source_ip ?? "—"} · {ASSET_TYPE_LABEL[e.source_type] ?? e.source_type}
                         </div>
                       </td>
@@ -1419,13 +1294,17 @@ export default function NetworkPage() {
                           </Link>
                           {dstNode && <CriticalityBadge value={dstNode.criticality} />}
                         </div>
-                        <div className="font-mono text-[11px] text-slate-500">{e.target_ip ?? "—"}</div>
+                        <div className="font-mono text-[11px] text-slate-500 tabular-nums">
+                          {e.target_ip ?? "—"}
+                        </div>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="flex items-center gap-1.5">
                           <ProtocolBadge protocol={e.protocol} confidence={e.protocol_confidence} />
                           {e.target_port !== null && (
-                            <span className="font-mono text-xs text-slate-600">:{e.target_port}</span>
+                            <span className="font-mono text-xs text-slate-600 tabular-nums">
+                              :{e.target_port}
+                            </span>
                           )}
                         </div>
                       </td>
@@ -1452,8 +1331,10 @@ export default function NetworkPage() {
                           </Badge>
                         )}
                       </td>
-                      <td className="px-4 py-3 font-mono font-bold text-[#1C2434]">{e.connection_count}</td>
-                      <td className="px-4 py-3 font-mono whitespace-nowrap text-slate-500">
+                      <td className="px-4 py-3 font-mono font-bold text-[#1C2434] tabular-nums">
+                        {e.connection_count}
+                      </td>
+                      <td className="px-4 py-3 font-mono whitespace-nowrap text-slate-500 tabular-nums">
                         {formatDate(e.last_seen_at)}
                       </td>
                       {canEditAssets && (

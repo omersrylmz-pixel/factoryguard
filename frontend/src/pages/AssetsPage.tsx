@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
-import { Link, useSearchParams } from "react-router";
-import { DeviceHardwareThumb } from "../components/deviceVisuals";
+import { Link, useNavigate, useSearchParams } from "react-router";
+import { DeviceHardwareChassisCard, DeviceHardwareThumb } from "../components/deviceVisuals";
 import { DecryptedText } from "../components/reactBits";
 import {
   ASSET_TYPE_LABEL,
@@ -17,6 +17,7 @@ import {
   PageHeader,
   ProtocolBadge,
   Select,
+  SlideOverDrawer,
   StatCard,
   formatDate,
 } from "../components/ui";
@@ -26,6 +27,7 @@ import { api, apiDownload } from "../services/api";
 import type {
   Asset,
   AssetBulkVerifyResult,
+  AssetDetail,
   AssetType,
   Criticality,
   CsvImportResult,
@@ -38,10 +40,12 @@ export default function AssetsPage() {
   const { activeOrg, canEditAssets } = useAuth();
   const { t } = useLang();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [activeTab, setActiveTab] = useState<"inventory" | "zones">("inventory");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [drawerAssetId, setDrawerAssetId] = useState<string | null>(null);
   const [rowsPerPage, setRowsPerPage] = useState(15);
   const [pageIdx, setPageIdx] = useState(1);
 
@@ -83,6 +87,12 @@ export default function AssetsPage() {
     queryKey: ["assets", activeOrg?.id, params.toString()],
     queryFn: () => api<Page<Asset>>(`/assets?${params.toString()}`),
     enabled: !!activeOrg,
+  });
+
+  const drawerAssetQuery = useQuery({
+    queryKey: ["asset", activeOrg?.id, drawerAssetId],
+    queryFn: () => api<AssetDetail>(`/assets/${drawerAssetId}`),
+    enabled: !!activeOrg && !!drawerAssetId,
   });
 
   // CSV İçe Aktarma
@@ -717,9 +727,16 @@ export default function AssetsPage() {
                                 {t("✓ Doğrula", "✓ Verify")}
                               </Button>
                             )}
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => setDrawerAssetId(a.id)}
+                            >
+                              {t("Hızlı İncele", "Quick Sheet")}
+                            </Button>
                             <Link to={`/assets/${a.id}`}>
-                              <Button variant="secondary" size="sm">
-                                {t("Detay", "Detail")}
+                              <Button variant="primary" size="sm">
+                                {t("Konsol →", "Console →")}
                               </Button>
                             </Link>
                           </div>
@@ -786,6 +803,144 @@ export default function AssetsPage() {
           </div>
         )}
       </Card>
+
+      {/* Sağdan Kayarak Açılan Cihaz & Dijital İkiz İnceleme Çekmecesi (SlideOverDrawer) */}
+      <SlideOverDrawer
+        open={Boolean(drawerAssetId)}
+        onClose={() => setDrawerAssetId(null)}
+        widthClass="max-w-3xl"
+        title={
+          drawerAssetQuery.data
+            ? drawerAssetQuery.data.name ||
+              drawerAssetQuery.data.model ||
+              drawerAssetQuery.data.ip_address ||
+              t("Cihaz İnceleme", "Asset Inspection")
+            : t("Cihaz Yükleniyor…", "Loading Asset…")
+        }
+        subtitle={
+          drawerAssetQuery.data
+            ? `${ASSET_TYPE_LABEL[drawerAssetQuery.data.asset_type]} · ${
+                drawerAssetQuery.data.vendor || t("Doğrulanmamış Üretici", "Unverified Vendor")
+              } · ${drawerAssetQuery.data.ip_address ?? "—"}`
+            : undefined
+        }
+        badge={
+          drawerAssetQuery.data ? (
+            <CriticalityBadge value={drawerAssetQuery.data.criticality} />
+          ) : undefined
+        }
+        footer={
+          drawerAssetQuery.data && (
+            <>
+              <div className="flex items-center gap-2">
+                {canEditAssets && !drawerAssetQuery.data.is_verified && (
+                  <Button
+                    variant="outline"
+                    disabled={bulkVerifyMut.isPending}
+                    onClick={() => bulkVerifyMut.mutate([drawerAssetQuery.data!.id])}
+                  >
+                    {t("✓ Cihazı Doğrula", "✓ Verify Asset")}
+                  </Button>
+                )}
+                <Button variant="secondary" onClick={() => setDrawerAssetId(null)}>
+                  {t("Kapat", "Close")}
+                </Button>
+              </div>
+              <Button
+                variant="primary"
+                onClick={() => navigate(`/assets/${drawerAssetQuery.data!.id}`)}
+              >
+                {t("Tam Cihaz Detay Konsolunu Aç →", "Open Full Asset Console →")}
+              </Button>
+            </>
+          )
+        }
+      >
+        {drawerAssetQuery.isLoading ? (
+          <Empty>{t("Cihaz telemetrisi yükleniyor…", "Loading device telemetry…")}</Empty>
+        ) : !drawerAssetQuery.data ? (
+          <Empty>{t("Cihaz bulunamadı.", "Device not found.")}</Empty>
+        ) : (
+          <div className="space-y-5 text-xs">
+            <DeviceHardwareChassisCard
+              name={
+                drawerAssetQuery.data.name ||
+                drawerAssetQuery.data.model ||
+                drawerAssetQuery.data.ip_address ||
+                "OT Node"
+              }
+              ip={drawerAssetQuery.data.ip_address}
+              mac={drawerAssetQuery.data.mac_address}
+              assetType={drawerAssetQuery.data.asset_type}
+              vendor={drawerAssetQuery.data.vendor}
+              model={drawerAssetQuery.data.model}
+              firmware={drawerAssetQuery.data.firmware_version}
+              serial={drawerAssetQuery.data.serial_number}
+              purdueLevel={drawerAssetQuery.data.purdue_level}
+              isVerified={drawerAssetQuery.data.is_verified}
+              criticality={drawerAssetQuery.data.criticality}
+              protocols={drawerAssetQuery.data.observed_protocols ?? []}
+              activePorts={drawerAssetQuery.data.communications
+                .filter((c) => c.target_port !== null)
+                .map((c) => ({
+                  port: c.target_port!,
+                  proto: c.protocol.replace(/\?+$/, "").toUpperCase(),
+                  direction: c.direction,
+                }))}
+            />
+
+            {/* Sınıflandırma Kanıtları */}
+            <div className="rounded-[8px] border border-[#E2E8F0] bg-[#F8FAFC] p-4 dark:border-[#1E293B] dark:bg-[#161F30]">
+              <div className="font-bold text-[#1C2434]">
+                {t("Kanıta Dayalı Sınıflandırma & Protokoller", "Evidence-Based Classification & Protocols")}
+              </div>
+              <div className="mt-1 text-[#64748B]">{drawerAssetQuery.data.classification_label}</div>
+              <ul className="mt-2 list-disc space-y-1 pl-4 text-[#64748B]">
+                {drawerAssetQuery.data.classification_reasons.map((r, idx) => (
+                  <li key={idx}>{r}</li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Açık Risk Bulguları Özeti */}
+            <div className="rounded-[8px] border border-[#E2E8F0] bg-white dark:border-[#1E293B] dark:bg-[#111827]">
+              <div className="flex items-center justify-between border-b border-[#E2E8F0] px-4 py-2.5 font-bold text-[#1C2434] dark:border-[#1E293B]">
+                <span>
+                  {t(
+                    `Cihaza Ait Risk Bulguları (${drawerAssetQuery.data.risk_findings.length})`,
+                    `Device Risk Findings (${drawerAssetQuery.data.risk_findings.length})`,
+                  )}
+                </span>
+                <Link to="/risks" className="text-sky-500 hover:underline">
+                  {t("Risk Merkezinde Gör →", "View in Risk Center →")}
+                </Link>
+              </div>
+              {drawerAssetQuery.data.risk_findings.length === 0 ? (
+                <div className="p-4 text-[#64748B]">
+                  {t("Bu cihaz için kayıtlı risk bulgusu yok.", "No risk findings recorded for this device.")}
+                </div>
+              ) : (
+                <div className="divide-y divide-[#E2E8F0] dark:divide-[#1E293B]">
+                  {drawerAssetQuery.data.risk_findings.slice(0, 5).map((rf) => (
+                    <div key={rf.id} className="px-4 py-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold text-[#1C2434]">{rf.title}</span>
+                        <div className="flex items-center gap-1.5">
+                          <CriticalityBadge value={rf.severity} />
+                          <span className="font-mono font-bold text-[#1C2434] tabular-nums">
+                            {rf.score}/100
+                          </span>
+                        </div>
+                      </div>
+                      <p className="mt-1 text-[11px] text-[#64748B]">{rf.recommendation}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </SlideOverDrawer>
     </div>
   );
 }

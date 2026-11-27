@@ -34,9 +34,12 @@
 
   code,
   pre,
-  .font-mono {
+  td,
+  .font-mono,
+  .tabular-nums {
     font-family: var(--font-mono);
-    font-feature-settings: "zero" 1;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1, "zero" 1;
   }
 
   /* Native select fallback styling */
@@ -172,3 +175,23 @@ html.dark .text-rose-700,
 html.dark .text-red-700 {
   color: #FDA4AF;
 }
+
+/* React Flow (@xyflow/react) Endüstriyel Koyu/Açık Komuta Özelleştirmeleri */
+.react-flow__attribution {
+  display: none !important;
+}
+html.dark .react-flow__controls {
+  border: 1px solid #1E293B !important;
+  background-color: #0F172A !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5) !important;
+}
+html.dark .react-flow__controls-button {
+  background-color: #0F172A !important;
+  border-bottom: 1px solid #1E293B !important;
+  fill: #E2E8F0 !important;
+  color: #E2E8F0 !important;
+}
+html.dark .react-flow__controls-button:hover {
+  background-color: #1E293B !important;
+}
+

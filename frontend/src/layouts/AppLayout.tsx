@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
+import { CommandPalette } from "../components/CommandPalette";
 import { StaggerStage, useLenisSmoothScroll } from "../components/reactBits";
 import { CriticalityBadge, ROLE_LABEL, formatDate } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
@@ -94,8 +95,20 @@ export default function AppLayout() {
   const [globalSearch, setGlobalSearch] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [cmdkOpen, setCmdkOpen] = useState(false);
   const scrollWrapperRef = useRef<HTMLDivElement>(null);
   useLenisSmoothScroll(scrollWrapperRef);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setCmdkOpen((v) => !v);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const sitesQuery = useQuery({
     queryKey: ["sites", activeOrg?.id],
@@ -318,8 +331,8 @@ export default function AppLayout() {
               </svg>
             </button>
 
-            <form onSubmit={handleSearchSubmit} className="w-full max-w-md">
-              <div className="relative flex items-center">
+            <form onSubmit={handleSearchSubmit} className="flex w-full max-w-md items-center gap-2">
+              <div className="relative flex flex-1 items-center">
                 <svg
                   className="pointer-events-none absolute left-3 h-4 w-4 text-[#64748B]"
                   viewBox="0 0 24 24"
@@ -338,8 +351,16 @@ export default function AppLayout() {
                     "Cihaz adı, IP, MAC, üretici veya protokol ara...",
                     "Search device name, IP, MAC, vendor or protocol...",
                   )}
-                  className="h-9 w-full rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] pr-3 pl-9 text-xs text-[#1C2434] placeholder:text-[#64748B] focus:border-[#0D9488] focus:bg-white focus:outline-none"
+                  className="h-9 w-full rounded-[6px] border border-[#E2E8F0] bg-[#F8FAFC] pr-16 pl-9 text-xs text-[#1C2434] placeholder:text-[#64748B] focus:border-[#2563EB] focus:bg-white focus:outline-none dark:border-[#2A364F] dark:bg-[#161F30] dark:focus:border-[#38BDF8]"
                 />
+                <button
+                  type="button"
+                  onClick={() => setCmdkOpen(true)}
+                  title={t("Hızlı Komut Paletini Aç (Ctrl+K)", "Open Command Palette (Ctrl+K)")}
+                  className="absolute right-1.5 inline-flex cursor-pointer items-center gap-1 rounded-[4px] border border-[#CBD5E1] bg-white px-1.5 py-0.5 font-mono text-[10px] font-bold text-[#64748B] hover:border-blue-500 hover:text-blue-600 dark:border-[#334155] dark:bg-[#0F172A] dark:text-sky-400"
+                >
+                  <span>Ctrl+K</span>
+                </button>
               </div>
             </form>
           </div>
@@ -581,6 +602,9 @@ export default function AppLayout() {
         </main>
         </div>
       </div>
+
+      {/* Global Ctrl+K Hızlı Komut & Arama Paleti */}
+      <CommandPalette open={cmdkOpen} onClose={() => setCmdkOpen(false)} />
     </div>
   );
 }

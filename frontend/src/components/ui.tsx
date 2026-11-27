@@ -754,3 +754,82 @@ export function formatDate(iso: string | null | undefined): string {
     return iso;
   }
 }
+
+/* ============================================================================
+ * Sağdan Kayarak Açılan İnceleme Çekmecesi (shadcn Sheet / Slide-Over Drawer)
+ * Tablo veya topoloji bağlamını kaybetmeden cihaz/risk detayını sağ panelde açar.
+ * ============================================================================ */
+export function SlideOverDrawer({
+  open,
+  onClose,
+  title,
+  subtitle,
+  badge,
+  footer,
+  children,
+  widthClass = "max-w-2xl",
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: ReactNode;
+  subtitle?: ReactNode;
+  badge?: ReactNode;
+  footer?: ReactNode;
+  children: ReactNode;
+  widthClass?: string;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex justify-end bg-slate-950/60 backdrop-blur-[2px] transition-opacity"
+      onClick={onClose}
+    >
+      <aside
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+        className={`relative flex h-full w-full ${widthClass} flex-col border-l border-[#CBD5E1] bg-white shadow-[0_0_50px_rgba(0,0,0,0.45)] dark:border-[#1E293B] dark:bg-[#0B0F19]`}
+      >
+        <div className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-[#2563EB] via-[#0284C7] to-[#10B981]" />
+        <header className="flex items-start justify-between gap-3 border-b border-[#E2E8F0] bg-[#F8FAFC] px-6 py-4 dark:border-[#1E293B] dark:bg-[#111827]">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="font-display truncate text-base font-bold text-[#1C2434]">
+                {title}
+              </h2>
+              {badge}
+            </div>
+            {subtitle && <p className="mt-0.5 text-xs text-[#64748B]">{subtitle}</p>}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={tx("Çekmeceyi kapat", "Close drawer")}
+            className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-[6px] border border-[#CBD5E1] bg-white text-xs font-bold text-[#64748B] transition hover:border-rose-500/50 hover:text-rose-500 dark:border-[#2A364F] dark:bg-[#161F30] dark:text-[#94A3B8]"
+          >
+            ✕
+          </button>
+        </header>
+
+        <div className="flex-1 space-y-5 overflow-y-auto p-6">{children}</div>
+
+        {footer && (
+          <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-[#E2E8F0] bg-[#F8FAFC] px-6 py-3.5 dark:border-[#1E293B] dark:bg-[#111827]">
+            {footer}
+          </footer>
+        )}
+      </aside>
+    </div>
+  );
+}
+

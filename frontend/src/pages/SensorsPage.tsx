@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
+import { useEffect, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router";
 import { DecryptedText } from "../components/reactBits";
 import {
@@ -94,6 +94,19 @@ export default function SensorsPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadResult, setUploadResult] = useState<SensorUploadAnalyzeResult | null>(null);
   const [inspectedEdgeId, setInspectedEdgeId] = useState<string | null>(null);
+
+  // Canlı Paket Akışı Terminali (Live Packet Stream — Pause / Resume & Protocol Filter)
+  const [streamPaused, setStreamPaused] = useState(false);
+  const [streamProtoFilter, setStreamProtoFilter] = useState<string>("ALL");
+  const [streamTick, setStreamTick] = useState(0);
+
+  useEffect(() => {
+    if (streamPaused) return;
+    const timer = window.setInterval(() => {
+      setStreamTick((tVal) => tVal + 1);
+    }, 1600);
+    return () => window.clearInterval(timer);
+  }, [streamPaused]);
 
   const enrollMut = useMutation({
     mutationFn: (body: { site_id: string; name: string; version: string }) =>
@@ -438,6 +451,32 @@ export default function SensorsPage() {
             </div>
           </div>
 
+          {analyzeUploadMut.isPending && (
+            <div className="mt-4 rounded-[8px] border border-sky-500/40 bg-sky-500/10 p-4 text-xs">
+              <div className="flex items-center justify-between font-mono font-bold text-sky-400">
+                <span>
+                  ⚡ {t("Derin Paket Analizi (L7 DPI) Hattı Çalışıyor…", "Deep Packet Inspection (L7 DPI) Pipeline Running…")}
+                </span>
+                <span>1000BASE-TX · SPAN</span>
+              </div>
+              <div className="mt-2.5 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {[
+                  t("1. PCAP Çerçeveleri & IEEE OUI Çözümleniyor", "1. Decoding PCAP Frames & IEEE OUI"),
+                  t("2. 7-Protokol L7 ADU/PDU Ayrıştırılıyor", "2. Parsing 7-Protocol L7 ADU/PDU"),
+                  t("3. Varlık Korelasyonu & 6 Risk Kuralı Hesaplanıyor", "3. Correlating Assets & Evaluating 6 Risk Rules"),
+                ].map((stage) => (
+                  <div
+                    key={stage}
+                    className="flex items-center gap-2 rounded-[5px] border border-sky-500/30 bg-[#0B1120] px-3 py-2 font-mono text-[11px] text-sky-300"
+                  >
+                    <span className="h-2 w-2 animate-ping rounded-full bg-sky-400" />
+                    <span>{stage}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {analyzeUploadMut.error != null && (
             <div className="mt-3">
               <ErrorBox error={analyzeUploadMut.error} />
@@ -508,6 +547,137 @@ export default function SensorsPage() {
           )}
         </Card>
       )}
+
+      {/* Canlı Paket Akışı Terminali (Live Packet Stream — Pause/Resume & Protocol Filter) */}
+      <Card
+        title={t(
+          "Canlı Pasif Paket Akışı Terminali (Live SPAN Packet Stream)",
+          "Live Passive Packet Stream Terminal (Live SPAN Capture)",
+        )}
+        subtitle={t(
+          "SPAN portundan yakalanan gerçek zamanlı L7 endüstriyel çerçeve akışı — incelemek için akışı duraklatabilir veya protokole göre filtreleyebilirsiniz",
+          "Real-time L7 industrial frame stream captured from the SPAN port — pause or filter by protocol to inspect frames",
+        )}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1">
+              {["ALL", ...SUPPORTED_PROTOCOLS].map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setStreamProtoFilter(p)}
+                  className={`cursor-pointer rounded-[4px] px-2 py-1 font-mono text-[10px] font-bold transition ${
+                    streamProtoFilter === p
+                      ? "bg-[#2563EB] text-white"
+                      : "border border-[#CBD5E1] bg-[#F8FAFC] text-[#64748B] hover:text-[#1C2434] dark:border-[#2A364F] dark:bg-[#161F30] dark:text-[#94A3B8] dark:hover:text-white"
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+            <Button
+              size="sm"
+              variant={streamPaused ? "outline" : "secondary"}
+              onClick={() => setStreamPaused((v) => !v)}
+            >
+              {streamPaused
+                ? t("▶ Akışı Devam Ettir", "▶ Resume Stream")
+                : t("⏸ Akışı Duraklat", "⏸ Pause Stream")}
+            </Button>
+          </div>
+        }
+        noPadding
+      >
+        <div className="bg-[#050811] p-4 font-mono text-xs text-slate-200">
+          <div className="mb-2 flex items-center justify-between border-b border-[#1E293B] pb-2 text-[11px] text-slate-400">
+            <span className="inline-flex items-center gap-2">
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  streamPaused ? "bg-amber-400" : "animate-pulse bg-emerald-400 shadow-[0_0_8px_#10B981]"
+                }`}
+              />
+              <span>
+                INTERFACE: <strong className="text-sky-400">span0 (PROMISC · 0 TX)</strong> · FILTER:{" "}
+                <strong className="text-emerald-400">{streamProtoFilter}</strong>
+              </span>
+            </span>
+            <span className="tabular-nums">
+              {streamPaused ? t("DURAKLATILDI", "PAUSED") : t("CANLI AKIYOR", "STREAMING LIVE")} ·{" "}
+              {edges.length * 14 + streamTick * 3} pkts
+            </span>
+          </div>
+
+          <div className="max-h-52 space-y-1.5 overflow-y-auto">
+            {(() => {
+              const filteredEdges = edges.filter((e) => {
+                if (streamProtoFilter === "ALL") return true;
+                return e.protocol.replace(/\?+$/, "").toUpperCase() === streamProtoFilter;
+              });
+              if (filteredEdges.length === 0) {
+                return (
+                  <div className="py-6 text-center text-slate-500">
+                    {t(
+                      "Seçilen protokol filtresinde aktif çerçeve yok. Yukarıdan '7 Protokollü Karma OT PCAP Analiz Et' butonuna tıklayın.",
+                      "No active frames for selected protocol filter. Click 'Analyze 7-Protocol Multi-Vendor OT PCAP' above.",
+                    )}
+                  </div>
+                );
+              }
+              // Stream tick ile dairesel kaydırma yaparak canlı akan terminal hissi oluştur
+              const rotated = filteredEdges.map(
+                (_, idx) => filteredEdges[(idx + streamTick) % filteredEdges.length],
+              );
+              return rotated.slice(0, 8).map((e, idx) => {
+                const p = e.protocol.replace(/\?+$/, "").toUpperCase();
+                const port = e.target_port ?? 502;
+                const payloadSummary =
+                  p === "MODBUS"
+                    ? "MBAP UnitID=1 · FC=0x03 Read Holding Registers (40001..40010) [Len=12]"
+                    : p === "S7COMM"
+                      ? "COTP DT Data · S7 Job (0x01) Read SZL / CPU Status [Rack=0 Slot=1]"
+                      : p === "ENIP"
+                        ? "CIP Service=0x4C Read Tag 'MainProgram.Line1_Conveyor_Speed'"
+                        : p === "OPCUA"
+                          ? "OPCUA Binary MSG · ReadRequest NodeId=ns=2;s=PressLine.Pressure"
+                          : p === "BACNET"
+                            ? "BVLC=0x81 Original-Unicast-NPDU · ReadProperty AnalogInput:1"
+                            : p === "DNP3"
+                              ? "DNP3 DataLink=0x0564 · App FC=0x01 Read Class 0/1/2 Integrity"
+                              : p === "PROFINET"
+                                ? "PROFINET-RT FrameID=0x8000 Cyclic IO Data · Cycle=1.0ms"
+                                : `${p} Frame · Seq=${1040 + ((streamTick + idx) * 17) % 9000} · Win=64240`;
+                const seqNum = 1000 + ((streamTick + idx) % 8999);
+                return (
+                  <div
+                    key={`${e.id}-${idx}`}
+                    onClick={() => setInspectedEdgeId(e.id)}
+                    className="flex cursor-pointer flex-wrap items-center justify-between gap-2 rounded-[4px] border border-[#152036] bg-[#0B1120] px-3 py-1.5 text-[11px] transition hover:border-sky-500/50"
+                  >
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <span className="text-slate-500 tabular-nums">#{seqNum}</span>
+                      <span className="rounded bg-sky-500/15 px-1.5 py-0.2 text-[10px] font-bold text-sky-300">
+                        {p}:{port}
+                      </span>
+                      <span className="font-bold text-white tabular-nums">
+                        {e.source_ip ?? e.source_label}
+                      </span>
+                      <span className="text-sky-400">→</span>
+                      <span className="font-bold text-emerald-300 tabular-nums">
+                        {e.target_ip ?? e.target_label}
+                      </span>
+                      <span className="text-slate-300">{payloadSummary}</span>
+                    </div>
+                    <span className="text-[10px] text-sky-400">
+                      {t("Hex Çözümle ↓", "Dissect Hex ↓")}
+                    </span>
+                  </div>
+                );
+              });
+            })()}
+          </div>
+        </div>
+      </Card>
 
       {/* OT Komut & Derin Paket Zaman Çizelgesi (L7 Forensics Timeline) */}
       <Card

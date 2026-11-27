@@ -335,6 +335,7 @@ export interface GraphNode {
   label: string;
   ip_address: string | null;
   asset_type: AssetType;
+  vendor?: string | null;
   classification_label: string;
   criticality: Criticality;
   is_verified: boolean;

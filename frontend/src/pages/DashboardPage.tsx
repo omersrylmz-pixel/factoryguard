@@ -197,6 +197,69 @@ export default function DashboardPage() {
 
       {(sitesQuery.error || zonesQuery.error) && <ErrorBox error={sitesQuery.error ?? zonesQuery.error} />}
 
+      {/* 3 Adımlı Etkileşimli OT Güvenlik İş Akışı & Kurulum Rehberi (Onboarding Pipeline) */}
+      <div className="grid grid-cols-1 gap-3 rounded-[8px] border border-[#CBD5E1] bg-white p-4 shadow-xs md:grid-cols-3 dark:border-[#1E293B] dark:bg-[#111827]">
+        {[
+          {
+            step: "01",
+            done: totalAssets > 0 && edges.length > 0,
+            title: t("1. SPAN Portunu Bağla veya PCAP Yükle", "1. Connect SPAN Port or Upload PCAP"),
+            desc: t(
+              "7 endüstriyel protokolde (Modbus, S7comm, ENIP, OPC UA, DNP3, BACnet, PROFINET) pasif trafik yakala.",
+              "Capture passive traffic across 7 OT protocols (Modbus, S7comm, ENIP, OPC UA, DNP3, BACnet, PROFINET).",
+            ),
+            cta: t("PCAP / Sensör Analizi →", "PCAP / Sensor Analysis →"),
+            to: "/sensors",
+          },
+          {
+            step: "02",
+            done: totalAssets > 0 && unverifiedCount === 0,
+            title: t("2. Keşfedilen Cihazları Doğrula", "2. Verify Discovered OT Devices"),
+            desc: t(
+              `${verifiedCount}/${totalAssets} varlık doğrulandı. Doğrulanmamış PLC ve HMI düğümlerini envanterde onayla.`,
+              `${verifiedCount}/${totalAssets} assets verified. Confirm unverified PLC & HMI nodes in inventory.`,
+            ),
+            cta: t(`Envanteri Doğrula (${unverifiedCount} Bekleyen) →`, `Verify Inventory (${unverifiedCount} Pending) →`),
+            to: "/assets",
+          },
+          {
+            step: "03",
+            done: edges.length > 0 && approvedFlowsCount === edges.length,
+            title: t("3. Baseline Kilitle & Conduit Kuralı Üret", "3. Lock Baseline & Generate Conduit Rules"),
+            desc: t(
+              `${approvedFlowsCount}/${edges.length} iletişim akışı baseline onaylı. Sapmaları izle ve firewall kurallarını dışa aktar.`,
+              `${approvedFlowsCount}/${edges.length} flows baseline approved. Monitor drift and export firewall policies.`,
+            ),
+            cta: t("Topoloji & Baseline Kilitle →", "Topology & Lock Baseline →"),
+            to: "/network",
+          },
+        ].map((item) => (
+          <Link
+            key={item.step}
+            to={item.to}
+            className="group flex flex-col justify-between rounded-[6px] border border-[#E2E8F0] bg-[#F8FAFC] p-3.5 transition hover:border-blue-500/60 dark:border-[#1E293B] dark:bg-[#161F30]"
+          >
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-[10px] font-bold tracking-wider text-sky-500 uppercase">
+                  {t(`ADIM ${item.step}`, `STEP ${item.step}`)}
+                </span>
+                <Badge tone={item.done ? "emerald" : "amber"} dot>
+                  {item.done ? t("Tamamlandı", "Completed") : t("Aksiyon Bekliyor", "Action Needed")}
+                </Badge>
+              </div>
+              <div className="mt-1.5 text-xs font-bold text-[#1C2434] group-hover:text-sky-400">
+                {item.title}
+              </div>
+              <p className="mt-1 text-[11px] leading-relaxed text-[#64748B]">{item.desc}</p>
+            </div>
+            <div className="mt-3 font-mono text-[11px] font-semibold text-[#2563EB] group-hover:underline dark:text-sky-400">
+              {item.cta}
+            </div>
+          </Link>
+        ))}
+      </div>
+
       {/* 1. Satır: 4 Sütunlu Endüstriyel Telemetri KPI Izgarası */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
