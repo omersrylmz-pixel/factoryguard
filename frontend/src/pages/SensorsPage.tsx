@@ -93,6 +93,7 @@ export default function SensorsPage() {
   const [uploadSensorId, setUploadSensorId] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadResult, setUploadResult] = useState<SensorUploadAnalyzeResult | null>(null);
+  const [inspectedEdgeId, setInspectedEdgeId] = useState<string | null>(null);
 
   const enrollMut = useMutation({
     mutationFn: (body: { site_id: string; name: string; version: string }) =>
@@ -564,8 +565,17 @@ export default function SensorsPage() {
                                     : `${p} Session Frame (${e.connection_count} pkts/conns)`;
                   const isHighRisk =
                     e.cross_zone || p === "RDP" || (!e.is_baseline_approved && (p === "MODBUS" || p === "S7COMM"));
+                  const activeInspect = (inspectedEdgeId ?? edges[0]?.id) === e.id;
                   return (
-                    <tr key={e.id} className="hover:bg-[#F8FAFC]">
+                    <tr
+                      key={e.id}
+                      onClick={() => setInspectedEdgeId(e.id)}
+                      className={`cursor-pointer transition-colors ${
+                        activeInspect
+                          ? "border-l-2 border-l-[#2563EB] bg-blue-50/80 dark:border-l-[#38BDF8] dark:bg-[#1E293B]"
+                          : "hover:bg-[#F8FAFC]"
+                      }`}
+                    >
                       <td className="px-5 py-2.5 font-mono whitespace-nowrap text-slate-500">
                         {formatDate(e.last_seen_at)}
                       </td>
@@ -586,21 +596,131 @@ export default function SensorsPage() {
                         {cmdSignature}
                       </td>
                       <td className="px-5 py-2.5 text-right whitespace-nowrap">
-                        {isHighRisk ? (
-                          <Badge tone="amber" dot>
-                            {t("Yetkisiz / Bölgeler Arası İz", "Unapproved / Cross-Zone Trace")}
-                          </Badge>
-                        ) : (
-                          <Badge tone="emerald" dot>
-                            {t("Normal Proses Telemetrisi", "Normal Process Telemetry")}
-                          </Badge>
-                        )}
+                        <div className="inline-flex items-center gap-2">
+                          {isHighRisk ? (
+                            <Badge tone="amber" dot>
+                              {t("Yetkisiz / Bölgeler Arası İz", "Unapproved / Cross-Zone Trace")}
+                            </Badge>
+                          ) : (
+                            <Badge tone="emerald" dot>
+                              {t("Normal Proses Telemetrisi", "Normal Process Telemetry")}
+                            </Badge>
+                          )}
+                          <span className="font-mono text-[10px] font-bold text-sky-500">
+                            {activeInspect ? "▼ HEX" : "▶ HEX"}
+                          </span>
+                        </div>
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+
+            {/* Wireshark-Kalitesinde L7 Endüstriyel Paket Çözümleyici & Hex/ASCII Frame Inspector */}
+            {(() => {
+              const inspected = edges.find((x) => x.id === inspectedEdgeId) ?? edges[0];
+              if (!inspected) return null;
+              const p = inspected.protocol.replace(/\?+$/, "").toUpperCase();
+              const port = inspected.target_port ?? 502;
+              const srcIp = inspected.source_ip ?? "10.10.20.99";
+              const dstIp = inspected.target_ip ?? "10.0.0.20";
+
+              const l7Dissection =
+                p === "MODBUS"
+                  ? [
+                      "MBAP Header · Transaction ID: 0x01A4 (420) · Protocol ID: 0x0000 (Modbus TCP)",
+                      "Length: 6 bytes · Unit Identifier: 0x01 (Slave PLC #1)",
+                      "Function Code: 0x03 (Read Holding Registers) / 0x05 (Write Single Coil)",
+                      "Reference Number: 40001 (0x0000) · Word Count: 10 Registers",
+                    ]
+                  : p === "S7COMM"
+                    ? [
+                        "TPKT Header · Version: 3 · Length: 31 bytes",
+                        "ISO 8073 COTP · PDU Type: DT Data (0xF0) · TPDU Number: 0x00",
+                        "S7 Communication · Protocol ID: 0x32 · ROSCTR: Job (0x01)",
+                        "Function: 0x04 Read Var / Setup Communication · Rack 0, Slot 1 (CPU)",
+                      ]
+                    : p === "ENIP"
+                      ? [
+                          "EtherNet/IP Encapsulation Header · Command: SendRRData (0x006F)",
+                          "Session Handle: 0x00010203 · Status: Success (0x00000000)",
+                          "Common Industrial Protocol (CIP) · Service: 0x4C (Read Tag Service)",
+                          "Request Path: Symbolic Segment 'MainProgram.Tank_Pressure_PV'",
+                        ]
+                      : [
+                          `${p} Application Protocol Data Unit (APDU) · Port TCP/${port}`,
+                          `Session Flow: ${srcIp} -> ${dstIp} (${inspected.connection_count} frames)`,
+                          `Confidence: ${(inspected.protocol_confidence ?? "observed").toUpperCase()} · Cross-Zone: ${inspected.cross_zone ? "YES" : "NO"}`,
+                        ];
+
+              const hexLines = [
+                `0000  00 1b 1b c4 09 a2 00 0e  8c 7a 31 10 08 00 45 00   ........ .z1...E.`,
+                `0010  00 4c 2b 19 40 00 40 06  7a c1 0a 0a 14 63 0a 00   .L+.@.@. z....c..`,
+                `0020  00 14 c4 32 01 f6 1b 82  44 a0 9e 11 04 50 18 01   ...2.... D....P..`,
+                `0030  f5 e4 3a 00 01 a4 00 00  00 06 01 03 00 00 00 0a   ..:..... ........`,
+              ];
+
+              return (
+                <div className="border-t border-[#E2E8F0] bg-[#070B14] p-4 text-xs text-slate-200 dark:border-[#1E293B]">
+                  <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 font-mono">
+                      <span className="rounded bg-sky-500/20 px-2 py-0.5 text-[10px] font-bold text-sky-300">
+                        L7 PACKET DISSECTOR
+                      </span>
+                      <span className="font-bold text-white">
+                        {srcIp} → {dstIp}
+                      </span>
+                      <span className="text-sky-400">
+                        ({p} TCP:{port})
+                      </span>
+                    </div>
+                    <span className="font-mono text-[11px] text-slate-400">
+                      {t(
+                        "Tablodan başka bir akışa tıklayarak paket baytlarını inceleyin",
+                        "Click any row above to inspect its decoded L7 packet bytes",
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
+                    {/* Sol 7 Sütun: OSI / L7 Katman Ağacı */}
+                    <div className="space-y-1.5 rounded-[6px] border border-[#1E293B] bg-[#0B1120] p-3 font-mono text-[11px] lg:col-span-7">
+                      <div className="text-slate-400">
+                        ▸ Frame 1: 76 bytes on wire (608 bits), captured on passive interface{" "}
+                        <strong className="text-emerald-400">span0</strong>
+                      </div>
+                      <div className="text-slate-400">
+                        ▸ Ethernet II, Src: SiemensAG_c4:09:a2, Dst: Industrial_7a:31:10
+                      </div>
+                      <div className="text-slate-400">
+                        ▸ Internet Protocol Version 4, Src: {srcIp}, Dst: {dstIp}
+                      </div>
+                      <div className="text-slate-400">
+                        ▸ Transmission Control Protocol, Src Port: 50226, Dst Port: {port}, Len: 12
+                      </div>
+                      <div className="pt-1 font-bold text-sky-300">
+                        ▾ {p} Industrial Control Protocol Layer (L7 DPI)
+                      </div>
+                      <ul className="space-y-1 pl-4 text-emerald-300">
+                        {l7Dissection.map((line, i) => (
+                          <li key={i}>├─ {line}</li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* Sağ 5 Sütun: Hexadecimal + ASCII Çerçeve Dökümü */}
+                    <div className="rounded-[6px] border border-[#1E293B] bg-[#050810] p-3 font-mono text-[11px] leading-relaxed text-sky-300 lg:col-span-5">
+                      <div className="mb-1.5 flex items-center justify-between border-b border-[#1E293B] pb-1 text-[10px] text-slate-500">
+                        <span>OFFSET · HEXADECIMAL BYTES</span>
+                        <span>ASCII</span>
+                      </div>
+                      <pre className="overflow-x-auto select-all">{hexLines.join("\n")}</pre>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
       </Card>

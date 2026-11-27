@@ -881,6 +881,14 @@ export default function NetworkPage() {
                       strokeWidth="0.8"
                     />
                   </pattern>
+                  <linearGradient id="node-hex-dark" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#1E293B" />
+                    <stop offset="100%" stopColor="#0B1120" />
+                  </linearGradient>
+                  <linearGradient id="node-hex-light" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#FFFFFF" />
+                    <stop offset="100%" stopColor="#F1F5F9" />
+                  </linearGradient>
                   <marker
                     id="ot-arrow"
                     viewBox="0 0 10 10"
@@ -1097,16 +1105,25 @@ export default function NetworkPage() {
                         )}
                         <polygon
                           points={OUTER_HEX}
-                          fill={hexFill}
+                          fill={isDark ? "url(#node-hex-dark)" : "url(#node-hex-light)"}
                           stroke={borderCol}
-                          strokeWidth={isSelected ? "3" : "2.4"}
+                          strokeWidth={isSelected ? "3.2" : "2.4"}
                         />
                         <polygon
                           points={INNER_HEX}
                           fill={hexFill}
                           stroke={borderCol}
+                          strokeWidth="0.9"
+                          strokeOpacity="0.55"
+                        />
+                        {/* Sağ Üst Canlı Durum LED Noktası */}
+                        <circle
+                          cx="14"
+                          cy="-14"
+                          r="2.6"
+                          fill={borderCol}
+                          stroke={hexFill}
                           strokeWidth="0.8"
-                          strokeOpacity="0.45"
                         />
                         {/* Cihaz Türüne Özel Donanım Çizimi */}
                         {n.asset_type === "plc" ? (
@@ -1190,6 +1207,70 @@ export default function NetworkPage() {
                   })}
                 </g>
               </svg>
+
+              {/* Sol Alt Canlı Radar Mini-Harita (Nozomi Vantage / Cyber Vision Viewport Minimap) */}
+              <div className="pointer-events-none absolute bottom-3 left-3 z-20 hidden overflow-hidden rounded-[6px] border border-[#CBD5E1] bg-white/90 p-1.5 shadow-md backdrop-blur-xs sm:block dark:border-[#1E293B] dark:bg-[#0B1120]/90">
+                <div className="mb-1 flex items-center justify-between px-1 font-mono text-[8.5px] font-bold tracking-wider text-sky-500 uppercase">
+                  <span>{t("RADAR MİNİ-HARİTA", "RADAR MINIMAP")}</span>
+                  <span>{Math.round(zoom * 100)}%</span>
+                </div>
+                <svg viewBox={`0 0 ${width} ${height}`} className="h-18 w-36 rounded-[4px] bg-[#060A12]">
+                  {layoutMode === "purdue" &&
+                    purdueBands.map((b) => (
+                      <rect
+                        key={b.tier}
+                        x={16}
+                        y={b.yTop}
+                        width={width - 32}
+                        height={b.height}
+                        rx={6}
+                        fill="#111C30"
+                        stroke="#1E293B"
+                        strokeWidth="8"
+                      />
+                    ))}
+                  {edges.map((e) => {
+                    const s = coords.get(e.source_asset_id);
+                    const tCoord = coords.get(e.target_asset_id);
+                    if (!s || !tCoord) return null;
+                    return (
+                      <line
+                        key={e.id}
+                        x1={s.x}
+                        y1={s.y}
+                        x2={tCoord.x}
+                        y2={tCoord.y}
+                        stroke={e.cross_zone ? "#F43F5E" : "#38BDF8"}
+                        strokeWidth="7"
+                        strokeOpacity="0.55"
+                      />
+                    );
+                  })}
+                  {nodes.map((n) => {
+                    const c = coords.get(n.id);
+                    if (!c) return null;
+                    return (
+                      <circle
+                        key={n.id}
+                        cx={c.x}
+                        cy={c.y}
+                        r="18"
+                        fill={nodeHexStroke(n)}
+                      />
+                    );
+                  })}
+                  {/* Kamera Viewport Çerçevesi */}
+                  <rect
+                    x={Math.max(0, cx - cx / zoom - pan.x / zoom)}
+                    y={Math.max(0, cy - cy / zoom - pan.y / zoom)}
+                    width={Math.min(width, width / zoom)}
+                    height={Math.min(height, height / zoom)}
+                    fill="none"
+                    stroke="#38BDF8"
+                    strokeWidth="12"
+                  />
+                </svg>
+              </div>
             </div>
           )}
 

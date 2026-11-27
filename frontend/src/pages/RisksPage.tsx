@@ -368,6 +368,121 @@ export default function RisksPage() {
         />
       </div>
 
+      {/* Dragos Platform Stili: İnteraktif MITRE ATT&CK® for ICS Taktik & Teknik Matrisi */}
+      <Card
+        title={t(
+          "MITRE ATT&CK® for ICS Taktik & Endüstriyel Kill-Chain Haritası",
+          "MITRE ATT&CK® for ICS Tactical & Industrial Kill-Chain Matrix",
+        )}
+        subtitle={t(
+          "Deterministik risk bulgularının MITRE ICS saldırı taktikleriyle eşleşmesi — filtrelemek için bir taktik kartına tıklayın",
+          "Deterministic risk findings mapped to MITRE ICS adversary tactics — click any tactic card to filter findings",
+        )}
+        actions={
+          <div className="flex items-center gap-2">
+            {ruleFilter && (
+              <Button size="sm" variant="secondary" onClick={() => setRuleFilter("")}>
+                {t("Taktik Filtresini Temizle", "Clear Tactic Filter")}
+              </Button>
+            )}
+            <Badge tone="navy">MITRE ATT&CK® ICS v15</Badge>
+          </div>
+        }
+      >
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-6">
+          {(
+            [
+              {
+                tacticId: "TA0108",
+                tactic: t("İlk Erişim", "Initial Access"),
+                techId: "T0886",
+                techName: t("Uzaktan Servisler (RDP/SSH)", "Remote Services (RDP/SSH)"),
+                ruleKey: "UNAPPROVED_REMOTE_PATH" as RiskRuleKey,
+              },
+              {
+                tacticId: "TA0102",
+                tactic: t("Ağ Keşfi", "Discovery"),
+                techId: "T0846",
+                techName: t("Yeni Saha Cihazı Keşfi", "Remote System Discovery"),
+                ruleKey: "NEW_ASSET" as RiskRuleKey,
+              },
+              {
+                tacticId: "TA0100",
+                tactic: t("Veri Toplama", "Collection"),
+                techId: "T0802",
+                techName: t("Doğrulanmamış OT Protokolü", "Automated OT Collection"),
+                ruleKey: "UNKNOWN_OT_ASSET" as RiskRuleKey,
+              },
+              {
+                tacticId: "TA0109",
+                tactic: t("Yanal Hareket", "Lateral Movement"),
+                techId: "T0867",
+                techName: t("Bölgeler Arası Yetkisiz Akış", "Cross-Zone Lateral Flow"),
+                ruleKey: "UNEXPECTED_COMMUNICATION" as RiskRuleKey,
+              },
+              {
+                tacticId: "TA0106",
+                tactic: t("Proses Kontrol İhlali", "Impair Process Control"),
+                techId: "T0855",
+                techName: t("Bilinen Firmware Açığı (CVE)", "Exploit Firmware CVE"),
+                ruleKey: "KNOWN_VULNERABILITY" as RiskRuleKey,
+              },
+              {
+                tacticId: "TA0107",
+                tactic: t("Yanıt Fonksiyonu Kaybı", "Inhibit Response Function"),
+                techId: "T0816",
+                techName: t("Cihaz Telemetri Kesintisi", "Device Telemetry Loss"),
+                ruleKey: "ASSET_NOT_SEEN" as RiskRuleKey,
+              },
+            ] as const
+          ).map((m) => {
+            const count = findings.filter((f) => f.rule_key === m.ruleKey).length;
+            const isSelected = ruleFilter === m.ruleKey;
+            const hasAlerts = count > 0;
+            return (
+              <button
+                key={m.tacticId}
+                type="button"
+                onClick={() => setRuleFilter((cur) => (cur === m.ruleKey ? "" : m.ruleKey))}
+                className={`group flex cursor-pointer flex-col justify-between rounded-[6px] border p-3 text-left transition-all ${
+                  isSelected
+                    ? "border-[#2563EB] bg-[#2563EB]/12 ring-2 ring-[#2563EB]/30 dark:border-[#38BDF8] dark:bg-[#2563EB]/20"
+                    : hasAlerts
+                      ? "border-rose-500/35 bg-rose-500/5 hover:border-rose-500/60 dark:border-rose-500/30 dark:bg-[#161F30]"
+                      : "border-[#CBD5E1] bg-[#F8FAFC] hover:border-blue-500/50 dark:border-[#1E293B] dark:bg-[#161F30]"
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="font-mono text-[10px] font-bold text-sky-600 dark:text-sky-400">
+                      {m.tacticId}
+                    </span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 font-mono text-[10px] font-bold ${
+                        hasAlerts
+                          ? "bg-rose-500/20 text-rose-600 dark:text-rose-300"
+                          : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300"
+                      }`}
+                    >
+                      {count} {t("bulgu", "hits")}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-xs font-bold text-[#1C2434]">{m.tactic}</div>
+                </div>
+                <div className="mt-2.5 border-t border-[#E2E8F0] pt-2 dark:border-[#1E293B]">
+                  <div className="font-mono text-[10px] font-bold text-[#64748B]">
+                    {m.techId} · {m.ruleKey}
+                  </div>
+                  <div className="mt-0.5 truncate text-[11px] text-[#1C2434]" title={m.techName}>
+                    {m.techName}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </Card>
+
       {/* Deterministik 6 Kural Kataloğu */}
       {showRulesCatalog && rulesList.length > 0 && (
         <Card
