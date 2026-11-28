@@ -1,6 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
-import { Link, useSearchParams } from "react-router";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+  type FormEvent,
+} from "react";
+import { Link } from "react-router";
 import { DecryptedText } from "../components/reactBits";
 import {
   Badge,
@@ -55,8 +62,6 @@ export default function SensorsPage() {
   const { activeOrg, canAdmin, canEditAssets } = useAuth();
   const { t } = useLang();
   const qc = useQueryClient();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const activeView = searchParams.get("tab") === "pcap" ? "pcap" : "all";
 
   const sitesQuery = useQuery({
     queryKey: ["sites", activeOrg?.id],
@@ -94,11 +99,27 @@ export default function SensorsPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadResult, setUploadResult] = useState<SensorUploadAnalyzeResult | null>(null);
   const [inspectedEdgeId, setInspectedEdgeId] = useState<string | null>(null);
+  const [hexOpen, setHexOpen] = useState(true);
 
-  // Canlı Paket Akışı Terminali (Live Packet Stream — Pause / Resume & Protocol Filter)
+  // Örnek Senaryolar Açılır Menüsü (Örnek Yakalama Yükle ▾)
+  const [sampleMenuOpen, setSampleMenuOpen] = useState(false);
+  const sampleMenuRef = useRef<HTMLDivElement>(null);
+
+  // Canlı Paket Akışı Terminali (Live Log Table — Pause / Resume & Protocol Filter)
   const [streamPaused, setStreamPaused] = useState(false);
   const [streamProtoFilter, setStreamProtoFilter] = useState<string>("ALL");
   const [streamTick, setStreamTick] = useState(0);
+
+  useEffect(() => {
+    if (!sampleMenuOpen) return;
+    function onDocClick(e: MouseEvent) {
+      if (sampleMenuRef.current && !sampleMenuRef.current.contains(e.target as Node)) {
+        setSampleMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [sampleMenuOpen]);
 
   useEffect(() => {
     if (streamPaused) return;
@@ -200,7 +221,12 @@ export default function SensorsPage() {
 
   async function handleFileUpload(e: FormEvent) {
     e.preventDefault();
-    if (!effectiveUploadSensorId || !selectedFile) return;
+    if (!effectiveUploadSensorId) return;
+    if (!selectedFile) {
+      // Dosya seçilmemişse varsayılan 7-protokollü DPI analizini tetikle
+      handleSampleAnalyze("multi-ot-pcap");
+      return;
+    }
     const b64 = await fileToBase64(selectedFile);
     analyzeUploadMut.mutate({
       sensorId: effectiveUploadSensorId,
@@ -210,6 +236,7 @@ export default function SensorsPage() {
 
   function handleSampleAnalyze(sampleKey: "real-modbus-pcap" | "synthetic-zeek" | "multi-ot-pcap") {
     if (!effectiveUploadSensorId) return;
+    setSampleMenuOpen(false);
     setUploadResult(null);
     analyzeUploadMut.mutate({
       sensorId: effectiveUploadSensorId,
@@ -224,40 +251,480 @@ export default function SensorsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader
-        breadcrumb={
-          activeView === "pcap"
-            ? t("PCAP Analizi", "PCAP Analysis")
-            : t("Sensör Yönetimi", "Sensor Management")
-        }
+        breadcrumb={t("Sensörler & PCAP", "Sensors & PCAP")}
         title={t(
           "Pasif Sensör Yönetimi & Derin PCAP Analizi",
           "Passive Sensor Management & Deep PCAP Analysis",
         )}
-        subtitle={t(
-          "SPAN / TAP sensör kayıtları, 7 endüstriyel protokol için derin paket analizi ve tek tıkla PCAP / Zeek log işleme",
-          "SPAN / TAP sensor enrollment, deep packet inspection for 7 OT protocols and one-click PCAP / Zeek log analysis",
+      />
+
+      {/* 1. Kompakt Tek Satırlık PCAP / Zeek Kontrol Paneli (Toolbar) */}
+      {canEditAssets && sensors.length > 0 && (
+        <div className="rounded-md border border-zinc-200 bg-white p-3 dark:border-white/[0.08] dark:bg-[#111113]">
+          <form
+            onSubmit={(e) => void handleFileUpload(e)}
+            className="flex flex-col items-stretch gap-2.5 lg:flex-row lg:items-center"
+          >
+            {/* Sol: Dosya Sürükle-Bırak Alanı (İnce kesikli çizgili, kompakt yükseklik h-11) */}
+            <label
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={handleDrop}
+              className="flex h-11 flex-1 cursor-pointer items-center justify-between gap-3 rounded-md border border-dashed border-zinc-300 bg-zinc-50/70 px-3.5 text-xs text-zinc-700 transition hover:border-zinc-400 dark:border-white/[0.14] dark:bg-[#18181B]/60 dark:text-zinc-300 dark:hover:border-white/[0.25]"
+            >
+              <div className="flex min-w-0 items-center gap-2.5">
+                <svg
+                  className="h-4 w-4 shrink-0 text-zinc-400"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                <span className="truncate font-medium">
+                  {selectedFile
+                    ? selectedFile.name
+                    : t(
+                        ".pcap, .pcapng, .log dosyasını sürükleyin veya seçin",
+                        "Drop .pcap, .pcapng, .log file here or browse",
+                      )}
+                </span>
+              </div>
+              <span className="shrink-0 rounded border border-zinc-300 bg-white px-2 py-1 font-mono text-[11px] font-medium text-zinc-700 dark:border-white/[0.1] dark:bg-[#111113] dark:text-zinc-300">
+                {t("Dosya Seç", "Browse")}
+              </span>
+              <input
+                type="file"
+                accept=".pcap,.pcapng,.cap,.log,.json,.tsv"
+                onChange={handleFileChange}
+                className="sr-only"
+              />
+            </label>
+
+            {/* Orta: Hedef Sensör Seçici + Tek Mavi Ana Aksiyon Butonu (Upload & Analyze / Analiz Et) */}
+            <div className="flex items-center gap-2">
+              <div className="w-48">
+                <Select
+                  aria-label={t("Hedef Sensör", "Target Sensor")}
+                  value={effectiveUploadSensorId}
+                  onChange={(e) => setUploadSensorId(e.target.value)}
+                >
+                  {sensors.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              <Button
+                type="submit"
+                variant="primary"
+                className="h-9 px-4 whitespace-nowrap"
+                disabled={analyzeUploadMut.isPending}
+              >
+                {analyzeUploadMut.isPending
+                  ? t("Analiz Ediliyor…", "Analyzing…")
+                  : t("Analiz Et", "Upload & Analyze")}
+              </Button>
+            </div>
+
+            {/* Sağ: Örnek Senaryolar Açılır Menüsü (Örnek Yakalama Yükle ▾) */}
+            <div ref={sampleMenuRef} className="relative">
+              <button
+                type="button"
+                disabled={analyzeUploadMut.isPending}
+                onClick={() => setSampleMenuOpen((v) => !v)}
+                className="inline-flex h-9 w-full cursor-pointer items-center justify-between gap-2 rounded-md border border-zinc-300 bg-zinc-100/80 px-3 text-xs font-medium whitespace-nowrap text-zinc-800 transition hover:bg-zinc-200/70 disabled:opacity-50 lg:w-auto dark:border-white/[0.08] dark:bg-[#18181B] dark:text-zinc-200 dark:hover:border-white/[0.16] dark:hover:bg-[#222226]"
+              >
+                <svg
+                  className="h-3.5 w-3.5 text-zinc-400"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+                <span>{t("Örnek Yakalama Yükle", "Load Sample Capture")}</span>
+                <span className="text-[10px] text-zinc-400">▾</span>
+              </button>
+
+              {sampleMenuOpen && (
+                <div className="absolute right-0 z-40 mt-1.5 w-72 rounded-md border border-zinc-200 bg-white p-1 shadow-xl dark:border-white/[0.1] dark:bg-[#111113]">
+                  <button
+                    type="button"
+                    onClick={() => handleSampleAnalyze("multi-ot-pcap")}
+                    className="flex w-full cursor-pointer items-center justify-between rounded px-2.5 py-2 text-left text-xs text-zinc-800 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-[#18181B]"
+                  >
+                    <div>
+                      <div className="font-semibold">
+                        {t("7-Protokol Karma OT PCAP (DPI)", "7-Protocol Multi-Vendor OT PCAP (DPI)")}
+                      </div>
+                      <div className="font-mono text-[10px] text-zinc-400">
+                        Modbus · S7 · ENIP · OPCUA · DNP3 · BACnet · PN
+                      </div>
+                    </div>
+                    <span className="rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[10px] text-emerald-400">
+                      L7
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSampleAnalyze("real-modbus-pcap")}
+                    className="flex w-full cursor-pointer items-center justify-between rounded px-2.5 py-2 text-left text-xs text-zinc-800 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-[#18181B]"
+                  >
+                    <div>
+                      <div className="font-semibold">
+                        {t("Gerçek Modbus PCAP (Zeek 9.0.1)", "Real Modbus PCAP (Zeek 9.0.1)")}
+                      </div>
+                      <div className="font-mono text-[10px] text-zinc-400">
+                        MBAP FC=0x03 / FC=0x05 · TCP:502
+                      </div>
+                    </div>
+                    <span className="rounded border border-white/[0.08] bg-[#18181B] px-1.5 py-0.5 font-mono text-[10px] text-zinc-400">
+                      PCAP
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSampleAnalyze("synthetic-zeek")}
+                    className="flex w-full cursor-pointer items-center justify-between rounded px-2.5 py-2 text-left text-xs text-zinc-800 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-[#18181B]"
+                  >
+                    <div>
+                      <div className="font-semibold">
+                        {t("Örnek Fabrika Senaryosu", "Sample Plant Scenario")}
+                      </div>
+                      <div className="font-mono text-[10px] text-zinc-400">
+                        conn.log · modbus.log · s7comm.log
+                      </div>
+                    </div>
+                    <span className="rounded border border-white/[0.08] bg-[#18181B] px-1.5 py-0.5 font-mono text-[10px] text-zinc-400">
+                      ZEEK
+                    </span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </form>
+
+          {analyzeUploadMut.isPending && (
+            <div className="mt-2.5 flex items-center justify-between rounded-md border border-white/[0.08] bg-[#18181B] px-3 py-2 font-mono text-[11px] text-zinc-300">
+              <span className="inline-flex items-center gap-2">
+                <span className="h-2 w-2 animate-ping rounded-full bg-blue-500" />
+                {t(
+                  "L7 DPI Hattı Çalışıyor: Çerçeve Çözümleme → 7-Protokol Ayrıştırma → Risk Motoru…",
+                  "L7 DPI Pipeline Running: Frame Decode → 7-Protocol Dissection → Risk Engine…",
+                )}
+              </span>
+              <span className="text-zinc-500">1000BASE-TX · SPAN</span>
+            </div>
+          )}
+
+          {analyzeUploadMut.error != null && (
+            <div className="mt-2.5">
+              <ErrorBox error={analyzeUploadMut.error} />
+            </div>
+          )}
+
+          {uploadResult && (
+            <div className="mt-2.5 flex flex-wrap items-center justify-between gap-3 rounded-md border border-emerald-500/20 bg-emerald-500/[0.06] px-3.5 py-2 text-xs">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="font-semibold text-emerald-400">
+                  ✓ {uploadResult.filename}
+                </span>
+                <span className="font-mono text-[11px] text-zinc-300 tabular-nums">
+                  {t("Cihaz", "Devices")}: <strong>{uploadResult.devices_discovered}</strong>
+                </span>
+                <span className="font-mono text-[11px] text-zinc-300 tabular-nums">
+                  {t("Varlık", "Assets")}:{" "}
+                  <strong className="text-emerald-400">
+                    +{uploadResult.assets_created}/{uploadResult.assets_updated}
+                  </strong>
+                </span>
+                <span className="font-mono text-[11px] text-zinc-300 tabular-nums">
+                  {t("Akış", "Flows")}:{" "}
+                  <strong>
+                    +{uploadResult.communications_created}/{uploadResult.communications_updated}
+                  </strong>
+                </span>
+                <span className="font-mono text-[11px] text-zinc-300 tabular-nums">
+                  {t("Risk", "Risks")}:{" "}
+                  <strong className="text-rose-400">{uploadResult.open_risks_total}</strong>
+                </span>
+              </div>
+              <div className="flex items-center gap-3 font-medium text-zinc-300">
+                <Link to="/assets" className="hover:text-white hover:underline">
+                  {t("Envanter →", "Inventory →")}
+                </Link>
+                <Link to="/network" className="hover:text-white hover:underline">
+                  {t("Topoloji →", "Topology →")}
+                </Link>
+                <Link to="/risks" className="hover:text-white hover:underline">
+                  {t("Riskler →", "Risks →")}
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 2. Gerçek "Live Log Table" — Tek Satırlık Yoğun Paket Akışı Tablosu (32px satır yüksekliği) */}
+      <Card
+        title={t(
+          "Canlı Pasif Paket Akışı (Live SPAN Log Table)",
+          "Live Passive Packet Stream (Live SPAN Log Table)",
         )}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-1">
+              {["ALL", ...SUPPORTED_PROTOCOLS].map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setStreamProtoFilter(p)}
+                  className={`cursor-pointer rounded px-2 py-0.5 font-mono text-[11px] font-medium transition ${
+                    streamProtoFilter === p
+                      ? "border border-white/[0.2] bg-zinc-800 text-white"
+                      : "border border-transparent text-zinc-400 hover:bg-[#18181B] hover:text-zinc-200"
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
             <Button
-              variant={activeView === "all" ? "primary" : "secondary"}
-              onClick={() => setSearchParams({})}
+              size="sm"
+              variant="secondary"
+              onClick={() => setStreamPaused((v) => !v)}
             >
-              {t("Sensörler & Telemetri", "Sensors & Telemetry")}
-            </Button>
-            <Button
-              variant={activeView === "pcap" ? "primary" : "secondary"}
-              onClick={() => setSearchParams({ tab: "pcap" })}
-            >
-              {t("PCAP / Zeek Log Analizi", "PCAP / Zeek Log Analysis")}
+              {streamPaused
+                ? t("▶ Devam Et", "▶ Resume")
+                : t("⏸ Duraklat", "⏸ Pause")}
             </Button>
           </div>
         }
-      />
+        noPadding
+      >
+        {/* Üst Durum Şeridi */}
+        <div className="flex items-center justify-between border-b border-zinc-200 bg-zinc-50 px-3 py-1.5 font-mono text-[11px] text-zinc-500 dark:border-white/[0.08] dark:bg-[#18181B]/60 dark:text-zinc-400">
+          <span className="inline-flex items-center gap-2">
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                streamPaused ? "bg-amber-400" : "animate-pulse bg-emerald-400"
+              }`}
+            />
+            <span>
+              span0 (PROMISC · 0 TX) · FILTER:{" "}
+              <strong className="text-zinc-900 dark:text-zinc-200">{streamProtoFilter}</strong>
+            </span>
+          </span>
+          <span className="tabular-nums">
+            {streamPaused ? t("DURAKLATILDI", "PAUSED") : t("CANLI", "LIVE")} ·{" "}
+            {edges.length * 14 + streamTick * 3} pkts
+          </span>
+        </div>
 
-      {/* 4 TailAdmin StatCard (Tümü sayısal metrik, tek satır etiket ve alt metin) */}
+        {/* Tek Satırlık Yoğun Log Tablosu: Zaman | Frame # | Protokol | Kaynak IP → Hedef IP | L7 Özeti | Hex ▾ */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left font-mono text-xs">
+            <thead className="border-b border-zinc-200 bg-zinc-50/50 text-[10.5px] font-semibold text-zinc-500 uppercase dark:border-zinc-800/80 dark:bg-[#111113] dark:text-zinc-400">
+              <tr className="h-8">
+                <th className="py-1.5 px-3 whitespace-nowrap">{t("Zaman", "Time")}</th>
+                <th className="py-1.5 px-3 whitespace-nowrap">Frame #</th>
+                <th className="py-1.5 px-3 whitespace-nowrap">{t("Protokol", "Protocol")}</th>
+                <th className="py-1.5 px-3 whitespace-nowrap">
+                  {t("Kaynak IP → Hedef IP", "Source IP → Target IP")}
+                </th>
+                <th className="w-full py-1.5 px-3">{t("L7 Özeti", "L7 Summary")}</th>
+                <th className="py-1.5 px-3 text-right whitespace-nowrap">Hex</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(() => {
+                const filteredEdges = edges.filter((e) => {
+                  if (streamProtoFilter === "ALL") return true;
+                  return e.protocol.replace(/\?+$/, "").toUpperCase() === streamProtoFilter;
+                });
+                if (filteredEdges.length === 0) {
+                  return (
+                    <tr>
+                      <td colSpan={6} className="py-6 text-center font-sans text-xs text-zinc-500">
+                        {t(
+                          "Seçilen protokol filtresinde aktif çerçeve yok.",
+                          "No active frames for selected protocol filter.",
+                        )}
+                      </td>
+                    </tr>
+                  );
+                }
+                const rotated = filteredEdges.map(
+                  (_, idx) => filteredEdges[(idx + streamTick) % filteredEdges.length],
+                );
+                return rotated.slice(0, 10).map((e, idx) => {
+                  const p = e.protocol.replace(/\?+$/, "").toUpperCase();
+                  const port = e.target_port ?? 502;
+                  const payloadSummary =
+                    p === "MODBUS"
+                      ? "MBAP UnitID=1 · FC=0x03 Read Holding Registers (40001..40010) [Len=12]"
+                      : p === "S7COMM"
+                        ? "COTP DT Data · S7 Job (0x01) Read SZL / CPU Status [Rack=0 Slot=1]"
+                        : p === "ENIP"
+                          ? "CIP Service=0x4C Read Tag 'MainProgram.Line1_Conveyor_Speed'"
+                          : p === "OPCUA"
+                            ? "OPCUA Binary MSG · ReadRequest NodeId=ns=2;s=PressLine.Pressure"
+                            : p === "BACNET"
+                              ? "BVLC=0x81 Original-Unicast-NPDU · ReadProperty AnalogInput:1"
+                              : p === "DNP3"
+                                ? "DNP3 DataLink=0x0564 · App FC=0x01 Read Class 0/1/2 Integrity"
+                                : p === "PROFINET"
+                                  ? "PROFINET-RT FrameID=0x8000 Cyclic IO Data · Cycle=1.0ms"
+                                  : `${p} Session Frame · Ack=1 · Win=64240`;
+                  const seqNum = 1000 + ((streamTick + idx) % 8999);
+                  const isSelected = (inspectedEdgeId ?? filteredEdges[0]?.id) === e.id;
+                  const timeStr = e.last_seen_at
+                    ? new Date(e.last_seen_at).toLocaleTimeString("tr-TR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                      })
+                    : "02:19:04";
+
+                  return (
+                    <tr
+                      key={`${e.id}-${idx}`}
+                      onClick={() => {
+                        setInspectedEdgeId(e.id);
+                        setHexOpen(true);
+                      }}
+                      className={`h-8 cursor-pointer border-b border-zinc-200/70 transition-colors dark:border-zinc-800/60 ${
+                        isSelected
+                          ? "bg-zinc-100 dark:bg-[#18181B]"
+                          : "hover:bg-zinc-50 dark:hover:bg-[#16161A]"
+                      }`}
+                    >
+                      <td className="py-1.5 px-3 whitespace-nowrap text-zinc-500 tabular-nums dark:text-zinc-400">
+                        {timeStr}
+                      </td>
+                      <td className="py-1.5 px-3 whitespace-nowrap text-zinc-500 tabular-nums dark:text-zinc-400">
+                        #{seqNum}
+                      </td>
+                      <td className="py-1.5 px-3 whitespace-nowrap">
+                        <span className="rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[11px] text-emerald-600 dark:text-emerald-400">
+                          {p}:{port}
+                        </span>
+                      </td>
+                      <td className="py-1.5 px-3 whitespace-nowrap tabular-nums">
+                        <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                          {e.source_ip ?? e.source_label}
+                        </span>
+                        <span className="mx-1.5 text-zinc-500">→</span>
+                        <span className="font-semibold text-zinc-700 dark:text-zinc-300">
+                          {e.target_ip ?? e.target_label}
+                        </span>
+                      </td>
+                      <td className="max-w-md truncate py-1.5 px-3 text-zinc-600 dark:text-zinc-300">
+                        {payloadSummary}
+                      </td>
+                      <td className="py-1.5 px-3 text-right whitespace-nowrap text-zinc-400">
+                        <button
+                          type="button"
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            if (isSelected) {
+                              setHexOpen((v) => !v);
+                            } else {
+                              setInspectedEdgeId(e.id);
+                              setHexOpen(true);
+                            }
+                          }}
+                          className="cursor-pointer font-mono text-[11px] text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"
+                        >
+                          Hex {isSelected && hexOpen ? "▴" : "▾"}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                });
+              })()}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Seçili Satır İçin L7 Paket Çözümleyici & Hex/ASCII Çerçeve Dökümü */}
+        {hexOpen &&
+          (() => {
+            const inspected = edges.find((x) => x.id === inspectedEdgeId) ?? edges[0];
+            if (!inspected) return null;
+            const p = inspected.protocol.replace(/\?+$/, "").toUpperCase();
+            const port = inspected.target_port ?? 502;
+            const srcIp = inspected.source_ip ?? "10.10.20.99";
+            const dstIp = inspected.target_ip ?? "10.0.0.20";
+
+            const l7Dissection =
+              p === "MODBUS"
+                ? [
+                    "MBAP Header · Transaction ID: 0x01A4 (420) · Protocol ID: 0x0000 (Modbus TCP)",
+                    "Length: 6 bytes · Unit Identifier: 0x01 (Slave PLC #1)",
+                    "Function Code: 0x03 (Read Holding Registers) · Reference: 40001..40010",
+                  ]
+                : p === "S7COMM"
+                  ? [
+                      "TPKT Header · Version: 3 · Length: 31 bytes · ISO 8073 COTP DT Data (0xF0)",
+                      "S7 Communication · Protocol ID: 0x32 · ROSCTR: Job (0x01) · Read SZL",
+                    ]
+                  : p === "ENIP"
+                    ? [
+                        "EtherNet/IP Encapsulation · Command: SendRRData (0x006F)",
+                        "Common Industrial Protocol (CIP) · Service: 0x4C (Read Tag Service)",
+                      ]
+                    : [
+                        `${p} Application Protocol Data Unit (APDU) · Port TCP/${port}`,
+                        `Session Flow: ${srcIp} -> ${dstIp} (${inspected.connection_count} frames)`,
+                        `Confidence: ${(inspected.protocol_confidence ?? "observed").toUpperCase()} · Cross-Zone: ${inspected.cross_zone ? "YES" : "NO"}`,
+                      ];
+
+            const hexLines = [
+              `0000  00 1b 1b c4 09 a2 00 0e  8c 7a 31 10 08 00 45 00   ........ .z1...E.`,
+              `0010  00 4c 2b 19 40 00 40 06  7a c1 0a 0a 14 63 0a 00   .L+.@.@. z....c..`,
+              `0020  00 14 c4 32 01 f6 1b 82  44 a0 9e 11 04 50 18 01   ...2.... D....P..`,
+              `0030  f5 e4 3a 00 01 a4 00 00  00 06 01 03 00 00 00 0a   ..:..... ........`,
+            ];
+
+            return (
+              <div className="border-t border-zinc-200 bg-zinc-950 p-3.5 text-xs text-zinc-300 dark:border-white/[0.08] dark:bg-[#09090B]">
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
+                  <div className="space-y-1 rounded-md border border-white/[0.08] bg-[#111113] p-3 font-mono text-[11px] lg:col-span-7">
+                    <div className="text-zinc-400">
+                      ▸ Frame: 76 bytes on wire, interface <strong className="text-emerald-400">span0</strong> ·{" "}
+                      {srcIp} → {dstIp} ({p}:{port})
+                    </div>
+                    <div className="pt-0.5 font-semibold text-zinc-100">
+                      ▾ {p} Industrial Control Protocol Layer (L7 DPI)
+                    </div>
+                    <ul className="space-y-0.5 pl-4 text-emerald-400">
+                      {l7Dissection.map((line, i) => (
+                        <li key={i}>├─ {line}</li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="rounded-md border border-white/[0.08] bg-[#111113] p-3 font-mono text-[11px] leading-relaxed text-zinc-300 lg:col-span-5">
+                    <pre className="overflow-x-auto select-all">{hexLines.join("\n")}</pre>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+      </Card>
+
+      {/* 3. Kompakt KPI Özeti */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label={t("Kayıtlı Pasif Sensör", "Registered Passive Sensors")}
@@ -268,57 +735,32 @@ export default function SensorsPage() {
             text: t(`${connectedCount} Çevrimiçi`, `${connectedCount} Online`),
             tone: connectedCount > 0 ? "emerald" : "amber",
           }}
-          icon={
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <circle cx="12" cy="12" r="2" />
-              <path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14" />
-            </svg>
-          }
         />
-
         <StatCard
           label={t("Yakalanan İletişim Akışı", "Captured Network Flows")}
           value={edges.length}
-          hint={t(`Toplam ${totalPacketsOrConns} oturum / bağlantı`, `${totalPacketsOrConns} total sessions / connections`)}
+          hint={t(`Toplam ${totalPacketsOrConns} oturum`, `${totalPacketsOrConns} total sessions`)}
           tone="navy"
-          icon={
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-            </svg>
-          }
         />
-
         <StatCard
           label={t("Desteklenen OT Protokolü", "Supported OT Protocols")}
           value={SUPPORTED_PROTOCOLS.length}
           hint="Modbus · S7comm · ENIP · OPC UA · DNP3"
           tone="teal"
-          badge={{ text: t("Derin Paket Analizi", "Deep Packet Inspection"), tone: "teal" }}
-          icon={
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-              <polyline points="14 2 14 8 20 8" />
-            </svg>
-          }
+          badge={{ text: "L7 DPI", tone: "teal" }}
         />
-
         <StatCard
           label={t("Gönderilen Aktif Tarama Paketi", "Active Probe Packets Sent")}
           value={0}
           hint={t("Üretim ağına sıfır paket enjeksiyonu", "Zero packet injection into OT network")}
           tone="emerald"
           badge={{ text: t("Yalnızca Pasif", "Passive Only"), tone: "emerald" }}
-          icon={
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-            </svg>
-          }
         />
       </div>
 
       {/* Yeni Sensör Token Uyarısı */}
       {enrolledToken && (
-        <div className="rounded-[4px] border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
           <div className="flex items-center justify-between">
             <span className="font-semibold">
               {t(
@@ -328,588 +770,29 @@ export default function SensorsPage() {
             </span>
             <button
               type="button"
-              className="text-xs font-medium text-amber-800 hover:underline"
+              className="text-xs font-medium text-amber-300 hover:underline"
               onClick={() => setEnrolledToken(null)}
             >
               {t("Kapat", "Dismiss")}
             </button>
           </div>
-          <p className="mt-1 text-xs text-amber-800">
-            {t(
-              "Güvenlik nedeniyle bu anahtar veritabanında açık metin olarak saklanmaz (yalnızca SHA-256 parmak izi tutulur). Sensörünüzde FG_SENSOR_TOKEN olarak yapılandırın:",
-              "For security, this token is never stored in plain text (only its SHA-256 fingerprint is stored). Configure it as FG_SENSOR_TOKEN on your sensor:",
-            )}
-          </p>
-          <pre className="mt-2 overflow-x-auto rounded-[4px] border border-amber-200 bg-white px-3 py-2 font-mono text-xs text-[#1C2434] select-all">
+          <pre className="mt-2 overflow-x-auto rounded-md border border-white/[0.08] bg-[#09090B] px-3 py-2 font-mono text-xs text-zinc-100 select-all">
             {enrolledToken.token}
           </pre>
         </div>
       )}
 
-      {/* Tek Tıkla PCAP / Zeek Log Yükleme ve Analiz Kartı */}
-      {canEditAssets && sensors.length > 0 && (
-        <Card
-          title={t("PCAP / Zeek Log Derin Paket Analizi", "PCAP / Zeek Log Deep Packet Inspection")}
-          subtitle={t(
-            ".pcap, .pcapng veya Zeek .log dosyası yükleyin ya da hazır fabrika kayıtlarını tek tıkla çalıştırın",
-            "Upload a .pcap, .pcapng or Zeek .log file or run pre-packaged plant traffic captures with one click",
-          )}
-          actions={
-            <div className="flex flex-wrap items-center gap-1">
-              {SUPPORTED_PROTOCOLS.map((p) => (
-                <ProtocolBadge key={p} protocol={p} />
-              ))}
-            </div>
-          }
-        >
-          <form
-            onSubmit={(e) => void handleFileUpload(e)}
-            className="grid grid-cols-1 gap-4 sm:grid-cols-3"
-          >
-            <Field label={t("Hedef Sensör *", "Target Sensor *")}>
-              <Select
-                value={effectiveUploadSensorId}
-                onChange={(e) => setUploadSensorId(e.target.value)}
-              >
-                {sensors.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label={t("PCAP veya Zeek Log Dosyası (.pcap, .pcapng, .log)", "PCAP or Zeek Log File (.pcap, .pcapng, .log)")}>
-              <label
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={handleDrop}
-                className="flex h-9 w-full cursor-pointer items-center justify-between rounded-[4px] border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-3 text-xs text-[#1C2434] transition hover:border-[#0D9488] hover:bg-teal-50/30"
-              >
-                <span className="truncate font-medium">
-                  {selectedFile
-                    ? selectedFile.name
-                    : t("Dosya seçin veya buraya sürükleyin…", "Choose a file or drop it here…")}
-                </span>
-                <span className="ml-2 shrink-0 rounded-[3px] bg-[#1C2434] px-2.5 py-1 text-[11px] font-medium text-white">
-                  {t("Dosya Seç", "Browse")}
-                </span>
-                <input
-                  type="file"
-                  accept=".pcap,.pcapng,.cap,.log,.json,.tsv"
-                  onChange={handleFileChange}
-                  className="sr-only"
-                />
-              </label>
-            </Field>
-            <div className="flex items-end">
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={!selectedFile || analyzeUploadMut.isPending}
-              >
-                {analyzeUploadMut.isPending
-                  ? t("Analiz Ediliyor…", "Analyzing…")
-                  : t("Dosyayı Yükle ve Analiz Et", "Upload & Analyze File")}
-              </Button>
-            </div>
-          </form>
-
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[#E2E8F0] pt-3.5">
-            <div className="text-xs text-slate-500">
-              {t(
-                "Laboratuvar endüstriyel paket kayıtlarını tek tıkla sensör hattından geçirin:",
-                "Run laboratory industrial packet captures through the sensor pipeline with one click:",
-              )}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="primary"
-                disabled={analyzeUploadMut.isPending}
-                onClick={() => handleSampleAnalyze("multi-ot-pcap")}
-              >
-                {t(
-                  "7 Protokollü Karma OT PCAP Analiz Et (DPI)",
-                  "Analyze 7-Protocol Multi-Vendor OT PCAP (DPI)",
-                )}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={analyzeUploadMut.isPending}
-                onClick={() => handleSampleAnalyze("real-modbus-pcap")}
-              >
-                {t("Gerçek Modbus PCAP (Zeek 9.0.1)", "Real Modbus PCAP (Zeek 9.0.1)")}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={analyzeUploadMut.isPending}
-                onClick={() => handleSampleAnalyze("synthetic-zeek")}
-              >
-                {t("Örnek Fabrika Senaryosu", "Sample Plant Scenario")}
-              </Button>
-            </div>
-          </div>
-
-          {analyzeUploadMut.isPending && (
-            <div className="mt-4 rounded-[8px] border border-sky-500/40 bg-sky-500/10 p-4 text-xs">
-              <div className="flex items-center justify-between font-mono font-bold text-sky-400">
-                <span>
-                  ⚡ {t("Derin Paket Analizi (L7 DPI) Hattı Çalışıyor…", "Deep Packet Inspection (L7 DPI) Pipeline Running…")}
-                </span>
-                <span>1000BASE-TX · SPAN</span>
-              </div>
-              <div className="mt-2.5 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                {[
-                  t("1. PCAP Çerçeveleri & IEEE OUI Çözümleniyor", "1. Decoding PCAP Frames & IEEE OUI"),
-                  t("2. 7-Protokol L7 ADU/PDU Ayrıştırılıyor", "2. Parsing 7-Protocol L7 ADU/PDU"),
-                  t("3. Varlık Korelasyonu & 6 Risk Kuralı Hesaplanıyor", "3. Correlating Assets & Evaluating 6 Risk Rules"),
-                ].map((stage) => (
-                  <div
-                    key={stage}
-                    className="flex items-center gap-2 rounded-[5px] border border-sky-500/30 bg-[#0B1120] px-3 py-2 font-mono text-[11px] text-sky-300"
-                  >
-                    <span className="h-2 w-2 animate-ping rounded-full bg-sky-400" />
-                    <span>{stage}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {analyzeUploadMut.error != null && (
-            <div className="mt-3">
-              <ErrorBox error={analyzeUploadMut.error} />
-            </div>
-          )}
-
-          {uploadResult && (
-            <div className="mt-4 rounded-[8px] border border-emerald-500/35 bg-emerald-500/10 p-4 text-xs dark:border-emerald-500/30 dark:bg-[#0D1A2B]">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-2 font-bold text-emerald-800 dark:text-emerald-300">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-300">
-                    ✓
-                  </span>
-                  <span>
-                    {t("Analiz Tamamlandı", "Analysis Completed")}: {uploadResult.filename}
-                  </span>
-                </span>
-                <div className="flex flex-wrap gap-3 font-semibold">
-                  <Link to="/assets" className="text-[#2563EB] hover:underline dark:text-sky-400">
-                    {t("Cihaz Envanterine Git →", "Go to Device Inventory →")}
-                  </Link>
-                  <Link to="/network" className="text-[#2563EB] hover:underline dark:text-sky-400">
-                    {t("Topoloji Haritası →", "Topology Map →")}
-                  </Link>
-                  <Link to="/risks" className="text-[#2563EB] hover:underline dark:text-sky-400">
-                    {t(
-                      `Risk Bulguları (${uploadResult.open_risks_total}) →`,
-                      `Risk Findings (${uploadResult.open_risks_total}) →`,
-                    )}
-                  </Link>
-                </div>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="rounded-[6px] border border-[#CBD5E1] border-t-2 border-t-sky-500 bg-white p-3 shadow-xs dark:border-[#1E293B] dark:border-t-sky-400 dark:bg-[#111827]">
-                  <div className="font-mono text-[10px] font-bold tracking-wider text-[#64748B] uppercase dark:text-[#94A3B8]">
-                    {t("Keşfedilen Cihaz", "Discovered Devices")}
-                  </div>
-                  <div className="mt-1 font-mono text-lg font-bold text-[#0F172A] dark:text-[#F8FAFC]">
-                    {uploadResult.devices_discovered}
-                  </div>
-                </div>
-                <div className="rounded-[6px] border border-[#CBD5E1] border-t-2 border-t-emerald-500 bg-white p-3 shadow-xs dark:border-[#1E293B] dark:border-t-emerald-400 dark:bg-[#111827]">
-                  <div className="font-mono text-[10px] font-bold tracking-wider text-[#64748B] uppercase dark:text-[#94A3B8]">
-                    {t("Yeni / Güncellenen Varlık", "Created / Updated Assets")}
-                  </div>
-                  <div className="mt-1 font-mono text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                    +{uploadResult.assets_created} / {uploadResult.assets_updated}
-                  </div>
-                </div>
-                <div className="rounded-[6px] border border-[#CBD5E1] border-t-2 border-t-indigo-500 bg-white p-3 shadow-xs dark:border-[#1E293B] dark:border-t-indigo-400 dark:bg-[#111827]">
-                  <div className="font-mono text-[10px] font-bold tracking-wider text-[#64748B] uppercase dark:text-[#94A3B8]">
-                    {t("İletişim Akışı", "Communication Flows")}
-                  </div>
-                  <div className="mt-1 font-mono text-lg font-bold text-sky-600 dark:text-sky-400">
-                    +{uploadResult.communications_created} / {uploadResult.communications_updated}
-                  </div>
-                </div>
-                <div className="rounded-[6px] border border-[#CBD5E1] border-t-2 border-t-rose-500 bg-white p-3 shadow-xs dark:border-[#1E293B] dark:border-t-rose-400 dark:bg-[#111827]">
-                  <div className="font-mono text-[10px] font-bold tracking-wider text-[#64748B] uppercase dark:text-[#94A3B8]">
-                    {t("Açık Risk Bulgusu", "Open Risk Findings")}
-                  </div>
-                  <div className="mt-1 font-mono text-lg font-bold text-rose-600 dark:text-rose-400">
-                    {uploadResult.open_risks_total}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </Card>
-      )}
-
-      {/* Canlı Paket Akışı Terminali (Live Packet Stream — Pause/Resume & Protocol Filter) */}
-      <Card
-        title={t(
-          "Canlı Pasif Paket Akışı Terminali (Live SPAN Packet Stream)",
-          "Live Passive Packet Stream Terminal (Live SPAN Capture)",
-        )}
-        subtitle={t(
-          "SPAN portundan yakalanan gerçek zamanlı L7 endüstriyel çerçeve akışı — incelemek için akışı duraklatabilir veya protokole göre filtreleyebilirsiniz",
-          "Real-time L7 industrial frame stream captured from the SPAN port — pause or filter by protocol to inspect frames",
-        )}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex flex-wrap items-center gap-1">
-              {["ALL", ...SUPPORTED_PROTOCOLS].map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setStreamProtoFilter(p)}
-                  className={`cursor-pointer rounded-[4px] px-2 py-1 font-mono text-[10px] font-bold transition ${
-                    streamProtoFilter === p
-                      ? "bg-[#2563EB] text-white"
-                      : "border border-[#CBD5E1] bg-[#F8FAFC] text-[#64748B] hover:text-[#1C2434] dark:border-[#2A364F] dark:bg-[#161F30] dark:text-[#94A3B8] dark:hover:text-white"
-                  }`}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-            <Button
-              size="sm"
-              variant={streamPaused ? "outline" : "secondary"}
-              onClick={() => setStreamPaused((v) => !v)}
-            >
-              {streamPaused
-                ? t("▶ Akışı Devam Ettir", "▶ Resume Stream")
-                : t("⏸ Akışı Duraklat", "⏸ Pause Stream")}
-            </Button>
-          </div>
-        }
-        noPadding
-      >
-        <div className="bg-[#050811] p-4 font-mono text-xs text-slate-200">
-          <div className="mb-2 flex items-center justify-between border-b border-[#1E293B] pb-2 text-[11px] text-slate-400">
-            <span className="inline-flex items-center gap-2">
-              <span
-                className={`h-2 w-2 rounded-full ${
-                  streamPaused ? "bg-amber-400" : "animate-pulse bg-emerald-400 shadow-[0_0_8px_#10B981]"
-                }`}
-              />
-              <span>
-                INTERFACE: <strong className="text-sky-400">span0 (PROMISC · 0 TX)</strong> · FILTER:{" "}
-                <strong className="text-emerald-400">{streamProtoFilter}</strong>
-              </span>
-            </span>
-            <span className="tabular-nums">
-              {streamPaused ? t("DURAKLATILDI", "PAUSED") : t("CANLI AKIYOR", "STREAMING LIVE")} ·{" "}
-              {edges.length * 14 + streamTick * 3} pkts
-            </span>
-          </div>
-
-          <div className="max-h-52 space-y-1.5 overflow-y-auto">
-            {(() => {
-              const filteredEdges = edges.filter((e) => {
-                if (streamProtoFilter === "ALL") return true;
-                return e.protocol.replace(/\?+$/, "").toUpperCase() === streamProtoFilter;
-              });
-              if (filteredEdges.length === 0) {
-                return (
-                  <div className="py-6 text-center text-slate-500">
-                    {t(
-                      "Seçilen protokol filtresinde aktif çerçeve yok. Yukarıdan '7 Protokollü Karma OT PCAP Analiz Et' butonuna tıklayın.",
-                      "No active frames for selected protocol filter. Click 'Analyze 7-Protocol Multi-Vendor OT PCAP' above.",
-                    )}
-                  </div>
-                );
-              }
-              // Stream tick ile dairesel kaydırma yaparak canlı akan terminal hissi oluştur
-              const rotated = filteredEdges.map(
-                (_, idx) => filteredEdges[(idx + streamTick) % filteredEdges.length],
-              );
-              return rotated.slice(0, 8).map((e, idx) => {
-                const p = e.protocol.replace(/\?+$/, "").toUpperCase();
-                const port = e.target_port ?? 502;
-                const payloadSummary =
-                  p === "MODBUS"
-                    ? "MBAP UnitID=1 · FC=0x03 Read Holding Registers (40001..40010) [Len=12]"
-                    : p === "S7COMM"
-                      ? "COTP DT Data · S7 Job (0x01) Read SZL / CPU Status [Rack=0 Slot=1]"
-                      : p === "ENIP"
-                        ? "CIP Service=0x4C Read Tag 'MainProgram.Line1_Conveyor_Speed'"
-                        : p === "OPCUA"
-                          ? "OPCUA Binary MSG · ReadRequest NodeId=ns=2;s=PressLine.Pressure"
-                          : p === "BACNET"
-                            ? "BVLC=0x81 Original-Unicast-NPDU · ReadProperty AnalogInput:1"
-                            : p === "DNP3"
-                              ? "DNP3 DataLink=0x0564 · App FC=0x01 Read Class 0/1/2 Integrity"
-                              : p === "PROFINET"
-                                ? "PROFINET-RT FrameID=0x8000 Cyclic IO Data · Cycle=1.0ms"
-                                : `${p} Frame · Seq=${1040 + ((streamTick + idx) * 17) % 9000} · Win=64240`;
-                const seqNum = 1000 + ((streamTick + idx) % 8999);
-                return (
-                  <div
-                    key={`${e.id}-${idx}`}
-                    onClick={() => setInspectedEdgeId(e.id)}
-                    className="flex cursor-pointer flex-wrap items-center justify-between gap-2 rounded-[4px] border border-[#152036] bg-[#0B1120] px-3 py-1.5 text-[11px] transition hover:border-sky-500/50"
-                  >
-                    <div className="flex flex-wrap items-center gap-2.5">
-                      <span className="text-slate-500 tabular-nums">#{seqNum}</span>
-                      <span className="rounded bg-sky-500/15 px-1.5 py-0.2 text-[10px] font-bold text-sky-300">
-                        {p}:{port}
-                      </span>
-                      <span className="font-bold text-white tabular-nums">
-                        {e.source_ip ?? e.source_label}
-                      </span>
-                      <span className="text-sky-400">→</span>
-                      <span className="font-bold text-emerald-300 tabular-nums">
-                        {e.target_ip ?? e.target_label}
-                      </span>
-                      <span className="text-slate-300">{payloadSummary}</span>
-                    </div>
-                    <span className="text-[10px] text-sky-400">
-                      {t("Hex Çözümle ↓", "Dissect Hex ↓")}
-                    </span>
-                  </div>
-                );
-              });
-            })()}
-          </div>
-        </div>
-      </Card>
-
-      {/* OT Komut & Derin Paket Zaman Çizelgesi (L7 Forensics Timeline) */}
-      <Card
-        title={t(
-          "OT Komut & Derin Paket Zaman Çizelgesi (L7 DPI Forensics)",
-          "OT Command & Deep Packet Timeline (L7 DPI Forensics)",
-        )}
-        subtitle={t(
-          "Pasif SPAN trafiğinde yakalanan endüstriyel fonksiyon kodları, PLC yazma/okuma komutları ve oturum izleri",
-          "Industrial function codes, PLC read/write commands and session traces captured on passive SPAN traffic",
-        )}
-        actions={
-          <Badge tone="teal" dot>
-            {t("Gerçek Zamanlı L7 Çözümleyici", "Real-Time L7 Decoder")}
-          </Badge>
-        }
-        noPadding
-      >
-        {edges.length === 0 ? (
-          <div className="p-6">
-            <Empty>{t("Henüz paket akışı kaydedilmedi.", "No packet flows recorded yet.")}</Empty>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
-                <tr>
-                  <th className="px-5 py-3">{t("Zaman Damgası", "Timestamp")}</th>
-                  <th className="px-4 py-3">{t("Kaynak → Hedef", "Source → Target")}</th>
-                  <th className="px-4 py-3">{t("Protokol / Port", "Protocol / Port")}</th>
-                  <th className="px-4 py-3">{t("L7 Fonksiyon / Komut İzi", "L7 Function / Command Trace")}</th>
-                  <th className="px-5 py-3 text-right">{t("Güvenlik Etkisi", "Security Impact")}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#E2E8F0]">
-                {edges.slice(0, 10).map((e) => {
-                  const p = e.protocol.replace(/\?+$/, "").toUpperCase();
-                  const cmdSignature =
-                    p === "MODBUS"
-                      ? "FC=0x03 Read Holding Registers / FC=0x05 Write Single Coil (UnitID=1)"
-                      : p === "S7COMM"
-                        ? "ROSCTR=0x01 Job · Setup Communication / SZL Read (0x04)"
-                        : p === "ENIP"
-                          ? "CIP Service=0x0063 ListIdentity / Read Tag Service (0x4C)"
-                          : p === "OPCUA"
-                            ? "MSG=OPN OpenSecureChannel / ReadRequest NodeId=ns=2;i=1042"
-                            : p === "BACNET"
-                              ? "BVLC=0x81 · Unconfirmed-REQ Who-Is / ReadProperty"
-                              : p === "DNP3"
-                                ? "DL=0x0564 · App FC=0x01 Read Class 0/1/2/3 Data"
-                                : p === "PROFINET"
-                                  ? "PROFINET-IO DCP Identify / Cyclic RT Frame"
-                                  : p === "RDP"
-                                    ? "T.125 Connection-Request · Interactive Remote Session"
-                                    : `${p} Session Frame (${e.connection_count} pkts/conns)`;
-                  const isHighRisk =
-                    e.cross_zone || p === "RDP" || (!e.is_baseline_approved && (p === "MODBUS" || p === "S7COMM"));
-                  const activeInspect = (inspectedEdgeId ?? edges[0]?.id) === e.id;
-                  return (
-                    <tr
-                      key={e.id}
-                      onClick={() => setInspectedEdgeId(e.id)}
-                      className={`cursor-pointer transition-colors ${
-                        activeInspect
-                          ? "border-l-2 border-l-[#2563EB] bg-blue-50/80 dark:border-l-[#38BDF8] dark:bg-[#1E293B]"
-                          : "hover:bg-[#F8FAFC]"
-                      }`}
-                    >
-                      <td className="px-5 py-2.5 font-mono whitespace-nowrap text-slate-500">
-                        {formatDate(e.last_seen_at)}
-                      </td>
-                      <td className="px-4 py-2.5 font-mono whitespace-nowrap">
-                        <span className="font-semibold text-[#1C2434]">{e.source_ip ?? e.source_label}</span>
-                        <span className="mx-1.5 text-sky-500">→</span>
-                        <span className="font-semibold text-sky-600 dark:text-sky-400">
-                          {e.target_ip ?? e.target_label}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 whitespace-nowrap">
-                        <ProtocolBadge protocol={e.protocol} confidence={e.protocol_confidence} />
-                        {e.target_port !== null && (
-                          <span className="ml-1 font-mono text-[11px] text-slate-500">:{e.target_port}</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2.5 font-mono text-[11px] text-[#1C2434]">
-                        {cmdSignature}
-                      </td>
-                      <td className="px-5 py-2.5 text-right whitespace-nowrap">
-                        <div className="inline-flex items-center gap-2">
-                          {isHighRisk ? (
-                            <Badge tone="amber" dot>
-                              {t("Yetkisiz / Bölgeler Arası İz", "Unapproved / Cross-Zone Trace")}
-                            </Badge>
-                          ) : (
-                            <Badge tone="emerald" dot>
-                              {t("Normal Proses Telemetrisi", "Normal Process Telemetry")}
-                            </Badge>
-                          )}
-                          <span className="font-mono text-[10px] font-bold text-sky-500">
-                            {activeInspect ? "▼ HEX" : "▶ HEX"}
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-
-            {/* Wireshark-Kalitesinde L7 Endüstriyel Paket Çözümleyici & Hex/ASCII Frame Inspector */}
-            {(() => {
-              const inspected = edges.find((x) => x.id === inspectedEdgeId) ?? edges[0];
-              if (!inspected) return null;
-              const p = inspected.protocol.replace(/\?+$/, "").toUpperCase();
-              const port = inspected.target_port ?? 502;
-              const srcIp = inspected.source_ip ?? "10.10.20.99";
-              const dstIp = inspected.target_ip ?? "10.0.0.20";
-
-              const l7Dissection =
-                p === "MODBUS"
-                  ? [
-                      "MBAP Header · Transaction ID: 0x01A4 (420) · Protocol ID: 0x0000 (Modbus TCP)",
-                      "Length: 6 bytes · Unit Identifier: 0x01 (Slave PLC #1)",
-                      "Function Code: 0x03 (Read Holding Registers) / 0x05 (Write Single Coil)",
-                      "Reference Number: 40001 (0x0000) · Word Count: 10 Registers",
-                    ]
-                  : p === "S7COMM"
-                    ? [
-                        "TPKT Header · Version: 3 · Length: 31 bytes",
-                        "ISO 8073 COTP · PDU Type: DT Data (0xF0) · TPDU Number: 0x00",
-                        "S7 Communication · Protocol ID: 0x32 · ROSCTR: Job (0x01)",
-                        "Function: 0x04 Read Var / Setup Communication · Rack 0, Slot 1 (CPU)",
-                      ]
-                    : p === "ENIP"
-                      ? [
-                          "EtherNet/IP Encapsulation Header · Command: SendRRData (0x006F)",
-                          "Session Handle: 0x00010203 · Status: Success (0x00000000)",
-                          "Common Industrial Protocol (CIP) · Service: 0x4C (Read Tag Service)",
-                          "Request Path: Symbolic Segment 'MainProgram.Tank_Pressure_PV'",
-                        ]
-                      : [
-                          `${p} Application Protocol Data Unit (APDU) · Port TCP/${port}`,
-                          `Session Flow: ${srcIp} -> ${dstIp} (${inspected.connection_count} frames)`,
-                          `Confidence: ${(inspected.protocol_confidence ?? "observed").toUpperCase()} · Cross-Zone: ${inspected.cross_zone ? "YES" : "NO"}`,
-                        ];
-
-              const hexLines = [
-                `0000  00 1b 1b c4 09 a2 00 0e  8c 7a 31 10 08 00 45 00   ........ .z1...E.`,
-                `0010  00 4c 2b 19 40 00 40 06  7a c1 0a 0a 14 63 0a 00   .L+.@.@. z....c..`,
-                `0020  00 14 c4 32 01 f6 1b 82  44 a0 9e 11 04 50 18 01   ...2.... D....P..`,
-                `0030  f5 e4 3a 00 01 a4 00 00  00 06 01 03 00 00 00 0a   ..:..... ........`,
-              ];
-
-              return (
-                <div className="border-t border-[#E2E8F0] bg-[#070B14] p-4 text-xs text-slate-200 dark:border-[#1E293B]">
-                  <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 font-mono">
-                      <span className="rounded bg-sky-500/20 px-2 py-0.5 text-[10px] font-bold text-sky-300">
-                        L7 PACKET DISSECTOR
-                      </span>
-                      <span className="font-bold text-white">
-                        {srcIp} → {dstIp}
-                      </span>
-                      <span className="text-sky-400">
-                        ({p} TCP:{port})
-                      </span>
-                    </div>
-                    <span className="font-mono text-[11px] text-slate-400">
-                      {t(
-                        "Tablodan başka bir akışa tıklayarak paket baytlarını inceleyin",
-                        "Click any row above to inspect its decoded L7 packet bytes",
-                      )}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
-                    {/* Sol 7 Sütun: OSI / L7 Katman Ağacı */}
-                    <div className="space-y-1.5 rounded-[6px] border border-[#1E293B] bg-[#0B1120] p-3 font-mono text-[11px] lg:col-span-7">
-                      <div className="text-slate-400">
-                        ▸ Frame 1: 76 bytes on wire (608 bits), captured on passive interface{" "}
-                        <strong className="text-emerald-400">span0</strong>
-                      </div>
-                      <div className="text-slate-400">
-                        ▸ Ethernet II, Src: SiemensAG_c4:09:a2, Dst: Industrial_7a:31:10
-                      </div>
-                      <div className="text-slate-400">
-                        ▸ Internet Protocol Version 4, Src: {srcIp}, Dst: {dstIp}
-                      </div>
-                      <div className="text-slate-400">
-                        ▸ Transmission Control Protocol, Src Port: 50226, Dst Port: {port}, Len: 12
-                      </div>
-                      <div className="pt-1 font-bold text-sky-300">
-                        ▾ {p} Industrial Control Protocol Layer (L7 DPI)
-                      </div>
-                      <ul className="space-y-1 pl-4 text-emerald-300">
-                        {l7Dissection.map((line, i) => (
-                          <li key={i}>├─ {line}</li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    {/* Sağ 5 Sütun: Hexadecimal + ASCII Çerçeve Dökümü */}
-                    <div className="rounded-[6px] border border-[#1E293B] bg-[#050810] p-3 font-mono text-[11px] leading-relaxed text-sky-300 lg:col-span-5">
-                      <div className="mb-1.5 flex items-center justify-between border-b border-[#1E293B] pb-1 text-[10px] text-slate-500">
-                        <span>OFFSET · HEXADECIMAL BYTES</span>
-                        <span>ASCII</span>
-                      </div>
-                      <pre className="overflow-x-auto select-all">{hexLines.join("\n")}</pre>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
-        )}
-      </Card>
-
       {/* Kayıtlı Sensörler Tablosu */}
       <Card
         title={t(`Kayıtlı Pasif Sensörler (${sensors.length})`, `Registered Passive Sensors (${sensors.length})`)}
-        subtitle={t(
-          "SPAN / Port Mirroring noktalarında çalışan sensörlerin bağlantı durumu ve SHA-256 kimlik doğrulaması",
-          "Connection status and SHA-256 credential fingerprint of sensors running on SPAN / mirror ports",
-        )}
         noPadding
       >
         {sensorsQuery.isLoading ? (
-          <div className="p-6">
+          <div className="p-5">
             <Empty>{t("Yükleniyor…", "Loading…")}</Empty>
           </div>
         ) : sensors.length === 0 ? (
-          <div className="p-6">
+          <div className="p-5">
             <Empty>{t("Henüz kayıtlı sensör bulunmuyor.", "No sensors registered yet.")}</Empty>
           </div>
         ) : (
@@ -917,13 +800,13 @@ export default function SensorsPage() {
             <table className="w-full text-left text-xs">
               <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
                 <tr>
-                  <th className="px-5 py-3">{t("Sensör Adı", "Sensor Name")}</th>
-                  <th className="px-4 py-3">{t("Fabrika", "Site")}</th>
-                  <th className="px-4 py-3">{t("Durum", "Status")}</th>
-                  <th className="px-4 py-3">{t("Sürüm", "Version")}</th>
-                  <th className="px-4 py-3">{t("Son Telemetri", "Last Telemetry")}</th>
-                  <th className="px-4 py-3">{t("SHA-256 Parmak İzi", "SHA-256 Fingerprint")}</th>
-                  <th className="px-5 py-3 text-right">{t("İşlemler", "Actions")}</th>
+                  <th className="px-4 py-2.5">{t("Sensör Adı", "Sensor Name")}</th>
+                  <th className="px-4 py-2.5">{t("Fabrika", "Site")}</th>
+                  <th className="px-4 py-2.5">{t("Durum", "Status")}</th>
+                  <th className="px-4 py-2.5">{t("Sürüm", "Version")}</th>
+                  <th className="px-4 py-2.5">{t("Son Telemetri", "Last Telemetry")}</th>
+                  <th className="px-4 py-2.5">{t("SHA-256 Parmak İzi", "SHA-256 Fingerprint")}</th>
+                  <th className="px-4 py-2.5 text-right">{t("İşlemler", "Actions")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E2E8F0]">
@@ -931,56 +814,41 @@ export default function SensorsPage() {
                   const site = sites.find((st) => st.id === s.site_id);
                   return (
                     <tr key={s.id} className="hover:bg-[#F8FAFC]">
-                      <td className="px-5 py-3 font-semibold text-[#1C2434]">{s.name}</td>
-                      <td className="px-4 py-3 text-slate-600">{site?.name ?? "—"}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-2.5 font-semibold text-[#1C2434]">{s.name}</td>
+                      <td className="px-4 py-2.5 text-slate-600">{site?.name ?? "—"}</td>
+                      <td className="px-4 py-2.5">
                         <Badge tone={s.is_connected ? "emerald" : "slate"} dot>
                           {s.is_connected ? t("1G · Çevrimiçi", "1G · Online") : t("Beklemede", "Standby")}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3 font-mono text-slate-600">v{s.version}</td>
-                      <td className="px-4 py-3 font-mono whitespace-nowrap text-slate-500">
+                      <td className="px-4 py-2.5 font-mono text-slate-600">v{s.version}</td>
+                      <td className="px-4 py-2.5 font-mono whitespace-nowrap text-slate-500">
                         {s.last_seen_at ? formatDate(s.last_seen_at) : t("Henüz veri yok", "No telemetry yet")}
                       </td>
-                      <td className="px-4 py-3 font-mono text-slate-500">
+                      <td className="px-4 py-2.5 font-mono text-slate-500">
                         <div className="inline-flex items-center gap-1.5" title={s.credential_fingerprint}>
                           <DecryptedText text={`${s.credential_fingerprint.slice(0, 14)}…`} />
                           <button
                             type="button"
                             onClick={() => handleCopyFingerprint(s.id, s.credential_fingerprint)}
-                            className="rounded border border-[#E2E8F0] bg-white px-1.5 py-0.5 font-sans text-[10px] font-medium text-[#1C2434] hover:border-[#0D9488] hover:text-[#0D9488]"
+                            className="cursor-pointer rounded border border-[#E2E8F0] bg-white px-1.5 py-0.5 font-sans text-[10px] font-medium text-[#1C2434] hover:border-white/[0.2]"
                           >
                             {copiedId === s.id ? t("Kopyalandı", "Copied") : t("Kopyala", "Copy")}
                           </button>
                         </div>
                       </td>
-                      <td className="px-5 py-3 text-right whitespace-nowrap">
-                        <div className="inline-flex items-center gap-1.5">
-                          {canEditAssets && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={analyzeUploadMut.isPending}
-                              onClick={() => {
-                                setUploadSensorId(s.id);
-                                handleSampleAnalyze("real-modbus-pcap");
-                              }}
-                            >
-                              {t("Örnek PCAP Çalıştır", "Run Sample PCAP")}
-                            </Button>
-                          )}
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() =>
-                              setSelectedSensorId(selectedSensorId === s.id ? null : s.id)
-                            }
-                          >
-                            {selectedSensorId === s.id
-                              ? t("Gizle", "Hide")
-                              : t("Keşif Geçmişi", "Discovery Runs")}
-                          </Button>
-                        </div>
+                      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() =>
+                            setSelectedSensorId(selectedSensorId === s.id ? null : s.id)
+                          }
+                        >
+                          {selectedSensorId === s.id
+                            ? t("Gizle", "Hide")
+                            : t("Keşif Geçmişi", "Discovery Runs")}
+                        </Button>
                       </td>
                     </tr>
                   );
@@ -997,14 +865,10 @@ export default function SensorsPage() {
             `Son Keşif Çalışmaları — ${detailQuery.data.name}`,
             `Recent Discovery Runs — ${detailQuery.data.name}`,
           )}
-          subtitle={t(
-            "Sensör tarafından gönderilen pasif gözlem paketlerinin işlenme geçmişi",
-            "Processing history of passive observation batches submitted by this sensor",
-          )}
           noPadding
         >
           {detailQuery.data.recent_runs.length === 0 ? (
-            <div className="p-6">
+            <div className="p-5">
               <Empty>
                 {t(
                   "Bu sensör henüz keşif verisi göndermedi.",
@@ -1017,27 +881,27 @@ export default function SensorsPage() {
               <table className="w-full text-left text-xs">
                 <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
                   <tr>
-                    <th className="px-5 py-3">{t("Başlangıç Zamanı", "Start Time")}</th>
-                    <th className="px-4 py-3">{t("Tamamlanma Zamanı", "End Time")}</th>
-                    <th className="px-4 py-3">{t("Durum", "Status")}</th>
-                    <th className="px-5 py-3 text-right">{t("Görülen Cihaz Sayısı", "Devices Seen")}</th>
+                    <th className="px-4 py-2.5">{t("Başlangıç Zamanı", "Start Time")}</th>
+                    <th className="px-4 py-2.5">{t("Tamamlanma Zamanı", "End Time")}</th>
+                    <th className="px-4 py-2.5">{t("Durum", "Status")}</th>
+                    <th className="px-4 py-2.5 text-right">{t("Görülen Cihaz Sayısı", "Devices Seen")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E2E8F0]">
                   {detailQuery.data.recent_runs.map((r) => (
                     <tr key={r.id} className="hover:bg-[#F8FAFC]">
-                      <td className="px-5 py-2.5 font-mono text-slate-600">
+                      <td className="px-4 py-2 font-mono text-slate-600">
                         {formatDate(r.started_at)}
                       </td>
-                      <td className="px-4 py-2.5 font-mono text-slate-600">
+                      <td className="px-4 py-2 font-mono text-slate-600">
                         {r.ended_at ? formatDate(r.ended_at) : t("Devam ediyor", "In progress")}
                       </td>
-                      <td className="px-4 py-2.5">
+                      <td className="px-4 py-2">
                         <Badge tone="emerald" dot>
                           {r.status}
                         </Badge>
                       </td>
-                      <td className="px-5 py-2.5 text-right font-mono font-bold text-[#1C2434]">
+                      <td className="px-4 py-2 text-right font-mono font-bold text-[#1C2434]">
                         {r.devices_seen}
                       </td>
                     </tr>
@@ -1050,17 +914,13 @@ export default function SensorsPage() {
       )}
 
       {/* 2 Sütunlu Trafik Özeti: En Aktif IP'ler & Protokol Dağılımı */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <Card
-          title={t("Pasif Yakalamada En Aktif IP Adresleri", "Top Communicating IP Addresses")}
-          subtitle={t(
-            "Gözlemlenen akış ve oturum sayısına göre en yoğun endüstriyel düğümler",
-            "Most active industrial nodes by observed flow and session count",
-          )}
+          title={t("En Aktif IP Adresleri", "Top Communicating IP Addresses")}
           noPadding
         >
           {topIps.length === 0 ? (
-            <div className="p-6">
+            <div className="p-5">
               <Empty>{t("Henüz trafik verisi yok.", "No traffic data yet.")}</Empty>
             </div>
           ) : (
@@ -1068,39 +928,30 @@ export default function SensorsPage() {
               <table className="w-full text-left text-xs">
                 <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
                   <tr>
-                    <th className="px-5 py-3">{t("IP & Cihaz Adı", "IP & Device Name")}</th>
-                    <th className="px-4 py-3 text-right">{t("Aktif Akış", "Active Flows")}</th>
-                    <th className="px-4 py-3 text-right">{t("Toplam Oturum", "Total Sessions")}</th>
-                    <th className="px-5 py-3 text-right">{t("İncele", "Inspect")}</th>
+                    <th className="px-4 py-2.5">{t("IP & Cihaz Adı", "IP & Device Name")}</th>
+                    <th className="px-4 py-2.5 text-right">{t("Aktif Akış", "Active Flows")}</th>
+                    <th className="px-4 py-2.5 text-right">{t("Toplam Oturum", "Total Sessions")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E2E8F0]">
                   {topIps.map((item) => (
                     <tr key={item.id} className="hover:bg-[#F8FAFC]">
-                      <td className="px-5 py-2.5">
+                      <td className="px-4 py-2">
                         <Link
                           to={`/assets/${item.id}`}
-                          className="font-mono font-bold text-[#0D9488] hover:underline"
+                          className="font-mono font-bold text-[#1C2434] hover:underline"
                         >
                           {item.ip}
                         </Link>
                         {item.name !== item.ip && (
-                          <div className="text-[11px] text-slate-500">{item.name}</div>
+                          <span className="ml-2 text-[11px] text-slate-500">{item.name}</span>
                         )}
                       </td>
-                      <td className="px-4 py-2.5 text-right font-mono text-slate-700">
+                      <td className="px-4 py-2 text-right font-mono text-slate-700">
                         {item.flows}
                       </td>
-                      <td className="px-4 py-2.5 text-right font-mono font-bold text-[#1C2434]">
+                      <td className="px-4 py-2 text-right font-mono font-bold text-[#1C2434]">
                         {item.conns}
-                      </td>
-                      <td className="px-5 py-2.5 text-right">
-                        <Link
-                          to={`/assets/${item.id}`}
-                          className="text-xs font-semibold text-[#1C2434] hover:text-[#0D9488]"
-                        >
-                          {t("Detay →", "Detail →")}
-                        </Link>
                       </td>
                     </tr>
                   ))}
@@ -1111,15 +962,11 @@ export default function SensorsPage() {
         </Card>
 
         <Card
-          title={t("Pasif Yakalamada Gözlemlenen Protokoller", "Observed Protocols in Passive Capture")}
-          subtitle={t(
-            "DPI ve port analizi ile sınıflandırılan endüstriyel protokoller",
-            "Industrial protocols classified via DPI and port analysis",
-          )}
+          title={t("Gözlemlenen Protokoller", "Observed Protocols")}
           noPadding
         >
           {topProtos.length === 0 ? (
-            <div className="p-6">
+            <div className="p-5">
               <Empty>{t("Henüz protokol verisi yok.", "No protocol data yet.")}</Empty>
             </div>
           ) : (
@@ -1127,31 +974,22 @@ export default function SensorsPage() {
               <table className="w-full text-left text-xs">
                 <thead className="border-b border-[#E2E8F0] bg-[#F7F9FC] text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
                   <tr>
-                    <th className="px-5 py-3">{t("Protokol", "Protocol")}</th>
-                    <th className="px-4 py-3 text-right">{t("Akış Sayısı", "Flow Count")}</th>
-                    <th className="px-4 py-3 text-right">{t("Toplam Oturum", "Total Sessions")}</th>
-                    <th className="px-5 py-3 text-right">{t("Harita", "Map")}</th>
+                    <th className="px-4 py-2.5">{t("Protokol", "Protocol")}</th>
+                    <th className="px-4 py-2.5 text-right">{t("Akış Sayısı", "Flow Count")}</th>
+                    <th className="px-4 py-2.5 text-right">{t("Toplam Oturum", "Total Sessions")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E2E8F0]">
                   {topProtos.map((p) => (
                     <tr key={p.proto} className="hover:bg-[#F8FAFC]">
-                      <td className="px-5 py-2.5">
+                      <td className="px-4 py-2">
                         <ProtocolBadge protocol={p.proto} />
                       </td>
-                      <td className="px-4 py-2.5 text-right font-mono text-slate-700">
+                      <td className="px-4 py-2 text-right font-mono text-slate-700">
                         {p.flows}
                       </td>
-                      <td className="px-4 py-2.5 text-right font-mono font-bold text-[#1C2434]">
+                      <td className="px-4 py-2 text-right font-mono font-bold text-[#1C2434]">
                         {p.conns}
-                      </td>
-                      <td className="px-5 py-2.5 text-right">
-                        <Link
-                          to="/network"
-                          className="text-xs font-semibold text-[#0D9488] hover:underline"
-                        >
-                          {t("Topolojide Gör →", "View in Topology →")}
-                        </Link>
                       </td>
                     </tr>
                   ))}
@@ -1164,13 +1002,7 @@ export default function SensorsPage() {
 
       {/* Yeni Sensör Kaydet (Enroll) */}
       {canAdmin && (
-        <Card
-          title={t("Yeni Pasif Sensör Kaydet", "Enroll New Passive Sensor")}
-          subtitle={t(
-            "Saha SPAN portuna bağlanacak yeni bir Zeek / PCAP sensörü için tek kullanımlık API anahtarı üretin",
-            "Generate a one-time API token for a new Zeek / PCAP sensor connected to a plant SPAN port",
-          )}
-        >
+        <Card title={t("Yeni Pasif Sensör Kaydet", "Enroll New Passive Sensor")}>
           {sites.length === 0 ? (
             <Empty>
               {t(
@@ -1179,7 +1011,7 @@ export default function SensorsPage() {
               )}
             </Empty>
           ) : (
-            <form onSubmit={handleEnroll} className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+            <form onSubmit={handleEnroll} className="grid grid-cols-1 gap-3 sm:grid-cols-4">
               <Field label={t("Fabrika *", "Site *")}>
                 <Select value={effectiveSiteId} onChange={(e) => setSiteId(e.target.value)}>
                   {sites.map((s) => (
@@ -1192,24 +1024,33 @@ export default function SensorsPage() {
               <Field label={t("Sensör Adı *", "Sensor Name *")}>
                 <Input
                   required
-                  placeholder={t("Örn: sensor-uretim-vlan10", "e.g. sensor-prod-vlan10")}
+                  placeholder={t("Örn: zeek-span-montaj-02", "e.g. zeek-span-assembly-02")}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                 />
               </Field>
               <Field label={t("Sürüm", "Version")}>
-                <Input value={version} onChange={(e) => setVersion(e.target.value)} />
+                <Input
+                  placeholder="0.1.0"
+                  value={version}
+                  onChange={(e) => setVersion(e.target.value)}
+                />
               </Field>
               <div className="flex items-end">
-                <Button type="submit" className="w-full" disabled={enrollMut.isPending}>
-                  {t("Sensör Kaydet & Anahtar Üret", "Enroll Sensor & Generate Token")}
+                <Button
+                  type="submit"
+                  variant="secondary"
+                  className="w-full"
+                  disabled={enrollMut.isPending}
+                >
+                  {enrollMut.isPending
+                    ? t("Kaydediliyor…", "Enrolling…")
+                    : t("+ Sensör Anahtarı Üret", "+ Generate Sensor Token")}
                 </Button>
               </div>
             </form>
           )}
-          <div className="mt-2">
-            <ErrorBox error={enrollMut.error} />
-          </div>
+          <ErrorBox error={enrollMut.error} />
         </Card>
       )}
     </div>

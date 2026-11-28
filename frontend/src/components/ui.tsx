@@ -38,23 +38,23 @@ export function Card({
 }) {
   return (
     <section
-      className={`rounded-[8px] border border-[#CBD5E1]/90 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06)] dark:border-[#1E293B] dark:bg-[#111827] dark:shadow-[0_4px_20px_rgba(0,0,0,0.35)] ${className}`}
+      className={`rounded-md border border-zinc-200 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-white/[0.08] dark:bg-[#111113] dark:shadow-none ${className}`}
     >
       {(title || actions) && (
-        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E2E8F0] px-6 py-4 dark:border-[#1E293B]">
+        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 px-5 py-3.5 dark:border-white/[0.08]">
           <div>
             {title && (
-              <h2 className="font-display flex items-center gap-2.5 text-sm font-bold tracking-tight text-[#1C2434]">
-                <span className="inline-block h-3.5 w-1 rounded-full bg-gradient-to-b from-[#3B82F6] to-[#06B6D4]" />
+              <h2 className="font-display flex items-center gap-2 text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+                <span className="inline-block h-3.5 w-1 rounded-full bg-blue-500" />
                 <span>{title}</span>
               </h2>
             )}
-            {subtitle && <p className="mt-0.5 text-xs text-[#64748B]">{subtitle}</p>}
+            {subtitle && <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{subtitle}</p>}
           </div>
           {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
         </header>
       )}
-      <div className={noPadding ? "" : "p-6"}>{children}</div>
+      <div className={noPadding ? "" : "p-5"}>{children}</div>
     </section>
   );
 }
@@ -71,27 +71,27 @@ export function PageHeader({
   breadcrumb?: string;
 }) {
   return (
-    <div className="relative mb-6 overflow-hidden rounded-[8px] border border-[#CBD5E1] bg-white px-6 py-4 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:border-[#1E293B] dark:bg-[#111827]">
-      <div className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-[#2563EB] via-[#0284C7] to-[#06B6D4]" />
+    <div className="relative mb-5 overflow-hidden rounded-md border border-zinc-200 bg-white px-5 py-3.5 shadow-[0_1px_2px_rgba(0,0,0,0.03)] dark:border-white/[0.08] dark:bg-[#111113]">
+      <div className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-blue-600" />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           {breadcrumb && (
-            <div className="mb-1 flex items-center gap-1.5 font-mono text-[11px] font-semibold tracking-wider text-[#64748B] uppercase">
+            <div className="mb-1 flex items-center gap-1.5 font-mono text-[11px] font-medium tracking-wider text-zinc-500 uppercase dark:text-zinc-400">
               <span>{tx("Genel Bakış", "Overview")}</span>
               <span>/</span>
-              <span className="text-[#2563EB] dark:text-[#38BDF8]">{breadcrumb}</span>
-              <span className="ml-2 inline-flex items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[9px] font-bold text-emerald-600 dark:text-emerald-400">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-                {tx("SPAN TELEMETRİ · AKTİF", "SPAN TELEMETRY · LIVE")}
+              <span className="text-zinc-900 dark:text-zinc-200">{breadcrumb}</span>
+              <span className="ml-2 inline-flex items-center gap-1 rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                {tx("SPAN · AKTİF", "SPAN · LIVE")}
               </span>
             </div>
           )}
-          <h1 className="font-display text-xl font-bold tracking-tight text-[#1C2434] sm:text-2xl">
+          <h1 className="font-display text-lg font-bold tracking-tight text-zinc-900 sm:text-xl dark:text-zinc-100">
             {title}
           </h1>
-          {subtitle && <p className="mt-0.5 text-xs text-[#64748B]">{subtitle}</p>}
+          {subtitle && <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{subtitle}</p>}
         </div>
-        {actions && <div className="flex flex-wrap items-center gap-2.5">{actions}</div>}
+        {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       </div>
     </div>
   );
@@ -246,7 +246,7 @@ export function StatCard({
   const inner = (
     <SpotlightCard
       tone={spotlightTone}
-      className="group relative flex h-full flex-col justify-between rounded-[8px] border border-[#CBD5E1]/90 bg-white p-5 shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[#3B82F6]/60 hover:shadow-[0_10px_24px_-8px_rgba(37,99,235,0.22)] dark:border-[#1E293B] dark:bg-[#111827] dark:hover:border-[#38BDF8]/50"
+      className="group relative flex h-full flex-col justify-between rounded-md border border-zinc-200 bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-150 hover:border-zinc-300 dark:border-white/[0.08] dark:bg-[#111113] dark:hover:border-white/[0.16]"
     >
       <div
         className={`mb-3.5 h-1 w-full rounded-full bg-gradient-to-r ${STAT_TOP_BAR_GRADIENT[effectiveCardTone]}`}
@@ -324,22 +324,23 @@ export function StatCard({
 }
 
 /* ============================================================================
- * Taktil Mühendislik Butonları (Matte Precision Engineering Style)
+ * Keskin Endüstriyel Butonlar (Mavi vurgu yalnızca primary aksiyonda;
+ * diğer butonlar nötr karbon/gri #18181B veya ghost)
  * ============================================================================ */
 
 const BTN_VARIANTS = {
   primary:
-    "border border-[#3B82F6]/80 bg-[#2563EB] text-white shadow-[0_1px_2px_rgba(15,23,42,0.2),inset_0_1px_0_rgba(255,255,255,0.16)] hover:bg-[#1D4ED8] hover:border-[#60A5FA] active:translate-y-[0.5px] dark:border-[#3B82F6]/70 dark:bg-[#2563EB] dark:hover:bg-[#3B82F6]",
+    "border border-blue-500/80 bg-[#2563EB] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] hover:bg-[#1D4ED8] active:translate-y-[0.5px]",
   secondary:
-    "border border-[#CBD5E1] bg-white text-[#0F172A] shadow-[0_1px_2px_rgba(15,23,42,0.05)] hover:border-[#94A3B8] hover:bg-[#F8FAFC] active:translate-y-[0.5px] dark:border-[#2A364F] dark:bg-[#161F30] dark:text-[#E2E8F0] dark:hover:border-[#3B82F6]/60 dark:hover:bg-[#1E293B]",
+    "border border-zinc-300 bg-white text-zinc-900 hover:bg-zinc-50 active:translate-y-[0.5px] dark:border-white/[0.08] dark:bg-[#18181B] dark:text-zinc-200 dark:hover:border-white/[0.16] dark:hover:bg-[#222226]",
   outline:
-    "border border-[#3B82F6]/45 bg-[#EFF6FF] text-[#1D4ED8] shadow-[0_1px_2px_rgba(37,99,235,0.06)] hover:border-[#2563EB] hover:bg-[#DBEAFE]/70 active:translate-y-[0.5px] dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-300 dark:hover:border-sky-400 dark:hover:bg-sky-500/20",
+    "border border-zinc-300 bg-zinc-100/80 text-zinc-800 hover:bg-zinc-200/70 active:translate-y-[0.5px] dark:border-white/[0.1] dark:bg-[#18181B] dark:text-zinc-200 dark:hover:border-white/[0.18] dark:hover:bg-[#222226]",
   dark:
-    "border border-[#334155] bg-[#0F172A] text-white shadow-[0_1px_2px_rgba(0,0,0,0.25)] hover:bg-[#1E293B] active:translate-y-[0.5px] dark:border-[#334155] dark:bg-[#1E293B] dark:hover:bg-[#283548]",
+    "border border-zinc-700 bg-zinc-900 text-white hover:bg-zinc-800 active:translate-y-[0.5px] dark:border-white/[0.1] dark:bg-[#18181B] dark:hover:bg-[#222226]",
   danger:
-    "border border-rose-500/40 bg-rose-50 text-rose-700 hover:bg-rose-100 active:translate-y-[0.5px] dark:border-rose-500/40 dark:bg-rose-500/15 dark:text-rose-300 dark:hover:bg-rose-500/25",
+    "border border-rose-500/30 bg-rose-500/10 text-rose-700 hover:bg-rose-500/20 active:translate-y-[0.5px] dark:border-rose-500/25 dark:bg-rose-500/10 dark:text-rose-300 dark:hover:bg-rose-500/20",
   ghost:
-    "border border-transparent text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#1C2434] dark:text-[#94A3B8] dark:hover:bg-[#1E293B] dark:hover:text-white",
+    "border border-transparent text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-[#18181B] dark:hover:text-zinc-100",
 };
 
 export function Button({
@@ -356,11 +357,11 @@ export function Button({
     size === "sm"
       ? "px-2.5 py-1 text-xs"
       : size === "lg"
-        ? "px-4 py-2.5 text-sm"
-        : "px-3.5 py-2 text-xs";
+        ? "px-4 py-2 text-sm"
+        : "px-3 py-1.5 text-xs";
   return (
     <button
-      className={`inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-[6px] font-semibold tracking-[-0.01em] transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-50 ${BTN_VARIANTS[variant]} ${sz} ${className}`}
+      className={`inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-md font-medium tracking-[-0.01em] transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-50 ${BTN_VARIANTS[variant]} ${sz} ${className}`}
       {...rest}
     >
       {children}
@@ -603,10 +604,10 @@ export function ProtocolBadge({
               `${clean} — Verified via passive deep packet inspection`,
             )
       }
-      className={`inline-flex items-center gap-1 rounded-[5px] px-2 py-0.5 font-mono text-[11px] font-semibold ${
+      className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[11px] font-medium ${
         isHint
-          ? "border border-amber-500/35 bg-amber-500/10 text-amber-800 dark:text-amber-300"
-          : "border border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300"
+          ? "border border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+          : "border border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
       }`}
     >
       <span>{clean}</span>

@@ -15,13 +15,13 @@
 
   body {
     font-family: var(--font-sans);
-    background-color: #EEF2F6;
-    color: #0F172A;
+    background-color: #F4F4F5;
+    color: #09090B;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     letter-spacing: -0.011em;
     transition:
-      background-color 180ms ease,
-      color 180ms ease;
+      background-color 150ms ease,
+      color 150ms ease;
   }
 
   h1,
@@ -42,86 +42,102 @@
     font-feature-settings: "tnum" 1, "zero" 1;
   }
 
-  /* Native select fallback styling */
   select,
   option {
     background-color: #FFFFFF;
-    color: #0F172A;
+    color: #09090B;
   }
 
   html.dark select,
   html.dark option {
-    background-color: #0F172A;
-    color: #F8FAFC;
+    background-color: #111113;
+    color: #FAFAFA;
   }
 }
 
 /* ============================================================================
- * ENDÜSTRİYEL KOMUTA MODU (DARK COMMAND MODE — html.dark)
+ * KESKİN ENDÜSTRİYEL KARBON / ZINC KOMUTA MODU (html.dark)
+ * Ana zemin: #09090B (Zinc-950)
+ * Kart yüzeyi: #111113
+ * İkincil / Buton yüzeyi: #18181B (Zinc-900)
+ * Kenarlıklar: 1px solid rgba(255, 255, 255, 0.08)
  * ============================================================================ */
 html.dark body {
-  background-color: #0B0F19;
-  color: #F1F5F9;
+  background-color: #09090B;
+  color: #F4F4F5;
 }
 
-/* Ana zemin ve konteyner yüzeyleri */
-html.dark .bg-\[\#F1F5F9\] {
-  background-color: #0B0F19;
+/* Ana zemin */
+html.dark .bg-\[\#F1F5F9\],
+html.dark .dark\:bg-\[\#0B0F19\],
+html.dark .dark\:bg-\[\#070B14\],
+html.dark .bg-\[\#070B14\],
+html.dark .bg-\[\#050811\] {
+  background-color: #09090B;
 }
 
-/* Kart ve üst bar yüzeyleri */
-html.dark .bg-white {
-  background-color: #111827;
+/* Kart ve üst bar yüzeyleri (#111113) */
+html.dark .bg-white,
+html.dark .dark\:bg-\[\#111827\],
+html.dark .dark\:bg-\[\#0F172A\],
+html.dark .bg-\[\#0B1120\] {
+  background-color: #111113;
 }
 html.dark .bg-white\/80,
 html.dark .bg-white\/90,
 html.dark .bg-white\/70 {
-  background-color: rgba(15, 23, 42, 0.88);
+  background-color: rgba(17, 17, 19, 0.92);
 }
 
-/* İkincil panel, tablo başlığı ve input yüzeyleri */
+/* İkincil panel, tablo başlığı ve nötr gri yüzeyler (#18181B) */
 html.dark .bg-\[\#F8FAFC\],
 html.dark .bg-\[\#F7F9FC\],
 html.dark .bg-slate-50,
 html.dark .bg-slate-100,
-html.dark .bg-slate-200 {
-  background-color: #161F30;
+html.dark .bg-slate-200,
+html.dark .dark\:bg-\[\#161F30\],
+html.dark .dark\:bg-\[\#1E293B\] {
+  background-color: #18181B;
 }
 
 /* Tablo satırı ve kart hover durumları */
 html.dark .hover\:bg-\[\#F8FAFC\]:hover,
 html.dark .hover\:bg-slate-50:hover,
 html.dark .hover\:bg-slate-100:hover {
-  background-color: #1C273C;
+  background-color: #1F1F23;
 }
 
-/* Tüm teknik çerçeveler ve ayırıcı çizgiler */
+/* Tüm teknik çerçeveler ve ayırıcı çizgiler: 1px solid rgba(255, 255, 255, 0.08) */
 html.dark .border-\[\#E2E8F0\],
 html.dark .border-\[\#CBD5E1\],
 html.dark .border-slate-200,
-html.dark .border-slate-300 {
-  border-color: #1E293B;
+html.dark .border-slate-300,
+html.dark .border-\[\#1E293B\],
+html.dark .dark\:border-\[\#1E293B\],
+html.dark .dark\:border-\[\#2A364F\],
+html.dark .dark\:border-\[\#334155\] {
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
-html.dark .divide-\[\#E2E8F0\] > :not(:last-child) {
-  border-color: #1E293B;
+html.dark .divide-\[\#E2E8F0\] > :not(:last-child),
+html.dark .dark\:divide-\[\#1E293B\] > :not(:last-child) {
+  border-color: rgba(255, 255, 255, 0.07);
 }
 
 /* Birincil ve ikincil metin kontrastı */
 html.dark .text-\[\#1C2434\],
 html.dark .text-slate-900,
 html.dark .text-slate-800 {
-  color: #F8FAFC;
+  color: #FAFAFA;
 }
 
 html.dark .text-\[\#64748B\],
 html.dark .text-slate-600,
 html.dark .text-slate-700,
 html.dark .text-slate-500 {
-  color: #94A3B8;
+  color: #A1A1AA;
 }
 
-/* Eski teal linkleri Endüstriyel Siyan/Kobalt'a dönüştür */
 html.dark .text-\[\#0D9488\],
 html.dark .text-\[\#0F766E\] {
   color: #38BDF8;
@@ -130,36 +146,36 @@ html.dark .hover\:text-\[\#0D9488\]:hover {
   color: #38BDF8;
 }
 
-/* Koyu modda açık renkli rozet/uyarı arka planlarını derin endüstriyel tonlara çevir */
+/* Koyu modda rozet/uyarı arka planları */
 html.dark .bg-teal-50,
 html.dark .bg-teal-50\/70,
 html.dark .bg-teal-50\/40,
 html.dark .bg-teal-50\/30,
 html.dark .bg-sky-50 {
-  background-color: rgba(14, 165, 233, 0.14);
+  background-color: rgba(56, 189, 248, 0.1);
   color: #38BDF8;
-  border-color: rgba(56, 189, 248, 0.3);
+  border-color: rgba(56, 189, 248, 0.22);
 }
 html.dark .bg-emerald-50,
 html.dark .bg-emerald-50\/60,
 html.dark .bg-emerald-50\/40 {
-  background-color: rgba(16, 185, 129, 0.12);
+  background-color: rgba(16, 185, 129, 0.1);
   color: #34D399;
-  border-color: rgba(52, 211, 153, 0.28);
+  border-color: rgba(52, 211, 153, 0.22);
 }
 html.dark .bg-amber-50,
 html.dark .bg-amber-50\/60,
 html.dark .bg-amber-50\/40 {
-  background-color: rgba(245, 158, 11, 0.14);
+  background-color: rgba(245, 158, 11, 0.1);
   color: #FBBF24;
-  border-color: rgba(251, 191, 36, 0.3);
+  border-color: rgba(251, 191, 36, 0.22);
 }
 html.dark .bg-red-50,
 html.dark .bg-rose-50,
 html.dark .bg-rose-50\/50 {
-  background-color: rgba(244, 63, 94, 0.15);
-  color: #FB7185;
-  border-color: rgba(251, 113, 133, 0.3);
+  background-color: rgba(239, 68, 68, 0.12);
+  color: #F87171;
+  border-color: rgba(239, 68, 68, 0.25);
 }
 html.dark .text-emerald-950,
 html.dark .text-emerald-900,
@@ -176,22 +192,21 @@ html.dark .text-red-700 {
   color: #FDA4AF;
 }
 
-/* React Flow (@xyflow/react) Endüstriyel Koyu/Açık Komuta Özelleştirmeleri */
+/* React Flow (@xyflow/react) Endüstriyel Karbon Özelleştirmeleri */
 .react-flow__attribution {
   display: none !important;
 }
 html.dark .react-flow__controls {
-  border: 1px solid #1E293B !important;
-  background-color: #0F172A !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background-color: #111113 !important;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5) !important;
 }
 html.dark .react-flow__controls-button {
-  background-color: #0F172A !important;
-  border-bottom: 1px solid #1E293B !important;
-  fill: #E2E8F0 !important;
-  color: #E2E8F0 !important;
+  background-color: #111113 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  fill: #E4E4E7 !important;
+  color: #E4E4E7 !important;
 }
 html.dark .react-flow__controls-button:hover {
-  background-color: #1E293B !important;
+  background-color: #18181B !important;
 }
-

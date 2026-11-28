@@ -7,7 +7,7 @@ import { CriticalityBadge, ROLE_LABEL, formatDate } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { useLang } from "../i18n";
 import { api } from "../services/api";
-import type { Page, RiskFinding, Sensor, Site } from "../types/api";
+import type { Page, RiskFinding, Sensor } from "../types/api";
 
 interface SidebarItem {
   to: string;
@@ -110,12 +110,6 @@ export default function AppLayout() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const sitesQuery = useQuery({
-    queryKey: ["sites", activeOrg?.id],
-    queryFn: () => api<Site[]>("/sites"),
-    enabled: !!activeOrg,
-  });
-
   const sensorsQuery = useQuery({
     queryKey: ["sensors", activeOrg?.id],
     queryFn: () => api<Sensor[]>("/sensors"),
@@ -134,7 +128,6 @@ export default function AppLayout() {
     .slice(0, 6);
   const activeSensorCount = (sensorsQuery.data ?? []).filter((s) => s.is_connected).length;
   const totalSensorCount = (sensorsQuery.data ?? []).length;
-  const primarySite = sitesQuery.data?.[0];
 
   const MENU_GROUPS: { title: string; items: SidebarItem[] }[] = [
     {
@@ -181,23 +174,23 @@ export default function AppLayout() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#F1F5F9] text-[#1C2434]">
-      {/* Endüstriyel Komuta Sol Kenar Çubuğu */}
+      {/* Endüstriyel Karbon Sol Kenar Çubuğu */}
       <aside
         className={`${
           mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
-        } fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col border-r border-[#1E293B] bg-[#0B1120] text-[#DEE4EE] transition-transform duration-200 lg:static lg:translate-x-0`}
+        } fixed inset-y-0 left-0 z-40 flex w-60 shrink-0 flex-col border-r border-white/[0.08] bg-[#09090B] text-zinc-300 transition-transform duration-200 lg:static lg:translate-x-0`}
       >
         {/* Marka Başlığı */}
-        <div className="flex items-center justify-between border-b border-[#1E293B] px-6 py-4">
-          <Link to="/" className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-[5px] border border-blue-400/30 bg-gradient-to-br from-[#2563EB] to-[#0284C7] text-white shadow-[0_2px_10px_rgba(37,99,235,0.35)]">
-              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+        <div className="flex items-center justify-between border-b border-white/[0.08] px-5 py-3.5">
+          <Link to="/" className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-md border border-blue-500/40 bg-blue-600 text-white">
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
               </svg>
             </div>
             <div>
-              <div className="text-base font-bold tracking-tight text-white">FactoryGuard</div>
-              <div className="font-mono text-[10px] font-semibold tracking-wider text-sky-400 uppercase">
+              <div className="text-sm font-bold tracking-tight text-white">FactoryGuard</div>
+              <div className="font-mono text-[9.5px] font-medium tracking-wider text-zinc-400 uppercase">
                 {t("OT KOMUTA & RİSK", "OT COMMAND & RISK")}
               </div>
             </div>
@@ -205,21 +198,21 @@ export default function AppLayout() {
           <button
             type="button"
             onClick={() => setMobileMenuOpen(false)}
-            className="text-[#8A99AF] hover:text-white lg:hidden"
+            className="text-zinc-400 hover:text-white lg:hidden"
           >
             ✕
           </button>
         </div>
 
         {/* Menü Grupları */}
-        <div className="flex-1 overflow-y-auto px-4 py-5">
-          <nav className="space-y-6">
+        <div className="flex-1 overflow-y-auto px-3 py-4">
+          <nav className="space-y-5">
             {MENU_GROUPS.map((group) => (
               <div key={group.title}>
-                <h3 className="mb-2.5 px-3 font-mono text-[10px] font-bold tracking-wider text-[#64748B] uppercase">
+                <h3 className="mb-2 px-3 font-mono text-[10px] font-semibold tracking-wider text-zinc-500 uppercase">
                   {group.title}
                 </h3>
-                <ul className="space-y-1">
+                <ul className="space-y-0.5">
                   {group.items.map((item) => {
                     const isAssetDetail =
                       item.to === "/assets" && location.pathname.startsWith("/assets/");
@@ -231,10 +224,10 @@ export default function AppLayout() {
                           onClick={() => setMobileMenuOpen(false)}
                           className={({ isActive }) => {
                             const active = isActive || isAssetDetail;
-                            return `group relative flex items-center justify-between rounded-[5px] px-3.5 py-2.5 text-xs font-medium transition-all ${
+                            return `group relative flex items-center justify-between rounded-md px-3 py-2 text-xs font-medium transition-all ${
                               active
-                                ? "border border-blue-500/30 bg-[#17223B] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
-                                : "border border-transparent text-[#94A3B8] hover:bg-[#151F33] hover:text-white"
+                                ? "border border-white/[0.1] bg-[#18181B] text-white"
+                                : "border border-transparent text-zinc-400 hover:bg-[#141417] hover:text-zinc-100"
                             }`;
                           }}
                         >
@@ -243,20 +236,20 @@ export default function AppLayout() {
                             return (
                               <>
                                 {active && (
-                                  <span className="absolute top-1.5 bottom-1.5 left-0 w-1 rounded-r bg-gradient-to-b from-sky-400 to-blue-600" />
+                                  <span className="absolute top-1.5 bottom-1.5 left-0 w-[3px] rounded-r bg-blue-500" />
                                 )}
-                                <span className="flex items-center gap-3">
-                                  <span className={active ? "text-sky-400" : "text-[#64748B] group-hover:text-sky-300"}>
+                                <span className="flex items-center gap-2.5">
+                                  <span className={active ? "text-blue-400" : "text-zinc-500 group-hover:text-zinc-200"}>
                                     <SidebarIcon name={item.icon} />
                                   </span>
                                   <span>{item.label}</span>
                                 </span>
                                 {item.badge !== undefined && item.badge > 0 && (
                                   <span
-                                    className={`rounded-full px-2 py-0.5 font-mono text-[10px] font-bold ${
+                                    className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold tabular-nums ${
                                       item.badgeTone === "amber"
-                                        ? "border border-amber-500/30 bg-amber-500/15 text-amber-300"
-                                        : "border border-sky-500/30 bg-sky-500/15 text-sky-300"
+                                        ? "border border-amber-500/25 bg-amber-500/10 text-amber-400"
+                                        : "border border-white/[0.1] bg-[#18181B] text-zinc-300"
                                     }`}
                                   >
                                     {item.badge}
@@ -276,33 +269,22 @@ export default function AppLayout() {
         </div>
 
         {/* Alt Pasif Gözlem Güvenlik Garantisi Kartı */}
-        <div className="border-t border-[#1E293B] p-4">
-          <div className="rounded-[5px] border border-[#1E293B] bg-[#111A2E] p-3">
+        <div className="border-t border-white/[0.08] p-3.5">
+          <div className="rounded-md border border-white/[0.08] bg-[#111113] p-3">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-white">
-                {t("Yalnızca Pasif Gözlem", "Passive Observation Only")}
+              <span className="text-[11px] font-semibold text-zinc-100">
+                {t("Yalnızca Pasif Gözlem", "Passive Observation")}
               </span>
-              <span className="inline-flex items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-emerald-300">
+              <span className="inline-flex items-center gap-1 rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[9.5px] font-semibold text-emerald-400">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
                 {t("GÜVENLİ", "SAFE")}
               </span>
             </div>
-            <p className="mt-1 text-[11px] leading-relaxed text-[#94A3B8]">
-              {t(
-                "Aktif tarama yok · Saha ekipmanına paket gönderilmez.",
-                "No active scanning · No packets sent to field devices.",
-              )}
-            </p>
-            <div className="mt-2 space-y-1 border-t border-[#1E293B] pt-2 text-[10px] text-[#DEE4EE]">
-              <div className="flex items-center justify-between">
-                <span className="text-[#94A3B8]">{t("Aktif sensör", "Active sensors")}</span>
-                <span className="font-mono font-bold text-sky-400">
-                  {activeSensorCount}/{totalSensorCount}
-                </span>
-              </div>
-              <div className="truncate text-[#CBD5E1]" title={primarySite?.name}>
-                {primarySite?.name ?? t("Ana Tesis", "Main Site")}
-              </div>
+            <div className="mt-2 flex items-center justify-between border-t border-white/[0.06] pt-2 text-[10px] text-zinc-400">
+              <span>{t("Aktif sensör", "Active sensors")}</span>
+              <span className="font-mono font-semibold text-emerald-400 tabular-nums">
+                {activeSensorCount}/{totalSensorCount} · 0 Tx
+              </span>
             </div>
           </div>
         </div>
@@ -314,27 +296,27 @@ export default function AppLayout() {
         className="relative flex flex-1 flex-col overflow-x-hidden overflow-y-auto"
       >
         <div className="flex min-h-full flex-col">
-        {/* TailAdmin Üst Beyaz Başlık Çubuğu */}
-        <header className="sticky top-0 z-30 flex w-full items-center justify-between border-b border-[#E2E8F0] bg-white px-6 py-3 shadow-[0px_2px_4px_rgba(0,0,0,0.03)]">
-          {/* Sol: Mobil Menü + Küresel Arama Çubuğu */}
-          <div className="flex flex-1 items-center gap-4">
+        {/* Keskin Endüstriyel Üst Başlık Çubuğu (Topbar) */}
+        <header className="sticky top-0 z-30 flex h-13 w-full items-center justify-between gap-4 border-b border-zinc-200 bg-white px-5 dark:border-white/[0.08] dark:bg-[#111113]">
+          {/* Sol: Mobil Menü + Geniş Arama Kutusu (w-64 / w-80, kesilmeyen metin) */}
+          <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={() => setMobileMenuOpen(true)}
-              className="rounded-[4px] border border-[#E2E8F0] p-1.5 text-[#1C2434] lg:hidden"
+              className="rounded-md border border-zinc-200 p-1.5 text-zinc-800 lg:hidden dark:border-white/[0.08] dark:text-zinc-200"
               title={t("Menüyü aç", "Open menu")}
             >
-              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="3" y1="6" x2="21" y2="6" />
                 <line x1="3" y1="12" x2="21" y2="12" />
                 <line x1="3" y1="18" x2="21" y2="18" />
               </svg>
             </button>
 
-            <form onSubmit={handleSearchSubmit} className="flex w-full max-w-md items-center gap-2">
-              <div className="relative flex flex-1 items-center">
+            <form onSubmit={handleSearchSubmit} className="w-60 sm:w-72 md:w-80">
+              <div className="relative flex items-center">
                 <svg
-                  className="pointer-events-none absolute left-3 h-4 w-4 text-[#64748B]"
+                  className="pointer-events-none absolute left-3 h-3.5 w-3.5 text-zinc-400"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -348,107 +330,78 @@ export default function AppLayout() {
                   value={globalSearch}
                   onChange={(e) => setGlobalSearch(e.target.value)}
                   placeholder={t(
-                    "Cihaz adı, IP, MAC, üretici veya protokol ara...",
-                    "Search device name, IP, MAC, vendor or protocol...",
+                    "Cihaz, IP, MAC veya protokol ara...",
+                    "Search device, IP, MAC or protocol...",
                   )}
-                  className="h-9 w-full rounded-[6px] border border-[#E2E8F0] bg-[#F8FAFC] pr-16 pl-9 text-xs text-[#1C2434] placeholder:text-[#64748B] focus:border-[#2563EB] focus:bg-white focus:outline-none dark:border-[#2A364F] dark:bg-[#161F30] dark:focus:border-[#38BDF8]"
+                  className="h-8 w-full rounded-md border border-zinc-200 bg-zinc-50 pr-16 pl-8 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:bg-white focus:outline-none dark:border-white/[0.08] dark:bg-[#18181B] dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-blue-500"
                 />
                 <button
                   type="button"
                   onClick={() => setCmdkOpen(true)}
                   title={t("Hızlı Komut Paletini Aç (Ctrl+K)", "Open Command Palette (Ctrl+K)")}
-                  className="absolute right-1.5 inline-flex cursor-pointer items-center gap-1 rounded-[4px] border border-[#CBD5E1] bg-white px-1.5 py-0.5 font-mono text-[10px] font-bold text-[#64748B] hover:border-blue-500 hover:text-blue-600 dark:border-[#334155] dark:bg-[#0F172A] dark:text-sky-400"
+                  className="absolute right-1.5 inline-flex cursor-pointer items-center rounded border border-zinc-200 bg-white px-1.5 py-0.5 font-mono text-[10px] font-medium text-zinc-500 hover:text-zinc-900 dark:border-white/[0.08] dark:bg-[#111113] dark:text-zinc-400 dark:hover:text-zinc-200"
                 >
-                  <span>Ctrl+K</span>
+                  Ctrl+K
                 </button>
               </div>
             </form>
           </div>
 
-          {/* Sağ: Tesis Seçici, Açık Risk Bildirimi ve Kullanıcı Profili */}
-          <div className="flex items-center gap-3">
-            {/* Tesis / Organizasyon Rozeti */}
-            <div className="hidden items-center gap-2 rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-1.5 text-xs sm:flex">
-              <span className="h-2 w-2 rounded-full bg-[#0D9488]" />
-              {organizations.length > 1 ? (
-                <select
-                  aria-label="Organizasyon"
-                  className="bg-transparent text-xs font-semibold text-[#1C2434] focus:outline-none"
-                  value={activeOrg?.id ?? ""}
-                  onChange={(e) => setActiveOrg(e.target.value)}
-                >
-                  {organizations.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.name}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <span className="max-w-[180px] truncate font-semibold text-[#1C2434]" title={activeOrg?.name}>
-                  {activeOrg?.name ?? t("Organizasyon Yok", "No Organization")}
-                </span>
-              )}
-              {primarySite && (
-                <span
-                  className="hidden max-w-[160px] truncate border-l border-[#E2E8F0] pl-2 text-[#64748B] xl:inline"
-                  title={primarySite.name}
-                >
-                  {primarySite.name}
-                </span>
-              )}
-            </div>
+          {/* Sağ: İkon Tema/Dil Butonları, Bildirim Zili ve Şirket/Kullanıcı Profil Bloğu */}
+          <div className="flex items-center gap-2">
+            {/* Çoklu Organizasyon Seçici (Yalnızca birden fazla organizasyon varsa) */}
+            {organizations.length > 1 && (
+              <select
+                aria-label="Organizasyon"
+                className="h-8 rounded-md border border-zinc-200 bg-zinc-50 px-2 text-xs font-medium text-zinc-800 focus:outline-none dark:border-white/[0.08] dark:bg-[#18181B] dark:text-zinc-200"
+                value={activeOrg?.id ?? ""}
+                onChange={(e) => setActiveOrg(e.target.value)}
+              >
+                {organizations.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+            )}
 
-            {/* Koyu / Açık Tema Değiştirici (Mühendislik Komuta Modu) */}
+            {/* Kompakt İkon Tema Butonu (☀️ / 🌙) */}
             <button
               type="button"
               onClick={toggleTheme}
               title={
                 theme === "dark"
-                  ? t("Açık Mühendislik Moduna Geç", "Switch to Light Engineering Mode")
-                  : t("Koyu Komuta Moduna Geç", "Switch to Dark Command Mode")
+                  ? t("Açık Moda Geç", "Switch to Light Mode")
+                  : t("Koyu Moda Geç", "Switch to Dark Mode")
               }
-              className="inline-flex h-9 items-center gap-1.5 rounded-[5px] border border-[#CBD5E1] bg-[#F8FAFC] px-2.5 text-[11px] font-semibold text-[#1C2434] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] transition hover:border-blue-500 hover:text-blue-600 dark:border-[#334155] dark:bg-[#1E293B] dark:text-[#F8FAFC] dark:hover:border-sky-400 dark:hover:text-sky-300"
+              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border border-zinc-200 bg-zinc-50 text-zinc-700 transition hover:bg-zinc-100 dark:border-white/[0.08] dark:bg-[#18181B] dark:text-zinc-300 dark:hover:border-white/[0.16] dark:hover:text-white"
             >
               {theme === "dark" ? (
-                <>
-                  <svg className="h-3.5 w-3.5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                    <circle cx="12" cy="12" r="5" />
-                    <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-                  </svg>
-                  <span className="hidden sm:inline">{t("Açık Mod", "Light")}</span>
-                </>
+                <svg className="h-3.5 w-3.5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="5" />
+                  <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+                </svg>
               ) : (
-                <>
-                  <svg className="h-3.5 w-3.5 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                  </svg>
-                  <span className="hidden sm:inline">{t("Koyu Mod", "Dark")}</span>
-                </>
+                <svg className="h-3.5 w-3.5 text-zinc-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                </svg>
               )}
             </button>
 
-            {/* Dil Seçici (TR / EN) */}
-            <div
-              role="group"
-              aria-label={t("Arayüz dili", "Interface language")}
-              className="flex h-9 items-center rounded-[5px] border border-[#CBD5E1] bg-[#F8FAFC] p-0.5 dark:border-[#334155] dark:bg-[#161F30]"
+            {/* Kompakt İkon Dil Butonu (Tek tıkla TR ⇄ EN) */}
+            <button
+              type="button"
+              onClick={() => setLang(lang === "tr" ? "en" : "tr")}
+              title={t("Dili Değiştir (TR / EN)", "Toggle Language (TR / EN)")}
+              className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-2 font-mono text-[11px] font-semibold text-zinc-700 uppercase transition hover:bg-zinc-100 dark:border-white/[0.08] dark:bg-[#18181B] dark:text-zinc-300 dark:hover:border-white/[0.16] dark:hover:text-white"
             >
-              {(["tr", "en"] as const).map((l) => (
-                <button
-                  key={l}
-                  type="button"
-                  onClick={() => setLang(l)}
-                  aria-pressed={lang === l}
-                  className={`h-full rounded-[4px] px-2.5 text-[11px] font-bold uppercase transition-colors ${
-                    lang === l
-                      ? "bg-gradient-to-b from-[#2563EB] to-[#1D4ED8] text-white shadow-xs"
-                      : "text-[#64748B] hover:text-[#1C2434] dark:text-[#94A3B8] dark:hover:text-white"
-                  }`}
-                >
-                  {l}
-                </button>
-              ))}
-            </div>
+              <svg className="h-3.5 w-3.5 text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="2" y1="12" x2="22" y2="12" />
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+              </svg>
+              <span>{lang}</span>
+            </button>
 
             {/* Bildirim Zili & Açılır Canlı Uyarı Çekmecesi */}
             <div className="relative">
@@ -457,31 +410,31 @@ export default function AppLayout() {
                 onClick={() => setNotificationsOpen((v) => !v)}
                 aria-expanded={notificationsOpen}
                 title={t(`${openRiskCount} açık risk bulgusu`, `${openRiskCount} open risk findings`)}
-                className={`relative flex h-9 w-9 items-center justify-center rounded-full border transition ${
+                className={`relative flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border transition ${
                   notificationsOpen
-                    ? "border-[#0D9488] bg-teal-50 text-[#0D9488]"
-                    : "border-[#E2E8F0] bg-[#F8FAFC] text-[#64748B] hover:border-[#0D9488] hover:text-[#0D9488]"
+                    ? "border-blue-500/50 bg-blue-500/10 text-blue-500"
+                    : "border-zinc-200 bg-zinc-50 text-zinc-600 hover:text-zinc-900 dark:border-white/[0.08] dark:bg-[#18181B] dark:text-zinc-300 dark:hover:border-white/[0.16] dark:hover:text-white"
                 }`}
               >
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
                   <path d="M13.73 21a2 2 0 0 1-3.46 0" />
                 </svg>
                 {openRiskCount > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-600 px-1 font-mono text-[9px] font-bold text-white ring-2 ring-white">
+                  <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-600 px-1 font-mono text-[9px] font-bold text-white tabular-nums">
                     {openRiskCount > 99 ? "99+" : openRiskCount}
                   </span>
                 )}
               </button>
 
               {notificationsOpen && (
-                <div className="absolute right-0 z-50 mt-2 w-88 overflow-hidden rounded-[4px] border border-[#E2E8F0] bg-white shadow-xl sm:w-96">
-                  <div className="flex items-center justify-between border-b border-[#E2E8F0] bg-[#1C2434] px-4 py-3 text-white">
+                <div className="absolute right-0 z-50 mt-2 w-88 overflow-hidden rounded-md border border-zinc-200 bg-white shadow-xl sm:w-96 dark:border-white/[0.08] dark:bg-[#111113]">
+                  <div className="flex items-center justify-between border-b border-zinc-200 bg-zinc-900 px-4 py-2.5 text-white dark:border-white/[0.08] dark:bg-[#18181B]">
                     <div>
-                      <div className="text-xs font-bold">
+                      <div className="text-xs font-semibold">
                         {t("Canlı OT Güvenlik Bildirimleri", "Live OT Security Notifications")}
                       </div>
-                      <div className="text-[11px] text-[#8A99AF]">
+                      <div className="text-[11px] text-zinc-400">
                         {t(
                           `${openRiskCount} açık bulgu · En yüksek öncelikliler`,
                           `${openRiskCount} open findings · Highest priority`,
@@ -491,18 +444,18 @@ export default function AppLayout() {
                     <button
                       type="button"
                       onClick={() => setNotificationsOpen(false)}
-                      className="rounded px-1.5 py-0.5 text-xs text-[#8A99AF] hover:bg-[#333A48] hover:text-white"
+                      className="rounded px-1.5 py-0.5 text-xs text-zinc-400 hover:text-white"
                     >
                       ✕
                     </button>
                   </div>
 
                   {topOpenRisks.length === 0 ? (
-                    <div className="p-5 text-center text-xs text-[#64748B]">
+                    <div className="p-5 text-center text-xs text-zinc-500">
                       {t("Açık risk bildirimi bulunmuyor.", "No open risk notifications.")}
                     </div>
                   ) : (
-                    <div className="max-h-80 divide-y divide-[#E2E8F0] overflow-y-auto">
+                    <div className="max-h-80 divide-y divide-zinc-200 overflow-y-auto dark:divide-white/[0.07]">
                       {topOpenRisks.map((rf) => (
                         <div
                           key={rf.id}
@@ -515,11 +468,11 @@ export default function AppLayout() {
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-1.5">
                               <CriticalityBadge value={rf.severity} />
-                              <span className="font-mono font-bold text-[#1C2434]">
+                              <span className="font-mono font-bold text-[#1C2434] tabular-nums">
                                 {rf.score}/100
                               </span>
                             </div>
-                            <span className="font-mono text-[10px] text-[#64748B]">
+                            <span className="font-mono text-[10px] text-[#64748B] tabular-nums">
                               {formatDate(rf.last_seen_at)}
                             </span>
                           </div>
@@ -527,7 +480,9 @@ export default function AppLayout() {
                           <div className="mt-0.5 flex items-center justify-between font-mono text-[11px] text-[#64748B]">
                             <span>{rf.rule_key}</span>
                             {rf.asset_ip && (
-                              <span className="font-semibold text-[#0D9488]">{rf.asset_ip}</span>
+                              <span className="font-semibold text-emerald-500 tabular-nums">
+                                {rf.asset_ip}
+                              </span>
                             )}
                           </div>
                         </div>
@@ -535,18 +490,18 @@ export default function AppLayout() {
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between border-t border-[#E2E8F0] bg-[#F8FAFC] px-4 py-2.5 text-xs">
+                  <div className="flex items-center justify-between border-t border-zinc-200 bg-zinc-50 px-4 py-2 text-xs dark:border-white/[0.08] dark:bg-[#18181B]">
                     <Link
                       to="/network"
                       onClick={() => setNotificationsOpen(false)}
-                      className="font-medium text-[#64748B] hover:text-[#1C2434]"
+                      className="font-medium text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"
                     >
                       {t("Topoloji Haritası", "Topology Map")}
                     </Link>
                     <Link
                       to="/risks"
                       onClick={() => setNotificationsOpen(false)}
-                      className="font-semibold text-[#0D9488] hover:underline"
+                      className="font-semibold text-blue-500 hover:underline"
                     >
                       {t(`Tüm Bulguları İncele (${openRiskCount}) →`, `Inspect All Findings (${openRiskCount}) →`)}
                     </Link>
@@ -555,18 +510,20 @@ export default function AppLayout() {
               )}
             </div>
 
-            {/* Kullanıcı Profili + Çıkış */}
-            <div className="flex items-center gap-3 border-l border-[#E2E8F0] pl-3">
-              <div className="hidden min-w-0 text-left md:block">
-                <div className="max-w-[160px] truncate text-xs font-semibold text-[#1C2434]" title={user?.full_name}>
-                  {/* Parantez içi unvanlar rol satırına bırakılır; ad satırı kısa kalır. */}
+            {/* Kullanıcı Profili + Tek Satırda Temiz Şirket Adı + Çıkış */}
+            <div className="flex items-center gap-2.5 border-l border-zinc-200 pl-3 dark:border-white/[0.08]">
+              <div className="hidden text-right sm:block">
+                <div className="whitespace-nowrap text-xs font-semibold text-zinc-900 dark:text-zinc-100">
                   {(user?.full_name ?? t("OT Kullanıcısı", "OT User")).replace(/\s*\(.*\)\s*$/, "")}
                 </div>
-                <div className="text-[11px] text-[#64748B]">
-                  {activeOrg ? ROLE_LABEL[activeOrg.role] : ROLE_LABEL.analyst}
+                <div className="flex items-center justify-end gap-1.5 whitespace-nowrap text-[11px] text-zinc-500 dark:text-zinc-400">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  <span>{activeOrg?.name ?? "—"}</span>
+                  <span>·</span>
+                  <span>{activeOrg ? ROLE_LABEL[activeOrg.role] : ROLE_LABEL.analyst}</span>
                 </div>
               </div>
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#1C2434] font-mono text-xs font-bold text-white">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-white/[0.08] bg-[#18181B] font-mono text-[11px] font-bold text-zinc-200">
                 {(user?.full_name ?? "FG")
                   .split(" ")
                   .map((w) => w[0])
@@ -577,7 +534,7 @@ export default function AppLayout() {
               <button
                 type="button"
                 onClick={() => void logout()}
-                className="rounded-[4px] border border-[#E2E8F0] bg-white px-2.5 py-1.5 text-xs font-medium text-[#64748B] hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+                className="h-8 cursor-pointer rounded-md border border-zinc-200 bg-white px-2.5 text-xs font-medium text-zinc-600 transition hover:border-rose-500/30 hover:bg-rose-500/10 hover:text-rose-500 dark:border-white/[0.08] dark:bg-[#18181B] dark:text-zinc-300"
               >
                 {t("Çıkış", "Sign out")}
               </button>
